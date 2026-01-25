@@ -77,7 +77,12 @@ async function buildCurrentWorkflowSnapshot(workflowId: string): Promise<Workflo
     workflowName: workflow.name,
     dependencies: workflow.dependencies,
     envJson: typeof workflow.envJson === "string" ? workflow.envJson : "{}",
-    inputSpec: typeof workflow.inputSpec === "string" ? workflow.inputSpec : workflow.inputSpec == null ? null : String(workflow.inputSpec),
+    inputSpec:
+      typeof workflow.inputSpec === "string"
+        ? workflow.inputSpec
+        : workflow.inputSpec == null
+          ? null
+          : String(workflow.inputSpec),
     outputsSpec:
       typeof workflow.outputsSpec === "string"
         ? workflow.outputsSpec
@@ -124,4 +129,3 @@ export async function getWorkflowDraftMeta(workflowId: string): Promise<{
   const latestHash = sha256Hex(latestNormalized)
   return { latestVersionNumber, hasUnpublishedChanges: currentHash !== latestHash }
 }
-

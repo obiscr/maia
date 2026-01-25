@@ -43,7 +43,7 @@ import { UrlFilesEditor } from "@/components/common/url-files-editor"
 import { JsonMonacoEditor } from "@/components/common/json-monaco-editor"
 import { workflowInputSpecHasParams } from "@/lib/shared/maia/input-spec"
 import { workflowFileInputUi } from "@/lib/shared/maia/file-inputs-ui"
-import { fetchWorkflowInputSpecRaw } from "@/lib/client/workflows"
+import { fetchWorkflowInputSpecRaw, fetchWorkflowStepCount } from "@/lib/client/workflows"
 import { WorkflowVersionSelect } from "@/components/common/workflow-version-select"
 
 function toScheduleKind(v: string): "CRON" | "INTERVAL" {
@@ -126,6 +126,8 @@ export function EditScheduleSheet(props: {
   const [inputSpec, setInputSpec] = useState<WorkflowInputSpec | null>(null)
   const [inputSpecErr, setInputSpecErr] = useState<string | null>(null)
   const [inputSpecLoading, setInputSpecLoading] = useState(false)
+  const [workflowStepCount, setWorkflowStepCount] = useState<number | null>(null)
+  const [workflowStepCountLoading, setWorkflowStepCountLoading] = useState(false)
   const lastUrlTruncateToastAtRef = useRef<number>(0)
   const urlMaxItems = inputSpec?.fileInputs?.urlFiles?.maxItems
   const [submitError, setSubmitError] = useState<{ code: string; issues?: ApiIssue[] } | null>(null)
@@ -167,30 +169,42 @@ export function EditScheduleSheet(props: {
       setInputSpec(null)
       setInputSpecErr(null)
       setInputSpecLoading(false)
+      setWorkflowStepCount(null)
+      setWorkflowStepCountLoading(false)
       return
     }
     let cancelled = false
     setInputSpec(null)
     setInputSpecErr(null)
     setInputSpecLoading(true)
+    setWorkflowStepCount(null)
+    setWorkflowStepCountLoading(true)
     const desiredPinnedWorkflowVersion =
       typeof pinnedWorkflowVersionNumber === "number" && Number.isFinite(pinnedWorkflowVersionNumber)
         ? Math.floor(pinnedWorkflowVersionNumber)
         : null
 
-    fetchWorkflowInputSpecRaw({ workflowId, pinnedWorkflowVersionNumber: desiredPinnedWorkflowVersion })
-      .then((j) => {
+    Promise.all([
+      fetchWorkflowInputSpecRaw({ workflowId, pinnedWorkflowVersionNumber: desiredPinnedWorkflowVersion }),
+      fetchWorkflowStepCount({ workflowId, pinnedWorkflowVersionNumber: desiredPinnedWorkflowVersion }),
+    ])
+      .then(([rawSpec, stepCount]) => {
         if (cancelled) return
-        const parsed = parseWorkflowInputSpec(j)
+        const parsed = parseWorkflowInputSpec(rawSpec)
         setInputSpec(parsed.error ? null : parsed.spec)
         setInputSpecErr(parsed.error ?? null)
-        setInputSpecLoading(false)
+        setWorkflowStepCount(Number.isFinite(stepCount) ? Math.max(0, stepCount) : 0)
       })
       .catch(() => {
         if (cancelled) return
         setInputSpec(null)
         setInputSpecErr(desiredPinnedWorkflowVersion != null ? t("common.loadFailed") : null)
+        setWorkflowStepCount(null)
+      })
+      .finally(() => {
+        if (cancelled) return
         setInputSpecLoading(false)
+        setWorkflowStepCountLoading(false)
       })
     return () => {
       cancelled = true
@@ -281,12 +295,26 @@ export function EditScheduleSheet(props: {
   const canSubmit = useMemo(() => {
     if (!s) return false
     if (inputSpecLoading) return false
+    if (workflowStepCountLoading) return false
+    if (workflowStepCount === 0) return false
     if (!inputJsonOk) return false
     if (!requiredOk) return false
     if (clientValidationIssues.length) return false
     if (kind === "CRON") return cron.trim().length > 0 && timezone.trim().length > 0
     return Number.isFinite(intervalMs) && intervalMs >= 1000
-  }, [clientValidationIssues.length, cron, inputJsonOk, inputSpecLoading, intervalMs, kind, requiredOk, s, timezone])
+  }, [
+    clientValidationIssues.length,
+    cron,
+    inputJsonOk,
+    inputSpecLoading,
+    intervalMs,
+    kind,
+    requiredOk,
+    s,
+    timezone,
+    workflowStepCount,
+    workflowStepCountLoading,
+  ])
   const inputJsonStatus: ScheduleJsonUiStatus = !inputJsonRaw.trim().length
     ? "NOT_CONFIGURED"
     : inputJsonOk
@@ -306,6 +334,7 @@ export function EditScheduleSheet(props: {
   }, [inputSpec, workflowId])
 
   const showSelectWorkflowAlert = !workflowId
+  const showNoStepsAlert = !!workflowId && workflowStepCount === 0
   const urlFilesEnabled = inputSpec?.fileInputs?.urlFiles?.enabled === true
   const showNoInputsAlert = !!workflowId && !inputSpecLoading && !paramsEditorEnabled && !urlFilesEnabled
   const showInputsLoadingSkeleton = !!workflowId && inputSpecLoading
@@ -665,6 +694,11 @@ export function EditScheduleSheet(props: {
                     <InfoAlert
                       titleKey="common.selectWorkflowForInputsTitle"
                       descriptionKey="common.selectWorkflowForInputsDescription"
+                    />
+                  ) : showNoStepsAlert ? (
+                    <InfoAlert
+                      titleKey="common.workflowNoStepsTitle"
+                      descriptionKey="common.workflowNoStepsDescription"
                     />
                   ) : showInputsLoadingSkeleton ? (
                     <ScheduleInputsSkeleton />

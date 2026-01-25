@@ -17,7 +17,7 @@ import {
 } from "@/lib/shared/maia/input-spec"
 import { isRecord } from "@/lib/shared/lang/is-record"
 
-type Workflow = { id: string; name: string; hasInputSpec?: boolean }
+type Workflow = { id: string; name: string; hasInputSpec?: boolean; stepCount?: number }
 
 export function useNewJobForm(params: {
   t: (key: string, vars?: Record<string, any>) => string
@@ -38,6 +38,7 @@ export function useNewJobForm(params: {
   const [inputSpecForWorkflowId, setInputSpecForWorkflowId] = useState<string | null>(null)
   const [inputSpecErr, setInputSpecErr] = useState<string | null>(null)
   const [inputSpecLoading, setInputSpecLoading] = useState(false)
+  const [workflowStepCount, setWorkflowStepCount] = useState<number | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const didAutoPrefillWorkflowRef = useRef<string | null>(null)
@@ -51,6 +52,7 @@ export function useNewJobForm(params: {
     setUrlList("")
     setFiles([])
     setPinnedWorkflowVersionNumber(null)
+    setWorkflowStepCount(null)
     setWorkflowIdRaw(nextWorkflowId)
   }
 
@@ -171,6 +173,7 @@ export function useNewJobForm(params: {
       setInputSpecForWorkflowId(null)
       setInputSpecErr(null)
       setInputSpecLoading(false)
+      setWorkflowStepCount(null)
       return
     }
 
@@ -180,34 +183,45 @@ export function useNewJobForm(params: {
     setInputSpec(null)
     setInputSpecForWorkflowId(null)
     setInputSpecErr(null)
+    setWorkflowStepCount(null)
 
     const loadInputSpec = async () => {
       // If we are cloning from a run (pinned version known), load spec from that workflow version snapshot.
       if (typeof pinnedWorkflowVersionNumber === "number" && pinnedWorkflowVersionNumber > 0) {
         const j = await apiFetchJson<{
-          version?: { snapshot?: { inputSpec?: string | null } | null }
+          version?: { snapshot?: { inputSpec?: string | null; steps?: Array<unknown> | null } | null }
         }>(`/api/workflows/${workflowId}/versions/${encodeURIComponent(String(pinnedWorkflowVersionNumber))}`, {
           cache: "no-store",
         })
         const raw = (j?.version?.snapshot?.inputSpec ?? null) as string | null
+        const stepCount = Array.isArray(j?.version?.snapshot?.steps) ? (j?.version?.snapshot?.steps ?? []).length : 0
         const parsed = parseWorkflowInputSpec(raw)
         if (raw && !parsed.spec)
-          return { spec: null as WorkflowInputSpec | null, err: parsed.error ?? "INVALID_INPUT_SPEC" }
-        return { spec: parsed.spec, err: null as string | null }
+          return { spec: null as WorkflowInputSpec | null, err: parsed.error ?? "INVALID_INPUT_SPEC", stepCount }
+        return { spec: parsed.spec, err: null as string | null, stepCount }
       }
 
-      const j = await apiFetchJson<{ workflow?: { inputSpec?: string | null } }>(`/api/workflows/${workflowId}`, {
-        cache: "no-store",
-      })
+      const j = await apiFetchJson<{ workflow?: { inputSpec?: string | null; steps?: Array<unknown> | null } }>(
+        `/api/workflows/${workflowId}`,
+        {
+          cache: "no-store",
+        },
+      )
       const raw = String(j?.workflow?.inputSpec ?? "").trim()
+      const stepCount = Array.isArray(j?.workflow?.steps)
+        ? (j?.workflow?.steps ?? []).length
+        : (selectedWorkflow?.stepCount ?? 0)
       const parsed = parseWorkflowInputSpec(raw)
-      if (parsed.error) return { spec: null as WorkflowInputSpec | null, err: parsed.error }
-      return { spec: parsed.spec, err: null as string | null }
+      if (parsed.error) return { spec: null as WorkflowInputSpec | null, err: parsed.error, stepCount }
+      return { spec: parsed.spec, err: null as string | null, stepCount }
     }
 
     void loadInputSpec()
       .then((r) => {
         if (cancelled) return
+        setWorkflowStepCount(
+          typeof r.stepCount === "number" && Number.isFinite(r.stepCount) ? Math.max(0, r.stepCount) : 0,
+        )
         if (r.err) {
           setInputSpec(null)
           setInputSpecForWorkflowId(null)
@@ -223,6 +237,7 @@ export function useNewJobForm(params: {
         setInputSpec(null)
         setInputSpecForWorkflowId(null)
         setInputSpecErr(null)
+        setWorkflowStepCount(null)
       })
       .finally(() => {
         if (cancelled) return
@@ -232,7 +247,7 @@ export function useNewJobForm(params: {
     return () => {
       cancelled = true
     }
-  }, [workflowId, pinnedWorkflowVersionNumber])
+  }, [workflowId, pinnedWorkflowVersionNumber, selectedWorkflow?.stepCount])
 
   // Prefill from querystring if present (create job "from run" flow).
   useEffect(() => {
@@ -355,7 +370,9 @@ export function useNewJobForm(params: {
     files.length,
   ])
 
-  const canSubmit = !!workflowId && !submitting && requiredOk
+  const workflowHasSteps =
+    typeof workflowStepCount === "number" && Number.isFinite(workflowStepCount) && workflowStepCount > 0
+  const canSubmit = !!workflowId && !submitting && requiredOk && workflowHasSteps
 
   function onUrlListChange(raw: string) {
     const max = typeof urlMaxItems === "number" ? urlMaxItems : null
@@ -395,6 +412,10 @@ export function useNewJobForm(params: {
     if (submitting) return { started: true }
     if (!workflowId) {
       toast.warning(t("jobs.selectWorkflow"))
+      return { started: false }
+    }
+    if (workflowStepCount === 0) {
+      toast.warning(t("common.workflowNoStepsTitle"))
       return { started: false }
     }
     if (!jsonState.ok) {
@@ -465,6 +486,7 @@ export function useNewJobForm(params: {
     setWorkflowId,
     pinnedWorkflowVersionNumber,
     setPinnedWorkflowVersionNumber,
+    workflowStepCount,
     inputJson,
     setInputJson: (v: string) => {
       setInputTouched(true)

@@ -49,6 +49,7 @@ export function NewJobSheet(props: {
     setWorkflowId,
     pinnedWorkflowVersionNumber,
     setPinnedWorkflowVersionNumber,
+    workflowStepCount,
     inputSpec,
     inputSpecErr,
     inputSpecLoading,
@@ -106,6 +107,7 @@ export function NewJobSheet(props: {
   }, [inputSpec, workflowId])
 
   const showSelectWorkflowAlert = !workflowId
+  const showNoStepsAlert = !!workflowId && workflowStepCount === 0
   const showInputsLoadingSkeleton = !!workflowId && inputSpecLoading
   const urlFilesEnabled = inputSpec?.fileInputs?.urlFiles?.enabled === true
   const uploadsEnabled = inputSpec?.fileInputs?.uploads?.enabled === true
@@ -225,6 +227,11 @@ export function NewJobSheet(props: {
                   <InfoAlert
                     titleKey="common.selectWorkflowForInputsTitle"
                     descriptionKey="common.selectWorkflowForInputsDescription"
+                  />
+                ) : showNoStepsAlert ? (
+                  <InfoAlert
+                    titleKey="common.workflowNoStepsTitle"
+                    descriptionKey="common.workflowNoStepsDescription"
                   />
                 ) : showInputsLoadingSkeleton ? (
                   <JobInputsSkeleton />

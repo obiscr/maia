@@ -92,6 +92,7 @@ export function NewScheduleSheet(props: { open: boolean; onOpenChange: (open: bo
     inputSpec,
     inputSpecErr,
     inputSpecLoading,
+    workflowStepCount,
     schemaProps,
     schemaRequired,
     clientValidationIssues,
@@ -112,6 +113,7 @@ export function NewScheduleSheet(props: { open: boolean; onOpenChange: (open: bo
   }, [inputSpec, workflowId])
 
   const showSelectWorkflowAlert = !workflowId
+  const showNoStepsAlert = !!workflowId && workflowStepCount === 0
   const urlFilesEnabled = inputSpec?.fileInputs?.urlFiles?.enabled === true
   const showNoInputsAlert = !!workflowId && !inputSpecLoading && !paramsEditorEnabled && !urlFilesEnabled
   const showInputsLoadingSkeleton = !!workflowId && inputSpecLoading
@@ -437,6 +439,11 @@ export function NewScheduleSheet(props: { open: boolean; onOpenChange: (open: bo
                     <InfoAlert
                       titleKey="common.selectWorkflowForInputsTitle"
                       descriptionKey="common.selectWorkflowForInputsDescription"
+                    />
+                  ) : showNoStepsAlert ? (
+                    <InfoAlert
+                      titleKey="common.workflowNoStepsTitle"
+                      descriptionKey="common.workflowNoStepsDescription"
                     />
                   ) : showInputsLoadingSkeleton ? (
                     <ScheduleInputsSkeleton />

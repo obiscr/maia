@@ -6,8 +6,9 @@ import { useEffect, useMemo, useState } from "react"
 import { toast } from "@/lib/client/toast"
 import { apiFetchJson } from "@/lib/shared/http/api"
 import { tApiError } from "@/lib/shared/i18n/error"
+import { fetchWorkflowStepCount } from "@/lib/client/workflows"
 
-type Workflow = { id: string; name: string; hasInputSpec?: boolean }
+type Workflow = { id: string; name: string; hasInputSpec?: boolean; stepCount?: number }
 
 export function useNewBatchForm(params: { t: (key: string, vars?: Record<string, any>) => string }) {
   const { t } = params
@@ -24,11 +25,15 @@ export function useNewBatchForm(params: { t: (key: string, vars?: Record<string,
   const [maxFailures, setMaxFailures] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [workflowStepCount, setWorkflowStepCount] = useState<number | null>(null)
+  const [workflowStepCountLoading, setWorkflowStepCountLoading] = useState(false)
 
   const selectedWorkflow = useMemo(() => workflows.find((w) => w.id === workflowId) ?? null, [workflows, workflowId])
   const workflowHasInputSpec = selectedWorkflow?.hasInputSpec === true
 
-  const canSubmit = !!workflowId && !submitting
+  const workflowHasSteps =
+    typeof workflowStepCount === "number" && Number.isFinite(workflowStepCount) && workflowStepCount > 0
+  const canSubmit = !!workflowId && !submitting && workflowHasSteps
 
   function setWorkflowId(next: string) {
     const nextId = String(next ?? "")
@@ -37,6 +42,43 @@ export function useNewBatchForm(params: { t: (key: string, vars?: Record<string,
       return nextId
     })
   }
+
+  useEffect(() => {
+    if (!workflowId) {
+      setWorkflowStepCount(null)
+      setWorkflowStepCountLoading(false)
+      return
+    }
+
+    // Unpinned: use list stepCount.
+    if (pinnedWorkflowVersionNumber == null || !Number.isFinite(pinnedWorkflowVersionNumber)) {
+      setWorkflowStepCount(
+        typeof selectedWorkflow?.stepCount === "number" ? Math.max(0, selectedWorkflow.stepCount) : 0,
+      )
+      setWorkflowStepCountLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setWorkflowStepCount(null)
+    setWorkflowStepCountLoading(true)
+    fetchWorkflowStepCount({ workflowId, pinnedWorkflowVersionNumber })
+      .then((n) => {
+        if (cancelled) return
+        setWorkflowStepCount(Number.isFinite(n) ? Math.max(0, n) : 0)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setWorkflowStepCount(null)
+      })
+      .finally(() => {
+        if (cancelled) return
+        setWorkflowStepCountLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [pinnedWorkflowVersionNumber, selectedWorkflow?.stepCount, workflowId])
 
   async function refreshWorkflows() {
     setLoading(true)
@@ -94,6 +136,8 @@ export function useNewBatchForm(params: { t: (key: string, vars?: Record<string,
     workflowId,
     setWorkflowId,
     workflowHasInputSpec,
+    workflowStepCount,
+    workflowStepCountLoading,
     name,
     setName,
     pinnedWorkflowVersionNumber,

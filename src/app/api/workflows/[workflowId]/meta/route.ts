@@ -36,4 +36,3 @@ export const GET = withApiObservability(async (_: Request, ctx: { params: Promis
     },
   })
 })
-

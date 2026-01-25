@@ -17,8 +17,9 @@ import {
 } from "@/lib/shared/maia/input-spec"
 import { isRecord } from "@/lib/shared/lang/is-record"
 import type { ApiIssue } from "@/lib/shared/http/types"
+import { fetchWorkflowStepCount } from "@/lib/client/workflows"
 
-type Workflow = { id: string; name: string; hasInputSpec?: boolean }
+type Workflow = { id: string; name: string; hasInputSpec?: boolean; stepCount?: number }
 
 export function useNewScheduleForm(params: { t: (key: string, vars?: Record<string, any>) => string }) {
   const { t } = params
@@ -48,6 +49,8 @@ export function useNewScheduleForm(params: { t: (key: string, vars?: Record<stri
   const [inputSpecForKey, setInputSpecForKey] = useState<string | null>(null)
   const [inputSpecErr, setInputSpecErr] = useState<string | null>(null)
   const [inputSpecLoading, setInputSpecLoading] = useState(false)
+  const [workflowStepCount, setWorkflowStepCount] = useState<number | null>(null)
+  const [workflowStepCountLoading, setWorkflowStepCountLoading] = useState(false)
   const didAutoPrefillWorkflowRef = useRef<string | null>(null)
   const lastUrlTruncateToastAtRef = useRef<number>(0)
   const [submitError, setSubmitError] = useState<{ code: string; issues?: ApiIssue[] } | null>(null)
@@ -157,7 +160,10 @@ export function useNewScheduleForm(params: { t: (key: string, vars?: Record<stri
     return true
   }, [hasValidInputSpec, inputSpec, inputSpecLoading, jsonState, schemaRequired, urlLines.length, workflowHasInputSpec])
 
-  const canSubmit = !!workflowId && !submitting && inputJsonOk && requiredOk && clientValidationIssues.length === 0
+  const workflowHasSteps =
+    typeof workflowStepCount === "number" && Number.isFinite(workflowStepCount) && workflowStepCount > 0
+  const canSubmit =
+    !!workflowId && !submitting && inputJsonOk && requiredOk && clientValidationIssues.length === 0 && workflowHasSteps
 
   function setInputJsonRaw(v: string) {
     setInputTouched(true)
@@ -225,6 +231,44 @@ export function useNewScheduleForm(params: { t: (key: string, vars?: Record<stri
     if (typeof pinnedWorkflowVersionNumber !== "number" || !Number.isFinite(pinnedWorkflowVersionNumber)) return null
     return Math.floor(pinnedWorkflowVersionNumber)
   }, [pinnedWorkflowVersionNumber])
+
+  // Determine whether the selected (possibly pinned) workflow has any steps.
+  useEffect(() => {
+    if (!workflowId) {
+      setWorkflowStepCount(null)
+      setWorkflowStepCountLoading(false)
+      return
+    }
+
+    // Unpinned (Published: latest): use list stepCount (cheap, no extra fetch).
+    if (desiredPinnedWorkflowVersion == null) {
+      setWorkflowStepCount(
+        typeof selectedWorkflow?.stepCount === "number" ? Math.max(0, selectedWorkflow.stepCount) : 0,
+      )
+      setWorkflowStepCountLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setWorkflowStepCount(null)
+    setWorkflowStepCountLoading(true)
+    fetchWorkflowStepCount({ workflowId, pinnedWorkflowVersionNumber: desiredPinnedWorkflowVersion })
+      .then((n) => {
+        if (cancelled) return
+        setWorkflowStepCount(Number.isFinite(n) ? Math.max(0, n) : 0)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setWorkflowStepCount(null)
+      })
+      .finally(() => {
+        if (cancelled) return
+        setWorkflowStepCountLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [desiredPinnedWorkflowVersion, selectedWorkflow?.stepCount, workflowId])
 
   const autoPrefillKey = useMemo(() => {
     if (!workflowId) return ""
@@ -475,6 +519,8 @@ export function useNewScheduleForm(params: { t: (key: string, vars?: Record<stri
     inputSpecForKey,
     inputSpecErr,
     inputSpecLoading,
+    workflowStepCount,
+    workflowStepCountLoading,
     hasValidInputSpec,
     schemaProps,
     schemaRequired,

@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils"
 import { InlineItemRow } from "@/components/common/inline-item-row"
 import { batchJsonStatusUiSpec, type BatchJsonUiStatus } from "@/lib/shared/batch-status"
 import { WorkflowVersionSelect } from "@/components/common/workflow-version-select"
+import { InfoAlert } from "@/components/common/info-alert"
 
 export function NewBatchSheet(props: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { t } = useI18n()
@@ -37,6 +38,7 @@ export function NewBatchSheet(props: { open: boolean; onOpenChange: (open: boole
     workflowId,
     setWorkflowId,
     workflowHasInputSpec,
+    workflowStepCount,
     name,
     setName,
     pinnedWorkflowVersionNumber,
@@ -56,6 +58,7 @@ export function NewBatchSheet(props: { open: boolean; onOpenChange: (open: boole
   } = form
   const loading = form.loading
   const uiPending = submitting || submitAction !== null
+  const showNoStepsAlert = !!workflowId && workflowStepCount === 0
 
   // Provenance (structured + free-form meta).
   // Single-user/local mode: owner is always "local" (no auth concept yet).
@@ -287,6 +290,15 @@ export function NewBatchSheet(props: { open: boolean; onOpenChange: (open: boole
                       />
                     </Field>
                   </FieldGroup>
+
+                  {showNoStepsAlert ? (
+                    <div className="mt-4">
+                      <InfoAlert
+                        titleKey="common.workflowNoStepsTitle"
+                        descriptionKey="common.workflowNoStepsDescription"
+                      />
+                    </div>
+                  ) : null}
                 </CollapsibleSectionCard>
 
                 <CollapsibleSectionCard
