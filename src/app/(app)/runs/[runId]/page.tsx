@@ -24,7 +24,8 @@ export async function generateMetadata(props: { params: Promise<{ runId: string 
     }
   }
 
-  const title = `${run.workflowName} - ${t("nav.runs")}`
+  const workflowName = typeof run.workflowName === "string" ? run.workflowName.trim() : ""
+  const title = workflowName ? `${workflowName} - ${t("nav.runs")}` : t("nav.runs")
   const description = t("runs.recentRunsDescription")
 
   return {

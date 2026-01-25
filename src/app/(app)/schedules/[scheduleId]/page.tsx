@@ -14,7 +14,10 @@ export async function generateMetadata(props: { params: Promise<{ scheduleId: st
     .toLowerCase()
   const schedule = await prisma.schedule.findUnique({
     where: { publicId },
-    select: { name: true },
+    select: {
+      name: true,
+      workflow: { select: { name: true } },
+    },
   })
 
   if (!schedule) {
@@ -24,7 +27,10 @@ export async function generateMetadata(props: { params: Promise<{ scheduleId: st
     }
   }
 
-  const title = `${schedule.name} - ${t("nav.schedules")}`
+  const scheduleName = typeof schedule.name === "string" ? schedule.name.trim() : ""
+  const workflowName = typeof schedule.workflow?.name === "string" ? schedule.workflow.name.trim() : ""
+  const titlePrefix = scheduleName || workflowName
+  const title = titlePrefix ? `${titlePrefix} - ${t("nav.schedules")}` : t("nav.schedules")
   const description = t("schedules.recentSchedulesDescription")
 
   return {

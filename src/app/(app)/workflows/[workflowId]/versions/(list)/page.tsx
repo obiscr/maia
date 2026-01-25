@@ -24,9 +24,17 @@ export async function generateMetadata(props: { params: Promise<{ workflowId: st
     }
   }
 
+  const name = typeof workflow.name === "string" ? workflow.name.trim() : ""
+  if (!name) {
+    return {
+      title: t("workflows.versions.title"),
+      description: t("workflows.versions.description"),
+    }
+  }
+
   return {
-    title: `${workflow.name} - ${t("workflows.versions.title")}`,
-    description: t("workflows.versions.descriptionNamed", { name: workflow.name }),
+    title: `${name} - ${t("workflows.versions.title")}`,
+    description: t("workflows.versions.descriptionNamed", { name }),
   }
 }
 

@@ -25,9 +25,17 @@ export async function generateMetadata(props: {
       }
     }
 
+    const name = typeof workflow.name === "string" ? workflow.name.trim() : ""
+    if (!name) {
+      return {
+        title: t("workflows.versions.detailTitle", { version: resolved.version }),
+        description: t("workflows.versions.description"),
+      }
+    }
+
     return {
-      title: `${workflow.name} - ${t("workflows.versions.detailTitle", { version: resolved.version })}`,
-      description: t("workflows.versions.descriptionNamed", { name: workflow.name }),
+      title: `${name} - ${t("workflows.versions.detailTitle", { version: resolved.version })}`,
+      description: t("workflows.versions.descriptionNamed", { name }),
     }
   } catch {
     return {

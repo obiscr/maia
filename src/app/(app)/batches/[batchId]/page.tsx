@@ -24,7 +24,8 @@ export async function generateMetadata(props: { params: Promise<{ batchId: strin
     }
   }
 
-  const title = `${batch.name} - ${t("nav.batches")}`
+  const name = typeof batch.name === "string" ? batch.name.trim() : ""
+  const title = name ? `${name} - ${t("nav.batches")}` : t("nav.batches")
   const description = t("batches.recentBatchesDescription")
 
   return {

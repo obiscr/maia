@@ -24,7 +24,8 @@ export async function generateMetadata(props: { params: Promise<{ jobId: string 
     }
   }
 
-  const title = `${job.workflow.name} - ${t("nav.jobs")}`
+  const workflowName = typeof job.workflow?.name === "string" ? job.workflow.name.trim() : ""
+  const title = workflowName ? `${workflowName} - ${t("nav.jobs")}` : t("nav.jobs")
   const description = t("jobs.recentJobsDescription")
 
   return {

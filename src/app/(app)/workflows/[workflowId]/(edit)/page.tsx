@@ -24,8 +24,10 @@ export async function generateMetadata(props: { params: Promise<{ workflowId: st
     }
   }
 
-  const title = workflow.name || t("workflows.newWorkflowName")
-  const description = workflow.description || t("workflows.editWorkflowDescription")
+  const name = typeof workflow.name === "string" ? workflow.name.trim() : ""
+  const desc = typeof workflow.description === "string" ? workflow.description.trim() : ""
+  const title = name || t("workflows.newWorkflowName")
+  const description = desc || t("workflows.editWorkflowDescription")
 
   return {
     title,
