@@ -6,6 +6,16 @@
   <a href="./README.md">English</a> | <a href="./README.zh-cn.md"><b>中文</b></a>
 </p>
 
+<p align="center">
+  <a href="https://hub.docker.com/r/obiscr/maia">
+    <img src="https://img.shields.io/docker/pulls/obiscr/maia" alt="Docker Pulls" />
+  </a>
+  
+  <a href="https://hub.docker.com/r/obiscr/maia">
+    <img src="https://img.shields.io/docker/v/obiscr/maia" alt="Docker Image Version" />
+  </a>
+</p>
+
 # Maia
 
 Maia 是一个自托管的 DAG 工作流编排与执行服务，用于长时间自动化任务：可观测、可调试、可回放。
@@ -17,6 +27,11 @@ Maia 是一个自托管的 DAG 工作流编排与执行服务，用于长时间�
 - **可选 Agent**：辅助生成/完善工作流（可选启用）
 
 ![Runs preview](.github/assets/runs-preview-1.png)
+
+
+> [!TIP]
+> 这篇文章包含了更多的演示案例
+> [Maia - Self-hosted DAG workflow orchestration and execution service](https://obiscr.com/blog/maia)
 
 ## 快速开始
 

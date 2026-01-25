@@ -6,6 +6,16 @@
   <a href="./README.md"><b>English</b></a> | <a href="./README.zh-cn.md">中文</a>
 </p>
 
+<p align="center">
+  <a href="https://hub.docker.com/r/obiscr/maia">
+    <img src="https://img.shields.io/docker/pulls/obiscr/maia" alt="Docker Pulls" />
+  </a>
+  
+  <a href="https://hub.docker.com/r/obiscr/maia">
+    <img src="https://img.shields.io/docker/v/obiscr/maia" alt="Docker Image Version" />
+  </a>
+</p>
+
 # Maia
 
 Maia is a self-hosted DAG workflow orchestration and execution service for long-running automation—observable, debuggable, and replayable.
@@ -17,6 +27,10 @@ Maia is a self-hosted DAG workflow orchestration and execution service for long-
 - **Optional agent**: helps generate/refine workflows (opt-in)
 
 ![Runs preview](.github/assets/runs-preview-1.png)
+
+> [!TIP]
+> This article includes more demo examples
+> [Maia - Self-hosted DAG workflow orchestration and execution service](https://obiscr.com/blog/maia)
 
 ## Quick start
 
@@ -31,7 +45,7 @@ curl -fsSL -o docker-compose.release.yml https://raw.githubusercontent.com/obisc
 curl -fsSL -o .env.production https://raw.githubusercontent.com/obiscr/maia/main/env.example
 ```
 
-2) Edit `.env.production 文件`，setup `RUNNER_TOKEN`
+2) Edit `.env.production` file and setup `RUNNER_TOKEN`
 
 ```dotenv
 RUNNER_TOKEN=your-token
@@ -51,7 +65,7 @@ See [Run locally with Dev](https://maia.obiscr.com/quick-start/build-from-source
 
 ### Run locally with Docker
 
-See [Run locally with Dev](https://maia.obiscr.com/quick-start/build-from-source-docker/)
+See [Run locally with Docker](https://maia.obiscr.com/quick-start/build-from-source-docker/)
 
 ## Releases
 
