@@ -16,6 +16,8 @@ Maia 是一个**自托管的 DAG 工作流编排与执行服务**，面向长时
 - **可组合**：每个步骤显式定义输入/输出，并产出工件
 - **可选代理**：按需启用，辅助工作流编写
 
+![Runs preview](.github/assets/runs-preview-1.png)
+
 ## 快速开始（Docker，自托管）
 
 Docker 部署包含两个服务：

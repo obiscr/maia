@@ -16,6 +16,8 @@ Maia is a **self-hosted DAG workflow orchestration and execution service** built
 - **Composable**: each step has explicit inputs/outputs and produces artifacts
 - **Optional Agent**: assists workflow authoring when enabled
 
+![Runs preview](.github/assets/runs-preview-1.png)
+
 ## Quick start (Docker, self-host)
 
 Docker deployment includes two services:
