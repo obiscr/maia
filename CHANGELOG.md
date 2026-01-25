@@ -8,4 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
+## v0.1.0 - 2026-01-25
+
+### Added
+
 - Initial public development.
+
+### Changed
+
+- Auto-pull missing Docker images during container creation (runner `server.mjs`).
+
