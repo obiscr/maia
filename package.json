@@ -99,7 +99,7 @@
     "react-hook-form": "^7.69.0",
     "react-resizable-panels": "^2.1.9",
     "reactflow": "^11.11.4",
-    "recharts": "^2.15.4",
+    "recharts": "^3.7.0",
     "rehype-highlight": "^7.0.2",
     "rehype-stringify": "^10.0.1",
     "remark-gfm": "^4.0.1",
