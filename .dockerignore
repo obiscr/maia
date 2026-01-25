@@ -1,0 +1,11 @@
+node_modules
+.next
+out
+build
+.git
+.DS_Store
+.env*
+maia-data
+coverage
+pnpm-debug.log*
+

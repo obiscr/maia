@@ -1,0 +1,114 @@
+{
+  "format": "maia.workflow.export.v1",
+  "exportedAt": "2026-01-24T00:00:00.000Z",
+  "workflow": {
+    "id": "wf-example-05",
+    "name": "NPM Dependency Update Checker",
+    "description": "Upload your package.json, the workflow will query the npm registry for latest versions, calculate 'latest within range / latest in registry' using semver, and generate an exportable upgrade report."
+  },
+  "version": null,
+  "flags": {
+    "envIncluded": false
+  },
+  "data": {
+    "meta": {
+      "name": "NPM Dependency Update Checker",
+      "description": "Upload your package.json, the workflow will query the npm registry for latest versions, calculate 'latest within range / latest in registry' using semver, and generate an exportable upgrade report."
+    },
+    "steps": [
+      {
+        "stepKey": "parse_package_json",
+        "name": "Parse package.json",
+        "scriptEsm": "import fs from \"node:fs/promises\";\nimport path from \"node:path\";\n\nfunction isPlainObject(v) {\n  return !!v && typeof v === \"object\" && !Array.isArray(v);\n}\n\nfunction normalizeFiles(v) {\n  return Array.isArray(v) ? v.filter(isPlainObject) : [];\n}\n\nfunction filesToDebug(files) {\n  return files.map((f) => ({\n    name: f.name,\n    source: f.source,\n    status: f.status,\n    path: f.path,\n    mime: f.mime,\n    sizeBytes: f.sizeBytes,\n  }));\n}\n\nfunction pickUploadFile(files) {\n  const ready = files.filter(\n    (f) => f.source === \"upload\" && f.status === \"ready\" && typeof f.path === \"string\" && f.path,\n  );\n  if (!ready.length) return null;\n\n  const byExact = (name) => ready.find((f) => String(f.name || \"\").toLowerCase() === name);\n\n  return (\n    byExact(\"package.json\") ||\n    ready.find((f) => String(f.name || \"\").toLowerCase().endsWith(\"package.json\")) ||\n    ready.find((f) => String(f.name || \"\").toLowerCase().endsWith(\".json\")) ||\n    ready[0]\n  );\n}\n\nexport default {\n  async main(env, ctx) {\n    const p = ctx?.params || {};\n\n    // Keep these configurable in code only (UI hides params editor when schema is empty).\n    const include = [\"dependencies\", \"devDependencies\"];\n    const maxDeps = 300;\n\n    const meta = {\n      include,\n      maxDeps,\n      source: \"upload\",\n      sourceFile: null,\n      parsedAt: new Date().toISOString(),\n      warnings: [],\n      errors: [],\n      debug: { filesSeen: [] },\n    };\n\n    const files = normalizeFiles(p.files ?? ctx?.input?.initialInput?.files ?? ctx?.input?.files);\n    meta.debug.filesSeen = filesToDebug(files);\n\n    const pick = pickUploadFile(files);\n    if (!pick) {\n      meta.errors.push(\"No package.json found: please upload package.json in Files\");\n      return { outputs: { deps: [], project: null, meta } };\n    }\n\n    const runDir = String(ctx?.files?.dirs?.runDir || \"\");\n    const rel = String(pick?.path || \"\");\n    if (!runDir || !rel) {\n      meta.errors.push(\"Cannot locate runDir/path (Files metadata incomplete)\");\n      meta.sourceFile = { name: pick.name, source: pick.source, status: pick.status, path: pick.path };\n      return { outputs: { deps: [], project: null, meta } };\n    }\n\n    meta.sourceFile = { name: pick.name, source: pick.source, status: pick.status, path: rel };\n\n    let obj = null;\n    try {\n      const txt = await fs.readFile(path.join(runDir, rel), \"utf8\");\n      obj = JSON.parse(String(txt));\n    } catch (e) {\n      meta.errors.push(`Failed to read/parse file: ${e instanceof Error ? e.message : String(e)}`);\n      return { outputs: { deps: [], project: null, meta } };\n    }\n\n    if (!isPlainObject(obj)) {\n      meta.errors.push(\"package.json parse result is not an object\");\n      return { outputs: { deps: [], project: null, meta } };\n    }\n\n    const project = {\n      name: typeof obj?.name === \"string\" ? obj.name : null,\n      version: typeof obj?.version === \"string\" ? obj.version : null,\n    };\n\n    const sections = {\n      dependencies: obj?.dependencies && typeof obj.dependencies === \"object\" ? obj.dependencies : {},\n      devDependencies: obj?.devDependencies && typeof obj.devDependencies === \"object\" ? obj.devDependencies : {},\n      peerDependencies: obj?.peerDependencies && typeof obj.peerDependencies === \"object\" ? obj.peerDependencies : {},\n      optionalDependencies: obj?.optionalDependencies && typeof obj.optionalDependencies === \"object\" ? obj.optionalDependencies : {},\n    };\n\n    const picked = [];\n    for (const sectionName of include) {\n      const sec = sections[sectionName];\n      if (!sec || typeof sec !== \"object\") continue;\n      for (const [name, range] of Object.entries(sec)) {\n        if (typeof name !== \"string\") continue;\n        if (typeof range !== \"string\") continue;\n        picked.push({ name, range, section: sectionName });\n      }\n    }\n\n    if (picked.length > maxDeps) meta.warnings.push(`Too many dependencies (${picked.length}), truncated to ${maxDeps}`);\n\n    const seen = new Set();\n    const deps = [];\n    for (const d of picked) {\n      if (seen.has(d.name)) continue;\n      seen.add(d.name);\n      deps.push(d);\n      if (deps.length >= maxDeps) break;\n    }\n\n    return {\n      outputs: {\n        project,\n        deps,\n        meta,\n      },\n    };\n  },\n};\n",
+        "timeoutMs": 60000,
+        "deps": []
+      },
+      {
+        "stepKey": "fetch_registry",
+        "name": "Query npm registry",
+        "scriptEsm": "import semver from \"semver\";\n\nfunction nowMs() {\n  return Date.now();\n}\n\nasync function withConcurrency(items, concurrency, worker) {\n  const arr = Array.isArray(items) ? items : [];\n  const c = Math.max(1, Math.min(20, Number(concurrency) || 5));\n  const results = new Array(arr.length);\n  let idx = 0;\n\n  async function runOne() {\n    while (true) {\n      const i = idx++;\n      if (i >= arr.length) return;\n      results[i] = await worker(arr[i], i);\n    }\n  }\n\n  const pool = new Array(Math.min(c, arr.length)).fill(0).map(() => runOne());\n  await Promise.all(pool);\n  return results;\n}\n\nasync function fetchJsonWithTimeout(url, timeoutMs) {\n  const controller = new AbortController();\n  const t = setTimeout(() => controller.abort(), Math.max(1, Number(timeoutMs) || 15000));\n  try {\n    const res = await fetch(url, {\n      signal: controller.signal,\n      headers: {\n        \"User-Agent\": \"Mozilla/5.0 (compatible; Maia-NPM-Outdated/1.0)\",\n        Accept: \"application/json\",\n      },\n    });\n    return { res, json: res.ok ? await res.json() : null };\n  } finally {\n    clearTimeout(t);\n  }\n}\n\nfunction pickLatestSatisfying(versions, range) {\n  const list = Array.isArray(versions) ? versions.filter((v) => typeof v === \"string\") : [];\n  // semver.maxSatisfying handles ordering.\n  return semver.validRange(range) ? semver.maxSatisfying(list, range) : null;\n}\n\nexport default {\n  async main(env, ctx) {\n    const p = ctx?.params || {};\n    const upstream = ctx?.upstream || {};\n\n    const parsed = upstream.parse_package_json?.data;\n    const deps = Array.isArray(parsed?.outputs?.deps) ? parsed.outputs.deps : [];\n\n    const timeoutMs = Number(p.timeoutMs ?? 15000) || 15000;\n    const concurrency = Number(p.concurrency ?? 5) || 5;\n\n    const meta = {\n      timeoutMs,\n      concurrency,\n      checkedAt: new Date().toISOString(),\n      errors: [],\n      warnings: [],\n    };\n\n    if (!deps.length) {\n      meta.errors.push(\"No deps to check (upstream deps is empty)\");\n      return { outputs: { results: [], meta } };\n    }\n\n    const base = \"https://registry.npmjs.org\";\n\n    const results = await withConcurrency(deps, concurrency, async (d) => {\n      const name = String(d?.name || \"\");\n      const range = String(d?.range || \"\");\n      const section = String(d?.section || \"\");\n      const started = nowMs();\n\n      if (!name || !range) {\n        return {\n          name,\n          range,\n          section,\n          ok: false,\n          latest: null,\n          latest_satisfying: null,\n          status: 0,\n          latency_ms: nowMs() - started,\n          error: \"missing_name_or_range\",\n        };\n      }\n\n      const url = `${base}/${encodeURIComponent(name)}`;\n\n      try {\n        const { res, json } = await fetchJsonWithTimeout(url, timeoutMs);\n        const latency_ms = nowMs() - started;\n\n        if (!res.ok || !json) {\n          return {\n            name,\n            range,\n            section,\n            ok: false,\n            latest: null,\n            latest_satisfying: null,\n            status: res.status,\n            latency_ms,\n            error: `HTTP ${res.status} ${res.statusText}`,\n          };\n        }\n\n        const latest = typeof json?.[\"dist-tags\"]?.latest === \"string\" ? json[\"dist-tags\"].latest : null;\n        const versions = json?.versions ? Object.keys(json.versions) : [];\n        const latest_satisfying = pickLatestSatisfying(versions, range);\n\n        const rangeValid = Boolean(semver.validRange(range));\n\n        return {\n          name,\n          range,\n          section,\n          ok: true,\n          range_valid: rangeValid,\n          latest,\n          latest_satisfying,\n          status: res.status,\n          latency_ms,\n          error: null,\n        };\n      } catch (e) {\n        const latency_ms = nowMs() - started;\n        const msg = e instanceof Error ? e.message : String(e);\n        const nameErr = e && typeof e === \"object\" && \"name\" in e ? String(e.name) : \"\";\n        const isTimeout = nameErr === \"AbortError\";\n\n        return {\n          name,\n          range,\n          section,\n          ok: false,\n          latest: null,\n          latest_satisfying: null,\n          status: 0,\n          latency_ms,\n          error: isTimeout ? `timeout: ${msg}` : msg,\n        };\n      }\n    });\n\n    return {\n      outputs: {\n        results,\n        meta,\n      },\n    };\n  },\n};\n",
+        "timeoutMs": 600000,
+        "deps": ["parse_package_json"]
+      },
+      {
+        "stepKey": "build_report",
+        "name": "Generate Markdown Report",
+        "scriptEsm": "function escMd(s) {\n  return String(s ?? \"\").replace(/\\|/g, \"\\\\|\").replace(/\\r?\\n/g, \" \");\n}\n\nfunction compareStatus(a, b) {\n  // Sort: errors first, then outdated, then ok.\n  const aOk = Boolean(a?.ok);\n  const bOk = Boolean(b?.ok);\n  if (aOk !== bOk) return aOk ? 1 : -1;\n\n  const aOut = Boolean(a?.latest) && Boolean(a?.latest_satisfying) && a.latest !== a.latest_satisfying;\n  const bOut = Boolean(b?.latest) && Boolean(b?.latest_satisfying) && b.latest !== b.latest_satisfying;\n  if (aOut !== bOut) return aOut ? -1 : 1;\n\n  return String(a?.name || \"\").localeCompare(String(b?.name || \"\"));\n}\n\nexport default {\n  async main(env, ctx) {\n    const upstream = ctx?.upstream || {};\n\n    const parsed = upstream.parse_package_json?.data;\n    const project = parsed?.outputs?.project || null;\n\n    const fetched = upstream.fetch_registry?.data;\n    const results = Array.isArray(fetched?.outputs?.results) ? fetched.outputs.results : [];\n\n    const meta = {\n      builtAt: new Date().toISOString(),\n      wroteFile: false,\n      fileName: \"npm-outdated-report.md\",\n      filePath: null,\n      errors: [],\n      warnings: [],\n    };\n\n    const sorted = results.slice().sort(compareStatus);\n\n    const total = sorted.length;\n    const errorsCount = sorted.filter((r) => !r?.ok).length;\n    const outdatedCount = sorted.filter((r) => r?.ok && r?.latest && r?.latest_satisfying && r.latest !== r.latest_satisfying).length;\n\n    const lines = [];\n    lines.push(`# npm Dependency Update Check Report`);\n    lines.push(\"\");\n    lines.push(`- Generated at: ${new Date().toISOString()}`);\n    if (project?.name) lines.push(`- Project:${project.name}${project.version ? `@${project.version}` : \"\"}`);\n    lines.push(`- Total dependencies: ${total}`);\n    lines.push(`- Query failures: ${errorsCount}`);\n    lines.push(`- Upgradable (latest within range != latest in registry): ${outdatedCount}`);\n    lines.push(\"\");\n\n    lines.push(\"## Details\");\n    lines.push(\"\");\n    lines.push(\"| # | Name | Section | Range | Latest (registry) | Latest satisfying range | Status | Error |\");\n    lines.push(\"| - | ---- | ------- | ----- | ---------------- | ----------------------- | ------ | ----- |\");\n\n    for (let i = 0; i < sorted.length; i++) {\n      const r = sorted[i] || {};\n      const name = escMd(r.name || \"\");\n      const section = escMd(r.section || \"\");\n      const range = escMd(r.range || \"\");\n      const latest = escMd(r.latest || \"-\");\n      const ls = escMd(r.latest_satisfying || \"-\");\n      const status = r.ok ? (latest !== \"-\" && ls !== \"-\" && latest !== ls ? \"OUTDATED\" : \"OK\") : \"ERROR\";\n      const err = escMd(r.error || \"\");\n\n      lines.push(`| ${i + 1} | ${name} | ${section} | ${range} | ${latest} | ${ls} | ${status} | ${err} |`);\n    }\n\n    lines.push(\"\");\n    lines.push(\"## Interpretation\");\n    lines.push(\"\");\n    lines.push(\"- `Latest (registry)`: npm registry's dist-tag `latest`.\");\n    lines.push(\"- `Latest satisfying range`: the latest version that can be selected within your version range (Range).\");\n    lines.push(\"- If `Latest satisfying range` is lower than `Latest`: your current Range locks you to an older major version/range (you need to change the Range to upgrade to the latest).\");\n\n    const report_md = lines.join(\"\\n\");\n\n    try {\n      const r = await ctx.artifacts.writeText(meta.fileName, report_md, { kind: \"file\", summary: \"npm outdated report (Markdown)\" });\n      meta.wroteFile = true;\n      meta.filePath = r?.absPath || null;\n    } catch (e) {\n      meta.errors.push(`write/register artifact failed: ${e instanceof Error ? e.message : String(e)}`);\n    }\n\n    return {\n      outputs: {\n        report_md,\n        file_name: meta.fileName,\n        file_path: meta.filePath,\n        wrote_file: meta.wroteFile,\n        results: sorted,\n        summary: { total, errors: errorsCount, outdated: outdatedCount },\n        meta,\n      },\n    };\n  },\n};\n",
+        "timeoutMs": 60000,
+        "deps": ["parse_package_json", "fetch_registry"]
+      }
+    ],
+    "env": {},
+    "dependencies": {
+      "semver": "^7.7.3"
+    },
+    "inputSpec": {
+      "version": 1,
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {},
+        "required": []
+      },
+      "examples": [
+        {
+          "name": "Upload package.json",
+          "description": "Upload your package.json to Files > Uploads.",
+          "params": {},
+          "uploadNotes": "Please upload a package.json file."
+        }
+      ],
+      "fileInputs": {
+        "urlFiles": { "enabled": false, "required": false },
+        "uploads": {
+          "title": "Upload package.json",
+          "enabled": true,
+          "required": true,
+          "maxItems": 1,
+          "acceptMime": ["application/json", "text/plain", "application/octet-stream"]
+        }
+      }
+    },
+    "outputsSpec": {
+      "version": 1,
+      "outputs": {
+        "summary": {
+          "stepKey": "build_report",
+          "field": "summary",
+          "title": "Summary Statistics",
+          "description": "Contains total/errors/outdated counts."
+        },
+        "results": {
+          "stepKey": "build_report",
+          "field": "results",
+          "title": "Result Details",
+          "description": "Each package's range/latest/latest_satisfying and error information (if any)."
+        },
+        "report_md": {
+          "stepKey": "build_report",
+          "field": "report_md",
+          "title": "Markdown Report Content",
+          "description": "Upgrade check report that can be directly copied to issues/PRs."
+        },
+        "file_name": {
+          "stepKey": "build_report",
+          "field": "file_name",
+          "title": "Report File Name",
+          "description": "Markdown file name written to artifacts."
+        },
+        "wrote_file": {
+          "stepKey": "build_report",
+          "field": "wrote_file",
+          "title": "File Written",
+          "description": "Whether the file was successfully written and registered as an artifact."
+        },
+        "meta": {
+          "stepKey": "build_report",
+          "field": "meta",
+          "title": "Execution Meta",
+          "description": "Contains errors/warnings and artifact write information."
+        }
+      }
+    }
+  }
+}

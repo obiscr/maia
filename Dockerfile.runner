@@ -1,0 +1,13 @@
+FROM node:20-slim AS runner
+
+WORKDIR /runner
+
+ENV NODE_ENV=production
+ENV RUNNER_PORT=9090
+
+COPY runner/server.mjs ./server.mjs
+
+EXPOSE 9090
+
+CMD ["node", "server.mjs"]
+

@@ -1,0 +1,20 @@
+FROM node:20-slim
+
+# Sandbox runtime image for executing steps / deps installs.
+# Security posture:
+# - run as non-root (65532)
+# - intended to be launched with: read-only rootfs, cap-drop=ALL, no-new-privileges
+
+ENV NODE_ENV=production
+
+# Enable pnpm via Corepack (deps install in sandbox).
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
+
+# Create a minimal writable workspace only via mounted volumes.
+WORKDIR /app
+
+# Run as non-root (same uid/gid used in runner launch args).
+USER 65532:65532
+

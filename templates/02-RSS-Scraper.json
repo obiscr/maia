@@ -1,0 +1,149 @@
+{
+  "format": "maia.workflow.export.v1",
+  "exportedAt": "2026-01-24T00:00:00.000Z",
+  "workflow": {
+    "id": "wf-02",
+    "name": "RSS Scraper",
+    "description": "Fetch entries from RSS/Atom/XML addresses, parse and clean, deduplicate, and output structured results."
+  },
+  "version": null,
+  "flags": {
+    "envIncluded": false
+  },
+  "data": {
+    "meta": {
+      "name": "RSS Scraper",
+      "description": "Input an RSS/Atom/XML address, the workflow will fetch the raw XML, parse the entry list, clean fields, deduplicate, and limit the output quantity in the final step."
+    },
+    "steps": [
+      {
+        "stepKey": "deduplicate",
+        "name": "Deduplication",
+        "scriptEsm": "export default {\n  async main(env, ctx) {\n    const { params, upstream, files, urls } = ctx;\n    \n    const parseResult = upstream.parse_and_clean?.data;\n    const items = parseResult?.outputs?.items || [];\n    const previousMeta = parseResult?.outputs?.meta || {};\n    \n    const meta = {\n      ...previousMeta,\n      deduplicationStats: {\n        before: items.length,\n        after: 0,\n        removed: 0,\n        duplicateLinks: [],\n        duplicateTitles: [],\n        timestamp: new Date().toISOString()\n      }\n    };\n    \n    if (items.length === 0) {\n      meta.deduplicationStats.after = 0;\n      return {\n        outputs: {\n          items: [],\n          meta\n        }\n      };\n    }\n    \n    try {\n      const seenLinks = new Set();\n      const seenTitles = new Set();\n      const uniqueItems = [];\n      \n      // Sort by date (newest first), keeping the newest duplicates\n      const sortedItems = [...items].sort((a, b) => {\n        const dateA = a.pubDate ? new Date(a.pubDate).getTime() : 0;\n        const dateB = b.pubDate ? new Date(b.pubDate).getTime() : 0;\n        return dateB - dateA; // Descending order, newest first\n      });\n      \n      for (const item of sortedItems) {\n        let isDuplicate = false;\n        \n        // First check for duplicate links\n        if (item.link) {\n          const normalizedLink = item.link.toLowerCase().trim();\n          if (seenLinks.has(normalizedLink)) {\n            isDuplicate = true;\n            meta.deduplicationStats.duplicateLinks.push({\n              link: item.link,\n              title: item.title\n            });\n          } else {\n            seenLinks.add(normalizedLink);\n          }\n        }\n        \n        // If no link or link is not duplicate, check title duplicates\n        if (!isDuplicate && item.title) {\n          const normalizedTitle = item.title.toLowerCase().trim();\n          if (normalizedTitle && seenTitles.has(normalizedTitle)) {\n            // Same title but different link, may not be a true duplicate\n            // Can be handled selectively, for now just record\n            meta.deduplicationStats.duplicateTitles.push({\n              title: item.title,\n              link: item.link\n            });\n            // Don't mark as duplicate, could be same news from different sources\n          } else if (normalizedTitle) {\n            seenTitles.add(normalizedTitle);\n          }\n        }\n        \n        if (!isDuplicate) {\n          uniqueItems.push(item);\n        }\n      }\n      \n      // Restore original order (if needed)\n      const finalItems = uniqueItems.sort((a, b) => a.index - b.index);\n      \n      meta.deduplicationStats.after = finalItems.length;\n      meta.deduplicationStats.removed = items.length - finalItems.length;\n      \n      // Record deduplication strategy\n      if (meta.deduplicationStats.removed > 0) {\n        meta.fallbackStrategies = meta.fallbackStrategies || [];\n        meta.fallbackStrategies.push(`Removed ${meta.deduplicationStats.removed} duplicate items (based on link deduplication)`);\n      }\n      \n      return {\n        outputs: {\n          items: finalItems,\n          meta\n        }\n      };\n      \n    } catch (error) {\n      meta.deduplicationStats.error = error.message;\n      // Return original data when deduplication fails\n      return {\n        outputs: {\n          items,\n          meta\n        }\n      };\n    }\n  }\n}",
+        "timeoutMs": 600000,
+        "deps": ["parse_and_clean"]
+      },
+      {
+        "stepKey": "fetch_feed",
+        "name": "Fetch Feed Data",
+        "scriptEsm": "export default {\n  async main(env, ctx) {\n    const { params, upstream, files, urls } = ctx;\n    \n    const feedUrl = params.feedUrl;\n    const timeoutMs = params.timeoutMs || 10000;\n    \n    const meta = {\n      errors: [],\n      warnings: [],\n      fallbackStrategies: [],\n      timestamp: new Date().toISOString(),\n      feedUrl,\n      timeoutMs\n    };\n    \n    if (!feedUrl) {\n      meta.errors.push('feedUrl parameter missing');\n      return {\n        outputs: {\n          rawXml: null,\n          feedType: null,\n          meta\n        }\n      };\n    }\n    \n    try {\n      // Set timeout\n      const controller = new AbortController();\n      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);\n      \n      const response = await fetch(feedUrl, {\n        signal: controller.signal,\n        headers: {\n          'User-Agent': 'Mozilla/5.0 (compatible; RSS-Fetcher/1.0)',\n          'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml'\n        }\n      });\n      \n      clearTimeout(timeoutId);\n      \n      if (!response.ok) {\n        meta.errors.push(`HTTP error: ${response.status} ${response.statusText}`);\n        return {\n          outputs: {\n            rawXml: null,\n            feedType: null,\n            meta\n          }\n        };\n      }\n      \n      const contentType = response.headers.get('content-type') || '';\n      const rawXml = await response.text();\n      \n      // Detect feed type\n      let feedType = 'unknown';\n      if (contentType.includes('rss') || rawXml.includes('<rss')) {\n        feedType = 'rss';\n      } else if (contentType.includes('atom') || rawXml.includes('<feed')) {\n        feedType = 'atom';\n      } else if (contentType.includes('xml') || rawXml.trim().startsWith('<?xml')) {\n        feedType = 'xml';\n      }\n      \n      meta.feedType = feedType;\n      meta.contentLength = rawXml.length;\n      meta.contentType = contentType;\n      \n      if (feedType === 'unknown') {\n        meta.warnings.push('Unable to determine feed type, attempting to parse as generic XML');\n      }\n      \n      return {\n        outputs: {\n          rawXml,\n          feedType,\n          meta\n        }\n      };\n      \n    } catch (error) {\n      meta.errors.push(`Fetch failed: ${error.message}`);\n      \n      if (error.name === 'AbortError') {\n        meta.fallbackStrategies.push('Request timeout, consider using cache or retry');\n      } else if (error.code === 'ENOTFOUND') {\n        meta.fallbackStrategies.push('DNS resolution failed, check URL or network connection');\n      } else {\n        meta.fallbackStrategies.push('Network error, try alternate source or retry later');\n      }\n      \n      return {\n        outputs: {\n          rawXml: null,\n          feedType: null,\n          meta\n        }\n      };\n    }\n  }\n}",
+        "timeoutMs": 600000,
+        "deps": []
+      },
+      {
+        "stepKey": "limit_output",
+        "name": "Limit Output Count",
+        "scriptEsm": "export default {\n  async main(env, ctx) {\n    const { params, upstream, files, urls } = ctx;\n    \n    const deduplicateResult = upstream.deduplicate?.data;\n    const items = deduplicateResult?.outputs?.items || [];\n    const previousMeta = deduplicateResult?.outputs?.meta || {};\n    \n    const maxItems = params.maxItems || 10; // Default 10 items\n    const timeoutMs = params.timeoutMs || 10000;\n    \n    const meta = {\n      ...previousMeta,\n      limitStats: {\n        before: items.length,\n        maxItems,\n        after: 0,\n        limited: false,\n        timestamp: new Date().toISOString()\n      },\n      finalOutput: {\n        totalItems: 0,\n        hasErrors: false,\n        hasWarnings: false,\n        executionTime: new Date().toISOString()\n      }\n    };\n    \n    // Calculate final output\n    let finalItems = items;\n    \n    if (items.length > maxItems) {\n      finalItems = items.slice(0, maxItems);\n      meta.limitStats.after = maxItems;\n      meta.limitStats.limited = true;\n      \n      // Record fallback strategy\n      meta.fallbackStrategies = meta.fallbackStrategies || [];\n      meta.fallbackStrategies.push(`Output limited to ${maxItems} items (original ${items.length} items)`);\n    } else {\n      meta.limitStats.after = items.length;\n    }\n    \n    // Check for errors\n    const hasErrors = meta.errors && meta.errors.length > 0;\n    const hasWarnings = (meta.warnings && meta.warnings.length > 0) || \n                       (meta.parsingErrors && meta.parsingErrors.length > 0) ||\n                       (meta.parsingWarnings && meta.parsingWarnings.length > 0);\n    \n    meta.finalOutput.totalItems = finalItems.length;\n    meta.finalOutput.hasErrors = hasErrors;\n    meta.finalOutput.hasWarnings = hasWarnings;\n    \n    // If no data but has errors, add fallback strategy\n    if (finalItems.length === 0 && hasErrors) {\n      meta.fallbackStrategies = meta.fallbackStrategies || [];\n      meta.fallbackStrategies.push('Fetch failed, returning empty result set');\n    }\n    \n    // If no data but no obvious errors, add suggestion\n    if (finalItems.length === 0 && !hasErrors) {\n      meta.fallbackStrategies = meta.fallbackStrategies || [];\n      meta.fallbackStrategies.push('No valid items found, check feed format or URL');\n    }\n    \n    // Prepare final output format\n    const output = {\n      success: finalItems.length > 0 && !hasErrors,\n      items: finalItems.map(item => ({\n        id: item.id,\n        title: item.title,\n        link: item.link,\n        pubDate: item.pubDate,\n        source: item.source,\n        feedType: item.feedType\n      })),\n      feedInfo: previousMeta.feedInfo || {},\n      meta: {\n        stats: {\n          totalItems: items.length,\n          limited: meta.limitStats.limited,\n          maxItems,\n          duplicatesRemoved: meta.deduplicationStats?.removed || 0\n        },\n        errors: meta.errors || [],\n        warnings: [\n          ...(meta.warnings || []),\n          ...(meta.parsingErrors || []),\n          ...(meta.parsingWarnings || [])\n        ],\n        fallbackStrategies: meta.fallbackStrategies || [],\n        executionInfo: {\n          feedUrl: params.feedUrl,\n          feedType: meta.feedType,\n          timeoutMs,\n          timestamp: new Date().toISOString()\n        }\n      }\n    };\n    \n    return {\n      outputs: output\n    };\n  }\n}",
+        "timeoutMs": 600000,
+        "deps": ["deduplicate"]
+      },
+      {
+        "stepKey": "parse_and_clean",
+        "name": "Parse and Clean Entries",
+        "scriptEsm": "export default {\n  async main(env, ctx) {\n    const { params, upstream, files, urls } = ctx;\n    \n    const fetchResult = upstream.fetch_feed?.data;\n    const rawXml = fetchResult?.outputs?.rawXml;\n    const feedType = fetchResult?.outputs?.feedType;\n    const previousMeta = fetchResult?.outputs?.meta || {};\n    \n    const meta = {\n      ...previousMeta,\n      parsingErrors: [],\n      parsingWarnings: [],\n      parsingTimestamp: new Date().toISOString()\n    };\n    \n    if (!rawXml) {\n      meta.parsingErrors.push('No parseable XML data');\n      return {\n        outputs: {\n          items: [],\n          feedInfo: {},\n          meta\n        }\n      };\n    }\n    \n    try {\n      // Simple XML parsing (may need more complex parsing library in actual use)\n      const items = [];\n      const feedInfo = {};\n      \n      // Extract basic feed information\n      const titleMatch = rawXml.match(/<title[^>]*>([^<]+)<\\/title>/i);\n      if (titleMatch) {\n        feedInfo.title = titleMatch[1].trim();\n      }\n      \n      const linkMatch = rawXml.match(/<link[^>]*>([^<]+)<\\/link>/i) || \n                       rawXml.match(/<link[^>]*href=\"([^\"]+)\"[^>]*\\/?>/i);\n      if (linkMatch) {\n        feedInfo.link = linkMatch[1].trim();\n      }\n      \n      // Parse entries\n      let itemMatches = [];\n      \n      if (feedType === 'rss' || feedType === 'xml') {\n        // RSS format: <item> tags\n        const itemRegex = /<item[^>]*>([\\s\\S]*?)<\\/item>/gi;\n        itemMatches = [...rawXml.matchAll(itemRegex)];\n      } else if (feedType === 'atom') {\n        // Atom format: <entry> tags\n        const entryRegex = /<entry[^>]*>([\\s\\S]*?)<\\/entry>/gi;\n        itemMatches = [...rawXml.matchAll(entryRegex)];\n      } else {\n        // Unknown format, try both patterns\n        const rssItems = [...rawXml.matchAll(/<item[^>]*>([\\s\\S]*?)<\\/item>/gi)];\n        const atomEntries = [...rawXml.matchAll(/<entry[^>]*>([\\s\\S]*?)<\\/entry>/gi)];\n        itemMatches = rssItems.length > 0 ? rssItems : atomEntries;\n        \n        if (itemMatches.length === 0) {\n          meta.parsingWarnings.push('No standard item or entry tags found, trying other patterns');\n          // Try to find any content blocks containing title and link\n          const anyContentRegex = /<(?:item|entry|div|article)[^>]*>([\\s\\S]*?<\\/?(?:title|link)[^>]*>[\\s\\S]*?)<\\/(?:item|entry|div|article)>/gi;\n          itemMatches = [...rawXml.matchAll(anyContentRegex)];\n        }\n      }\n      \n      meta.totalItemsFound = itemMatches.length;\n      \n      for (let i = 0; i < itemMatches.length; i++) {\n        try {\n          const itemContent = itemMatches[i][1];\n          \n          // Extract title\n          let title = '';\n          const titleMatch = itemContent.match(/<title[^>]*>([^<]+)<\\/title>/i);\n          if (titleMatch) {\n            title = titleMatch[1].trim();\n          }\n          \n          // Extract link (RSS: <link>, Atom: <link href=\"...\">)\n          let link = '';\n          const linkMatch = itemContent.match(/<link[^>]*>([^<]+)<\\/link>/i) || \n                           itemContent.match(/<link[^>]*href=\"([^\"]+)\"[^>]*\\/?>/i);\n          if (linkMatch) {\n            link = linkMatch[1].trim();\n          }\n          \n          // Extract publication date\n          let pubDate = '';\n          const dateMatch = itemContent.match(/<(?:pubDate|published|updated|dc:date)[^>]*>([^<]+)<\\/(?:pubDate|published|updated|dc:date)>/i);\n          if (dateMatch) {\n            pubDate = dateMatch[1].trim();\n          }\n          \n          // Extract source/author\n          let source = '';\n          const sourceMatch = itemContent.match(/<(?:author|dc:creator|source)[^>]*>([^<]+)<\\/(?:author|dc:creator|source)>/i) ||\n                             itemContent.match(/<(?:author|dc:creator|source)[^>]*name=\"([^\"]+)\"[^>]*\\/?>/i);\n          if (sourceMatch) {\n            source = sourceMatch[1].trim();\n          }\n          \n          // Clean data\n          if (title) {\n            // Remove HTML tags and extra spaces\n            title = title.replace(/<[^>]*>/g, '').replace(/\\s+/g, ' ').trim();\n          }\n          \n          if (link) {\n            // Ensure link is a complete URL\n            try {\n              if (!link.startsWith('http')) {\n                const baseUrl = feedInfo.link || params.feedUrl;\n                if (baseUrl) {\n                  const urlObj = new URL(baseUrl);\n                  link = new URL(link, urlObj.origin + urlObj.pathname).href;\n                }\n              }\n            } catch (e) {\n              meta.parsingWarnings.push(`Link processing failed: ${link}`);\n            }\n          }\n          \n          // Normalize date format\n          let normalizedDate = '';\n          if (pubDate) {\n            try {\n              const date = new Date(pubDate);\n              if (!isNaN(date.getTime())) {\n                normalizedDate = date.toISOString();\n              }\n            } catch (e) {\n              // Keep original date string\n              normalizedDate = pubDate;\n            }\n          }\n          \n          // Generate unique ID (based on link or title)\n          const id = link || `item-${i}-${Date.now()}`;\n          \n          items.push({\n            id,\n            title,\n            link,\n            pubDate: normalizedDate || pubDate,\n            source,\n            rawDate: pubDate,\n            index: i,\n            feedType\n          });\n          \n        } catch (itemError) {\n          meta.parsingWarnings.push(`Item ${i} parsing failed: ${itemError.message}`);\n        }\n      }\n      \n      meta.successfullyParsed = items.length;\n      \n      if (items.length === 0 && itemMatches.length > 0) {\n        meta.parsingErrors.push('Found item tags but failed to extract valid data');\n      }\n      \n      return {\n        outputs: {\n          items,\n          feedInfo,\n          meta\n        }\n      };\n      \n    } catch (error) {\n      meta.parsingErrors.push(`Parsing failed: ${error.message}`);\n      return {\n        outputs: {\n          items: [],\n          feedInfo: {},\n          meta\n        }\n      };\n    }\n  }\n}",
+        "timeoutMs": 600000,
+        "deps": ["fetch_feed"]
+      },
+      {
+        "stepKey": "write_json_artifact",
+        "name": "Write JSON File",
+        "scriptEsm": "export default {\n  async main(env, ctx) {\n    const { upstream } = ctx;\n\n    const prev = upstream.limit_output?.data;\n    const outputs = prev?.outputs ?? null;\n\n    const meta = {\n      errors: [],\n      warnings: [],\n      builtAt: new Date().toISOString(),\n      wroteFile: false,\n      fileName: \"rss-output.json\",\n      filePath: null,\n    };\n\n    const json = JSON.stringify(outputs, null, 2);\n\n    try {\n      const r = await ctx.artifacts.writeText(meta.fileName, json, { kind: \"file\", summary: \"RSS workflow output JSON\" });\n      meta.wroteFile = true;\n      meta.filePath = r?.absPath || null;\n    } catch (e) {\n      meta.errors.push(`Failed to write/register artifact: ${e instanceof Error ? e.message : String(e)}`);\n    }\n\n    return {\n      outputs: {\n        json,\n        file_name: meta.fileName,\n        file_path: meta.filePath,\n        wrote_file: meta.wroteFile,\n        meta,\n      },\n    };\n  },\n};\n",
+        "timeoutMs": 600000,
+        "deps": ["limit_output"]
+      }
+    ],
+    "env": {},
+    "dependencies": {},
+    "inputSpec": {
+      "version": 1,
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "feedUrl": {
+            "type": "string",
+            "title": "Feed URL",
+            "description": "Address of RSS/Atom/XML. It is recommended to provide a complete URL (http/https).",
+            "minLength": 1
+          },
+          "maxItems": {
+            "type": "integer",
+            "title": "Maximum Output Items",
+            "description": "Maximum number of items to keep in the final output (default 10).",
+            "minimum": 1,
+            "maximum": 200,
+            "default": 10
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "title": "Request Timeout (ms)",
+            "description": "Network request timeout for fetching Feed (default 10000).",
+            "minimum": 1000,
+            "maximum": 600000,
+            "default": 10000
+          }
+        },
+        "required": ["feedUrl"]
+      },
+      "fileInputs": {
+        "urlFiles": {
+          "enabled": false,
+          "required": false
+        },
+        "uploads": {
+          "enabled": false,
+          "required": false
+        }
+      },
+      "examples": [
+        {
+          "name": "Blog RSS",
+          "description": "Most common usage: directly provide an RSS address.",
+          "params": {
+            "feedUrl": "https://news.ycombinator.com/rss",
+            "maxItems": 10,
+            "timeoutMs": 10000
+          }
+        },
+        {
+          "name": "Output More Items",
+          "description": "When you want to get more items at once, increase maxItems.",
+          "params": {
+            "feedUrl": "https://news.ycombinator.com/rss",
+            "maxItems": 50,
+            "timeoutMs": 10000
+          }
+        }
+      ]
+    },
+    "outputsSpec": {
+      "version": 1,
+      "outputs": {
+        "items": {
+          "stepKey": "limit_output",
+          "field": "items",
+          "title": "Item List",
+          "description": "Final output array of items (parsed, deduplicated, and limited in quantity)."
+        },
+        "feedInfo": {
+          "stepKey": "parse_and_clean",
+          "field": "feedInfo",
+          "title": "Feed Info",
+          "description": "Basic information of the Feed (such as title/link, depending on parsing results)."
+        },
+        "success": {
+          "stepKey": "limit_output",
+          "field": "success",
+          "title": "Success",
+          "description": "Comprehensive judgment based on fetch/parse errors and final item count."
+        },
+        "meta": {
+          "stepKey": "limit_output",
+          "field": "meta",
+          "title": "Execution Meta",
+          "description": "Contains stats/errors/warnings/fallbackStrategies and executionInfo."
+        }
+      }
+    }
+  }
+}

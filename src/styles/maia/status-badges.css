@@ -1,0 +1,106 @@
+@layer maia.components {
+  .maia-status-badge {
+    border-color: var(--maia-status-border);
+    background-color: var(--maia-status-bg);
+    color: var(--maia-status-text);
+  }
+
+  .maia-status-badge--pending,
+  .maia-status-badge--needs-action,
+  .maia-status-badge--interrupted {
+    --maia-status-border: #9a67004d;
+    --maia-status-bg: #9a67001a;
+    --maia-status-text: #9a6700;
+  }
+
+  /* Distinct from pending/queued: waiting for upstream deps (DAG). */
+  .maia-status-badge--blocked {
+    --maia-status-border: #0f766e4d;
+    --maia-status-bg: #0f766e1a;
+    --maia-status-text: #0f766e;
+  }
+
+  .maia-status-badge--running {
+    --maia-status-border: #0969da4d;
+    --maia-status-bg: #0969da1a;
+    --maia-status-text: #0969da;
+  }
+
+  .maia-status-badge--succeeded,
+  .maia-status-badge--success {
+    --maia-status-border: #1a7f374d;
+    --maia-status-bg: #1a7f371a;
+    --maia-status-text: #1a7f37;
+  }
+
+  .maia-status-badge--failed,
+  .maia-status-badge--error {
+    --maia-status-border: #d1242f4d;
+    --maia-status-bg: #d1242f1a;
+    --maia-status-text: #d1242f;
+  }
+
+  .maia-status-badge--paused {
+    --maia-status-border: #8250df4d;
+    --maia-status-bg: #8250df1a;
+    --maia-status-text: #8250df;
+  }
+
+  .maia-status-badge--canceled,
+  .maia-status-badge--skipped,
+  .maia-status-badge--neutral,
+  .maia-status-badge--unknown {
+    --maia-status-border: #57606a47;
+    --maia-status-bg: #57606a1a;
+    --maia-status-text: #57606a;
+  }
+
+  .dark .maia-status-badge--pending,
+  .dark .maia-status-badge--needs-action,
+  .dark .maia-status-badge--interrupted {
+    --maia-status-border: #d2992266;
+    --maia-status-bg: #d2992226;
+    --maia-status-text: #d29922;
+  }
+
+  .dark .maia-status-badge--blocked {
+    --maia-status-border: #2dd4bf66;
+    --maia-status-bg: #2dd4bf26;
+    --maia-status-text: #2dd4bf;
+  }
+
+  .dark .maia-status-badge--running {
+    --maia-status-border: #2f81f766;
+    --maia-status-bg: #2f81f726;
+    --maia-status-text: #2f81f7;
+  }
+
+  .dark .maia-status-badge--succeeded,
+  .dark .maia-status-badge--success {
+    --maia-status-border: #3fb95066;
+    --maia-status-bg: #3fb95026;
+    --maia-status-text: #3fb950;
+  }
+
+  .dark .maia-status-badge--failed,
+  .dark .maia-status-badge--error {
+    --maia-status-border: #f8514966;
+    --maia-status-bg: #f8514926;
+    --maia-status-text: #f85149;
+  }
+
+  .dark .maia-status-badge--paused {
+    --maia-status-border: #a371f766;
+    --maia-status-bg: #a371f726;
+    --maia-status-text: #a371f7;
+  }
+
+  .dark .maia-status-badge--canceled,
+  .dark .maia-status-badge--skipped,
+  .dark .maia-status-badge--neutral,
+  .dark .maia-status-badge--unknown {
+    --maia-status-border: #8b949e59;
+    --maia-status-bg: #8b949e24;
+    --maia-status-text: #8b949e;
+  }
+}

@@ -1,0 +1,268 @@
+@layer maia.components {
+  .indicator-shell {
+    background: var(--maia-indicator-shell-bg);
+    border: 1px solid var(--maia-indicator-shell-border);
+  }
+  .indicator-shell:hover {
+    background: var(--maia-indicator-shell-bg-hover);
+  }
+  .indicator-dot {
+    background-color: var(--maia-indicator-muted);
+    transition:
+      transform 150ms,
+      background-color 150ms,
+      box-shadow 150ms;
+  }
+  .indicator-dot:hover {
+    background-color: var(--maia-indicator-hover);
+  }
+  .indicator-dot[aria-current="true"] {
+    background-color: var(--maia-indicator-active);
+    box-shadow: 0 0 0 2px var(--maia-indicator-ring);
+  }
+  .indicator-dot:focus-visible {
+    box-shadow: 0 0 0 2px var(--maia-indicator-ring);
+    outline: none;
+  }
+
+  @keyframes maia-signal-ping {
+    0% {
+      transform: scale(0.8);
+      opacity: 0.6;
+    }
+    80% {
+      transform: scale(1.6);
+      opacity: 0;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+  .signal-pulse {
+    position: relative;
+  }
+  .signal-pulse::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border: 2px solid currentColor;
+    border-radius: 9999px;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .group:hover .signal-pulse::after {
+    animation: maia-signal-ping 900ms ease-out forwards;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .group:hover .signal-pulse::after {
+      animation: none;
+    }
+  }
+
+  @keyframes maia-comment-highlight-fade {
+    0% {
+      background-color: color-mix(in srgb, var(--maia-brand-bg) 22%, transparent);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--maia-brand-bg) 65%, transparent) inset;
+    }
+    100% {
+      background-color: transparent;
+      box-shadow: 0 0 0 0 transparent inset;
+    }
+  }
+  .comment-highlight,
+  .maia-comment-flash {
+    animation: maia-comment-highlight-fade 1600ms ease-out forwards;
+    border-radius: 8px;
+  }
+
+  .maia-divider {
+    display: flex;
+    margin-block: var(--maia-divider-margin-block, 1.5rem);
+    --maia-divider-bg: color-mix(in oklab, var(--maia-divider-accent) 18%, transparent);
+    --maia-divider-text: var(--maia-divider-accent);
+  }
+  .dark .maia-divider {
+    --maia-divider-bg: color-mix(in oklab, var(--maia-divider-accent) 26%, transparent);
+  }
+
+  .maia-divider--align-left {
+    justify-content: flex-start;
+  }
+  .maia-divider--align-center {
+    justify-content: center;
+  }
+  .maia-divider--align-right {
+    justify-content: flex-end;
+  }
+
+  .maia-divider__inner {
+    display: flex;
+    align-items: center;
+  }
+
+  .maia-divider--size-md {
+    --maia-divider-margin-block: 1.5rem;
+    --maia-divider-side-width: 0.9rem;
+    --maia-divider-side-height: 0.35rem;
+    --maia-divider-side-gap: 0.15rem;
+    --maia-divider-label-padding-y: 0.25rem;
+    --maia-divider-label-padding-x: 0.9rem;
+    --maia-divider-label-min-width: 4rem;
+    --maia-divider-font-weight: 600;
+    --maia-divider-font-size: 1em;
+
+    --maia-divider-label-tip: 0.9rem;
+  }
+  .maia-divider--size-lg {
+    --maia-divider-margin-block: 2.5rem;
+    --maia-divider-side-width: 1.5rem;
+    --maia-divider-side-height: 0.65rem;
+    --maia-divider-side-gap: 0.25rem;
+    --maia-divider-label-padding-y: 0.55rem;
+    --maia-divider-label-padding-x: 1.45rem;
+    --maia-divider-label-min-width: 6.5rem;
+    --maia-divider-font-weight: 700;
+    --maia-divider-font-size: 1.35em;
+    --maia-divider-label-tip: 1.6rem;
+  }
+  .maia-divider--size-sm {
+    --maia-divider-margin-block: 1.1rem;
+    --maia-divider-side-width: 0.75rem;
+    --maia-divider-side-height: 0.3rem;
+    --maia-divider-side-gap: 0.12rem;
+    --maia-divider-label-padding-y: 0.2rem;
+    --maia-divider-label-padding-x: 0.75rem;
+    --maia-divider-label-min-width: 3.5rem;
+    --maia-divider-font-weight: 600;
+    --maia-divider-font-size: 0.95em;
+    --maia-divider-label-tip: 0.75rem;
+  }
+
+  .maia-divider--note {
+    --maia-divider-accent: #0969da;
+  }
+  .maia-divider--tip {
+    --maia-divider-accent: #1a7f37;
+  }
+  .maia-divider--important {
+    --maia-divider-accent: #8250df;
+  }
+  .maia-divider--warning {
+    --maia-divider-accent: #9a6700;
+  }
+  .maia-divider--caution {
+    --maia-divider-accent: #d1242f;
+  }
+  .dark .maia-divider--note {
+    --maia-divider-accent: #2f81f7;
+  }
+  .dark .maia-divider--tip {
+    --maia-divider-accent: #3fb950;
+  }
+  .dark .maia-divider--important {
+    --maia-divider-accent: #a371f7;
+  }
+  .dark .maia-divider--warning {
+    --maia-divider-accent: #d29922;
+  }
+  .dark .maia-divider--caution {
+    --maia-divider-accent: #f85149;
+  }
+
+  .maia-divider__label {
+    position: relative;
+    padding: var(--maia-divider-label-padding-y, 0.25rem) var(--maia-divider-label-padding-x, 0.9rem);
+    min-width: var(--maia-divider-label-min-width, 4rem);
+    text-align: center;
+    isolation: isolate;
+  }
+  .maia-divider__label::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--maia-divider-bg);
+    z-index: -1;
+  }
+
+  @supports (clip-path: polygon(0 0)) {
+    .maia-divider__label::before {
+      inset-block: 0;
+      inset-inline: calc(var(--maia-divider-label-tip, 0.9rem) * -1);
+      clip-path: polygon(
+        var(--maia-divider-label-tip, 0.9rem) 0%,
+        calc(100% - var(--maia-divider-label-tip, 0.9rem)) 0%,
+        100% 50%,
+        calc(100% - var(--maia-divider-label-tip, 0.9rem)) 100%,
+        var(--maia-divider-label-tip, 0.9rem) 100%,
+        0% 50%
+      );
+    }
+  }
+  @supports not (clip-path: polygon(0 0)) {
+    .maia-divider__label::before {
+      transform: skewX(-12deg);
+    }
+  }
+
+  .maia-divider__label-text {
+    display: inline-block;
+    font-weight: var(--maia-divider-font-weight, 600);
+    font-size: var(--maia-divider-font-size, 1em);
+    color: var(--maia-divider-text);
+    line-height: 1.2;
+  }
+
+  .maia-aside {
+    border-left-color: var(--maia-aside-accent);
+  }
+  .maia-aside__title {
+    color: var(--maia-aside-accent);
+  }
+
+  .maia-aside--note {
+    --maia-aside-accent: #0969da;
+  }
+  .maia-aside--tip {
+    --maia-aside-accent: #1a7f37;
+  }
+  .maia-aside--important {
+    --maia-aside-accent: #8250df;
+  }
+  .maia-aside--warning {
+    --maia-aside-accent: #9a6700;
+  }
+  .maia-aside--caution {
+    --maia-aside-accent: #d1242f;
+  }
+
+  .dark .maia-aside--note {
+    --maia-aside-accent: #2f81f7;
+  }
+  .dark .maia-aside--tip {
+    --maia-aside-accent: #3fb950;
+  }
+  .dark .maia-aside--important {
+    --maia-aside-accent: #a371f7;
+  }
+  .dark .maia-aside--warning {
+    --maia-aside-accent: #d29922;
+  }
+  .dark .maia-aside--caution {
+    --maia-aside-accent: #f85149;
+  }
+
+  .maia-cm {
+    border-radius: inherit;
+  }
+  .maia-cm .cm-editor {
+    border-radius: inherit;
+    overflow: hidden;
+  }
+  .maia-cm .cm-scroller {
+    border-radius: inherit;
+  }
+  .maia-cm .cm-gutters {
+    border-top-left-radius: inherit;
+    border-bottom-left-radius: inherit;
+  }
+}

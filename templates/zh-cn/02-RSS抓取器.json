@@ -1,0 +1,149 @@
+{
+  "format": "maia.workflow.export.v1",
+  "exportedAt": "2026-01-24T00:00:00.000Z",
+  "workflow": {
+    "id": "wf-02",
+    "name": "RSS抓取器",
+    "description": "从 RSS/Atom/XML 地址抓取条目，解析清洗、去重并输出结构化结果。"
+  },
+  "version": null,
+  "flags": {
+    "envIncluded": false
+  },
+  "data": {
+    "meta": {
+      "name": "RSS抓取器",
+      "description": "输入一个 RSS/Atom/XML 地址，工作流会抓取原始 XML，解析出条目列表，清洗字段、去重，并在最后一步限制输出数量。"
+    },
+    "steps": [
+      {
+        "stepKey": "deduplicate",
+        "name": "去重处理",
+        "scriptEsm": "export default {\n  async main(env, ctx) {\n    const { params, upstream, files, urls } = ctx;\n    \n    const parseResult = upstream.parse_and_clean?.data;\n    const items = parseResult?.outputs?.items || [];\n    const previousMeta = parseResult?.outputs?.meta || {};\n    \n    const meta = {\n      ...previousMeta,\n      deduplicationStats: {\n        before: items.length,\n        after: 0,\n        removed: 0,\n        duplicateLinks: [],\n        duplicateTitles: [],\n        timestamp: new Date().toISOString()\n      }\n    };\n    \n    if (items.length === 0) {\n      meta.deduplicationStats.after = 0;\n      return {\n        outputs: {\n          items: [],\n          meta\n        }\n      };\n    }\n    \n    try {\n      const seenLinks = new Set();\n      const seenTitles = new Set();\n      const uniqueItems = [];\n      \n      // 按日期排序（最新的优先），这样保留最新的重复项\n      const sortedItems = [...items].sort((a, b) => {\n        const dateA = a.pubDate ? new Date(a.pubDate).getTime() : 0;\n        const dateB = b.pubDate ? new Date(b.pubDate).getTime() : 0;\n        return dateB - dateA; // 降序，最新的在前\n      });\n      \n      for (const item of sortedItems) {\n        let isDuplicate = false;\n        \n        // 首先检查链接重复\n        if (item.link) {\n          const normalizedLink = item.link.toLowerCase().trim();\n          if (seenLinks.has(normalizedLink)) {\n            isDuplicate = true;\n            meta.deduplicationStats.duplicateLinks.push({\n              link: item.link,\n              title: item.title\n            });\n          } else {\n            seenLinks.add(normalizedLink);\n          }\n        }\n        \n        // 如果没有链接或链接不重复，检查标题重复\n        if (!isDuplicate && item.title) {\n          const normalizedTitle = item.title.toLowerCase().trim();\n          if (normalizedTitle && seenTitles.has(normalizedTitle)) {\n            // 标题相同但链接不同，可能不是真正的重复\n            // 这里可以选择性处理，暂时只记录\n            meta.deduplicationStats.duplicateTitles.push({\n              title: item.title,\n              link: item.link\n            });\n            // 不标记为重复，因为可能是不同来源的相同新闻\n          } else if (normalizedTitle) {\n            seenTitles.add(normalizedTitle);\n          }\n        }\n        \n        if (!isDuplicate) {\n          uniqueItems.push(item);\n        }\n      }\n      \n      // 恢复原始顺序（如果需要）\n      const finalItems = uniqueItems.sort((a, b) => a.index - b.index);\n      \n      meta.deduplicationStats.after = finalItems.length;\n      meta.deduplicationStats.removed = items.length - finalItems.length;\n      \n      // 记录去重策略\n      if (meta.deduplicationStats.removed > 0) {\n        meta.fallbackStrategies = meta.fallbackStrategies || [];\n        meta.fallbackStrategies.push(`移除了${meta.deduplicationStats.removed}个重复条目（基于链接去重）`);\n      }\n      \n      return {\n        outputs: {\n          items: finalItems,\n          meta\n        }\n      };\n      \n    } catch (error) {\n      meta.deduplicationStats.error = error.message;\n      // 去重失败时返回原始数据\n      return {\n        outputs: {\n          items,\n          meta\n        }\n      };\n    }\n  }\n}",
+        "timeoutMs": 600000,
+        "deps": ["parse_and_clean"]
+      },
+      {
+        "stepKey": "fetch_feed",
+        "name": "抓取Feed数据",
+        "scriptEsm": "export default {\n  async main(env, ctx) {\n    const { params, upstream, files, urls } = ctx;\n    \n    const feedUrl = params.feedUrl;\n    const timeoutMs = params.timeoutMs || 10000;\n    \n    const meta = {\n      errors: [],\n      warnings: [],\n      fallbackStrategies: [],\n      timestamp: new Date().toISOString(),\n      feedUrl,\n      timeoutMs\n    };\n    \n    if (!feedUrl) {\n      meta.errors.push('feedUrl参数缺失');\n      return {\n        outputs: {\n          rawXml: null,\n          feedType: null,\n          meta\n        }\n      };\n    }\n    \n    try {\n      // 设置超时\n      const controller = new AbortController();\n      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);\n      \n      const response = await fetch(feedUrl, {\n        signal: controller.signal,\n        headers: {\n          'User-Agent': 'Mozilla/5.0 (compatible; RSS-Fetcher/1.0)',\n          'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml'\n        }\n      });\n      \n      clearTimeout(timeoutId);\n      \n      if (!response.ok) {\n        meta.errors.push(`HTTP错误: ${response.status} ${response.statusText}`);\n        return {\n          outputs: {\n            rawXml: null,\n            feedType: null,\n            meta\n          }\n        };\n      }\n      \n      const contentType = response.headers.get('content-type') || '';\n      const rawXml = await response.text();\n      \n      // 检测feed类型\n      let feedType = 'unknown';\n      if (contentType.includes('rss') || rawXml.includes('<rss')) {\n        feedType = 'rss';\n      } else if (contentType.includes('atom') || rawXml.includes('<feed')) {\n        feedType = 'atom';\n      } else if (contentType.includes('xml') || rawXml.trim().startsWith('<?xml')) {\n        feedType = 'xml';\n      }\n      \n      meta.feedType = feedType;\n      meta.contentLength = rawXml.length;\n      meta.contentType = contentType;\n      \n      if (feedType === 'unknown') {\n        meta.warnings.push('无法确定feed类型，尝试作为通用XML解析');\n      }\n      \n      return {\n        outputs: {\n          rawXml,\n          feedType,\n          meta\n        }\n      };\n      \n    } catch (error) {\n      meta.errors.push(`抓取失败: ${error.message}`);\n      \n      if (error.name === 'AbortError') {\n        meta.fallbackStrategies.push('请求超时，考虑使用缓存或重试');\n      } else if (error.code === 'ENOTFOUND') {\n        meta.fallbackStrategies.push('域名解析失败，检查URL或网络连接');\n      } else {\n        meta.fallbackStrategies.push('网络错误，尝试备用源或稍后重试');\n      }\n      \n      return {\n        outputs: {\n          rawXml: null,\n          feedType: null,\n          meta\n        }\n      };\n    }\n  }\n}",
+        "timeoutMs": 600000,
+        "deps": []
+      },
+      {
+        "stepKey": "limit_output",
+        "name": "限制输出数量",
+        "scriptEsm": "export default {\n  async main(env, ctx) {\n    const { params, upstream, files, urls } = ctx;\n    \n    const deduplicateResult = upstream.deduplicate?.data;\n    const items = deduplicateResult?.outputs?.items || [];\n    const previousMeta = deduplicateResult?.outputs?.meta || {};\n    \n    const maxItems = params.maxItems || 10; // 默认10条\n    const timeoutMs = params.timeoutMs || 10000;\n    \n    const meta = {\n      ...previousMeta,\n      limitStats: {\n        before: items.length,\n        maxItems,\n        after: 0,\n        limited: false,\n        timestamp: new Date().toISOString()\n      },\n      finalOutput: {\n        totalItems: 0,\n        hasErrors: false,\n        hasWarnings: false,\n        executionTime: new Date().toISOString()\n      }\n    };\n    \n    // 计算最终输出\n    let finalItems = items;\n    \n    if (items.length > maxItems) {\n      finalItems = items.slice(0, maxItems);\n      meta.limitStats.after = maxItems;\n      meta.limitStats.limited = true;\n      \n      // 记录降级策略\n      meta.fallbackStrategies = meta.fallbackStrategies || [];\n      meta.fallbackStrategies.push(`输出限制为${maxItems}条（原始${items.length}条）`);\n    } else {\n      meta.limitStats.after = items.length;\n    }\n    \n    // 检查是否有错误\n    const hasErrors = meta.errors && meta.errors.length > 0;\n    const hasWarnings = (meta.warnings && meta.warnings.length > 0) || \n                       (meta.parsingErrors && meta.parsingErrors.length > 0) ||\n                       (meta.parsingWarnings && meta.parsingWarnings.length > 0);\n    \n    meta.finalOutput.totalItems = finalItems.length;\n    meta.finalOutput.hasErrors = hasErrors;\n    meta.finalOutput.hasWarnings = hasWarnings;\n    \n    // 如果没有数据但有错误，添加降级策略\n    if (finalItems.length === 0 && hasErrors) {\n      meta.fallbackStrategies = meta.fallbackStrategies || [];\n      meta.fallbackStrategies.push('抓取失败，返回空结果集');\n    }\n    \n    // 如果没有数据但没有明显错误，添加建议\n    if (finalItems.length === 0 && !hasErrors) {\n      meta.fallbackStrategies = meta.fallbackStrategies || [];\n      meta.fallbackStrategies.push('未找到有效条目，检查feed格式或URL');\n    }\n    \n    // 准备最终输出格式\n    const output = {\n      success: finalItems.length > 0 && !hasErrors,\n      items: finalItems.map(item => ({\n        id: item.id,\n        title: item.title,\n        link: item.link,\n        pubDate: item.pubDate,\n        source: item.source,\n        feedType: item.feedType\n      })),\n      feedInfo: previousMeta.feedInfo || {},\n      meta: {\n        stats: {\n          totalItems: items.length,\n          limited: meta.limitStats.limited,\n          maxItems,\n          duplicatesRemoved: meta.deduplicationStats?.removed || 0\n        },\n        errors: meta.errors || [],\n        warnings: [\n          ...(meta.warnings || []),\n          ...(meta.parsingErrors || []),\n          ...(meta.parsingWarnings || [])\n        ],\n        fallbackStrategies: meta.fallbackStrategies || [],\n        executionInfo: {\n          feedUrl: params.feedUrl,\n          feedType: meta.feedType,\n          timeoutMs,\n          timestamp: new Date().toISOString()\n        }\n      }\n    };\n    \n    return {\n      outputs: output\n    };\n  }\n}",
+        "timeoutMs": 600000,
+        "deps": ["deduplicate"]
+      },
+      {
+        "stepKey": "parse_and_clean",
+        "name": "解析和清理条目",
+        "scriptEsm": "export default {\n  async main(env, ctx) {\n    const { params, upstream, files, urls } = ctx;\n    \n    const fetchResult = upstream.fetch_feed?.data;\n    const rawXml = fetchResult?.outputs?.rawXml;\n    const feedType = fetchResult?.outputs?.feedType;\n    const previousMeta = fetchResult?.outputs?.meta || {};\n    \n    const meta = {\n      ...previousMeta,\n      parsingErrors: [],\n      parsingWarnings: [],\n      parsingTimestamp: new Date().toISOString()\n    };\n    \n    if (!rawXml) {\n      meta.parsingErrors.push('没有可解析的XML数据');\n      return {\n        outputs: {\n          items: [],\n          feedInfo: {},\n          meta\n        }\n      };\n    }\n    \n    try {\n      // 简单的XML解析（实际使用中可能需要更复杂的解析库）\n      const items = [];\n      const feedInfo = {};\n      \n      // 提取feed基本信息\n      const titleMatch = rawXml.match(/<title[^>]*>([^<]+)<\\/title>/i);\n      if (titleMatch) {\n        feedInfo.title = titleMatch[1].trim();\n      }\n      \n      const linkMatch = rawXml.match(/<link[^>]*>([^<]+)<\\/link>/i) || \n                       rawXml.match(/<link[^>]*href=\"([^\"]+)\"[^>]*\\/?>/i);\n      if (linkMatch) {\n        feedInfo.link = linkMatch[1].trim();\n      }\n      \n      // 解析条目\n      let itemMatches = [];\n      \n      if (feedType === 'rss' || feedType === 'xml') {\n        // RSS格式：<item>标签\n        const itemRegex = /<item[^>]*>([\\s\\S]*?)<\\/item>/gi;\n        itemMatches = [...rawXml.matchAll(itemRegex)];\n      } else if (feedType === 'atom') {\n        // Atom格式：<entry>标签\n        const entryRegex = /<entry[^>]*>([\\s\\S]*?)<\\/entry>/gi;\n        itemMatches = [...rawXml.matchAll(entryRegex)];\n      } else {\n        // 未知格式，尝试两种模式\n        const rssItems = [...rawXml.matchAll(/<item[^>]*>([\\s\\S]*?)<\\/item>/gi)];\n        const atomEntries = [...rawXml.matchAll(/<entry[^>]*>([\\s\\S]*?)<\\/entry>/gi)];\n        itemMatches = rssItems.length > 0 ? rssItems : atomEntries;\n        \n        if (itemMatches.length === 0) {\n          meta.parsingWarnings.push('未找到标准的item或entry标签，尝试其他模式');\n          // 尝试查找任何包含标题和链接的内容块\n          const anyContentRegex = /<(?:item|entry|div|article)[^>]*>([\\s\\S]*?<\\/?(?:title|link)[^>]*>[\\s\\S]*?)<\\/(?:item|entry|div|article)>/gi;\n          itemMatches = [...rawXml.matchAll(anyContentRegex)];\n        }\n      }\n      \n      meta.totalItemsFound = itemMatches.length;\n      \n      for (let i = 0; i < itemMatches.length; i++) {\n        try {\n          const itemContent = itemMatches[i][1];\n          \n          // 提取标题\n          let title = '';\n          const titleMatch = itemContent.match(/<title[^>]*>([^<]+)<\\/title>/i);\n          if (titleMatch) {\n            title = titleMatch[1].trim();\n          }\n          \n          // 提取链接（RSS: <link>，Atom: <link href=\"...\">）\n          let link = '';\n          const linkMatch = itemContent.match(/<link[^>]*>([^<]+)<\\/link>/i) || \n                           itemContent.match(/<link[^>]*href=\"([^\"]+)\"[^>]*\\/?>/i);\n          if (linkMatch) {\n            link = linkMatch[1].trim();\n          }\n          \n          // 提取发布时间\n          let pubDate = '';\n          const dateMatch = itemContent.match(/<(?:pubDate|published|updated|dc:date)[^>]*>([^<]+)<\\/(?:pubDate|published|updated|dc:date)>/i);\n          if (dateMatch) {\n            pubDate = dateMatch[1].trim();\n          }\n          \n          // 提取来源/作者\n          let source = '';\n          const sourceMatch = itemContent.match(/<(?:author|dc:creator|source)[^>]*>([^<]+)<\\/(?:author|dc:creator|source)>/i) ||\n                             itemContent.match(/<(?:author|dc:creator|source)[^>]*name=\"([^\"]+)\"[^>]*\\/?>/i);\n          if (sourceMatch) {\n            source = sourceMatch[1].trim();\n          }\n          \n          // 清理数据\n          if (title) {\n            // 移除HTML标签和多余空格\n            title = title.replace(/<[^>]*>/g, '').replace(/\\s+/g, ' ').trim();\n          }\n          \n          if (link) {\n            // 确保链接是完整的URL\n            try {\n              if (!link.startsWith('http')) {\n                const baseUrl = feedInfo.link || params.feedUrl;\n                if (baseUrl) {\n                  const urlObj = new URL(baseUrl);\n                  link = new URL(link, urlObj.origin + urlObj.pathname).href;\n                }\n              }\n            } catch (e) {\n              meta.parsingWarnings.push(`链接处理失败: ${link}`);\n            }\n          }\n          \n          // 标准化日期格式\n          let normalizedDate = '';\n          if (pubDate) {\n            try {\n              const date = new Date(pubDate);\n              if (!isNaN(date.getTime())) {\n                normalizedDate = date.toISOString();\n              }\n            } catch (e) {\n              // 保持原始日期字符串\n              normalizedDate = pubDate;\n            }\n          }\n          \n          // 生成唯一ID（基于链接或标题）\n          const id = link || `item-${i}-${Date.now()}`;\n          \n          items.push({\n            id,\n            title,\n            link,\n            pubDate: normalizedDate || pubDate,\n            source,\n            rawDate: pubDate,\n            index: i,\n            feedType\n          });\n          \n        } catch (itemError) {\n          meta.parsingWarnings.push(`条目${i}解析失败: ${itemError.message}`);\n        }\n      }\n      \n      meta.successfullyParsed = items.length;\n      \n      if (items.length === 0 && itemMatches.length > 0) {\n        meta.parsingErrors.push('找到条目标签但未能提取有效数据');\n      }\n      \n      return {\n        outputs: {\n          items,\n          feedInfo,\n          meta\n        }\n      };\n      \n    } catch (error) {\n      meta.parsingErrors.push(`解析失败: ${error.message}`);\n      return {\n        outputs: {\n          items: [],\n          feedInfo: {},\n          meta\n        }\n      };\n    }\n  }\n}",
+        "timeoutMs": 600000,
+        "deps": ["fetch_feed"]
+      },
+      {
+        "stepKey": "write_json_artifact",
+        "name": "写入JSON文件",
+        "scriptEsm": "export default {\n  async main(env, ctx) {\n    const { upstream } = ctx;\n\n    const prev = upstream.limit_output?.data;\n    const outputs = prev?.outputs ?? null;\n\n    const meta = {\n      errors: [],\n      warnings: [],\n      builtAt: new Date().toISOString(),\n      wroteFile: false,\n      fileName: \"rss-output.json\",\n      filePath: null,\n    };\n\n    const json = JSON.stringify(outputs, null, 2);\n\n    try {\n      const r = await ctx.artifacts.writeText(meta.fileName, json, { kind: \"file\", summary: \"RSS 工作流输出 JSON\" });\n      meta.wroteFile = true;\n      meta.filePath = r?.absPath || null;\n    } catch (e) {\n      meta.errors.push(`写入/注册产物失败: ${e instanceof Error ? e.message : String(e)}`);\n    }\n\n    return {\n      outputs: {\n        json,\n        file_name: meta.fileName,\n        file_path: meta.filePath,\n        wrote_file: meta.wroteFile,\n        meta,\n      },\n    };\n  },\n};\n",
+        "timeoutMs": 600000,
+        "deps": ["limit_output"]
+      }
+    ],
+    "env": {},
+    "dependencies": {},
+    "inputSpec": {
+      "version": 1,
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "feedUrl": {
+            "type": "string",
+            "title": "Feed URL",
+            "description": "RSS/Atom/XML 的地址。建议提供完整 URL（http/https）。",
+            "minLength": 1
+          },
+          "maxItems": {
+            "type": "integer",
+            "title": "最大输出条目数",
+            "description": "最终输出最多保留多少条（默认 10）。",
+            "minimum": 1,
+            "maximum": 200,
+            "default": 10
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "title": "请求超时（毫秒）",
+            "description": "抓取 Feed 的网络请求超时（默认 10000）。",
+            "minimum": 1000,
+            "maximum": 600000,
+            "default": 10000
+          }
+        },
+        "required": ["feedUrl"]
+      },
+      "fileInputs": {
+        "urlFiles": {
+          "enabled": false,
+          "required": false
+        },
+        "uploads": {
+          "enabled": false,
+          "required": false
+        }
+      },
+      "examples": [
+        {
+          "name": "博客 RSS",
+          "description": "最常见的用法：直接提供 RSS 地址。",
+          "params": {
+            "feedUrl": "https://news.ycombinator.com/rss",
+            "maxItems": 10,
+            "timeoutMs": 10000
+          }
+        },
+        {
+          "name": "输出更多条目",
+          "description": "当你想一次拿到更多条目时，调大 maxItems。",
+          "params": {
+            "feedUrl": "https://news.ycombinator.com/rss",
+            "maxItems": 50,
+            "timeoutMs": 10000
+          }
+        }
+      ]
+    },
+    "outputsSpec": {
+      "version": 1,
+      "outputs": {
+        "items": {
+          "stepKey": "limit_output",
+          "field": "items",
+          "title": "条目列表",
+          "description": "最终输出的条目数组（已解析、已去重、已限制数量）。"
+        },
+        "feedInfo": {
+          "stepKey": "parse_and_clean",
+          "field": "feedInfo",
+          "title": "Feed 信息",
+          "description": "Feed 的基础信息（如 title/link 等，取决于解析结果）。"
+        },
+        "success": {
+          "stepKey": "limit_output",
+          "field": "success",
+          "title": "是否成功",
+          "description": "根据抓取/解析错误与最终条目数量综合判断。"
+        },
+        "meta": {
+          "stepKey": "limit_output",
+          "field": "meta",
+          "title": "执行 meta",
+          "description": "包含 stats/errors/warnings/fallbackStrategies 与 executionInfo。"
+        }
+      }
+    }
+  }
+}

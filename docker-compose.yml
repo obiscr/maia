@@ -1,0 +1,73 @@
+name: maia
+
+services:
+  maia:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3690:3690"
+    environment:
+      # Next standalone server binds to HOSTNAME; force 0.0.0.0 in containers
+      - HOSTNAME=0.0.0.0
+      - PORT=3690
+      - MAIA_DATA_DIR=/app/maia-data
+      - GLOBAL_RUN_CONCURRENCY=2
+      - PER_RUN_STEP_CONCURRENCY=2
+      - INPUT_DOWNLOAD_CONCURRENCY=2
+      - INPUT_DOWNLOAD_TIMEOUT_MS=60000
+      - INPUT_DOWNLOAD_MAX_BYTES=52428800
+      # Runner (execution plane) - required for container isolation
+      - RUNNER_URL=http://runner:9090
+      - RUNNER_TOKEN=${RUNNER_TOKEN:-dev-runner-token}
+    volumes:
+      # Instance data directory mount (two modes):
+      #
+      # Mode A (default, recommended for most users): Docker named volume
+      # - No .env needed; data is managed by Docker.
+      #
+      # Mode B (optional): bind-mount a HOST directory (for operators who want explicit location)
+      # - Set in .env:
+      #     MAIA_DATA_MOUNT_TYPE=bind
+      #     MAIA_HOST_DATA_DIR=/absolute/path/on/host
+      #
+      # Host path examples:
+      # - macOS:   /Users/<user>/Documents/Maia
+      # - Linux:   /home/<user>/Maia  or  /var/lib/maia
+      # - Windows: /c/Users/<user>/Documents/Maia  (Git-Bash style)
+      #
+      # Container path MUST be: /app/maia-data (matches MAIA_DATA_DIR)
+      - type: ${MAIA_DATA_MOUNT_TYPE:-volume}
+        source: ${MAIA_HOST_DATA_DIR:-maia-data}
+        target: /app/maia-data
+
+  runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.runner
+    environment:
+      - RUNNER_PORT=9090
+      - RUNNER_TOKEN=${RUNNER_TOKEN:-dev-runner-token}
+      - DOCKER_SOCKET=/var/run/docker.sock
+      - RUNNER_DATA_DIR=/app/maia-data
+      # Runner mount mode:
+      # - If MAIA_DATA_MOUNT_TYPE=bind, set MAIA_HOST_DATA_DIR and Runner will mount that host path into sandbox containers.
+      # - If using default volume mode, leave MAIA_HOST_DATA_DIR empty and Runner will mount the named volume.
+      - RUNNER_DATA_BIND=${MAIA_HOST_DATA_DIR:-}
+      - RUNNER_DATA_VOLUME=maia-data
+      - RUNNER_ORPHAN_TTL_MS=1800000
+      # Sandbox image used to execute steps.
+      # Default is a published image that Docker can auto-pull if missing.
+      # For offline/local builds, set MAIA_SANDBOX_IMAGE=maia-sandbox and build it via Dockerfile.sandbox.
+      - RUNNER_STEP_IMAGE=${MAIA_SANDBOX_IMAGE:-obiscr/maia-sandbox:latest}
+      - RUNNER_DEPS_IMAGE=${MAIA_SANDBOX_IMAGE:-obiscr/maia-sandbox:latest}
+    volumes:
+      - type: ${MAIA_DATA_MOUNT_TYPE:-volume}
+        source: ${MAIA_HOST_DATA_DIR:-maia-data}
+        target: /app/maia-data
+      - /var/run/docker.sock:/var/run/docker.sock
+    expose:
+      - "9090"
+
+volumes:
+  maia-data:

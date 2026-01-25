@@ -1,0 +1,82 @@
+@layer maia.core {
+  @media print {
+    :root {
+      --maia-sl-color-white: #17181c;
+      --maia-sl-color-gray-1: #23262f;
+      --maia-sl-color-gray-2: #353841;
+      --maia-sl-color-gray-3: #555962;
+      --maia-sl-color-gray-4: #888c96;
+      --maia-sl-color-gray-5: #c1c3c8;
+      --maia-sl-color-gray-6: #edeef3;
+      --maia-sl-color-gray-7: #f6f7f9;
+      --maia-sl-color-black: #ffffff;
+
+      --maia-sl-color-orange-high: #73520d;
+      --maia-sl-color-orange: #f5bb3d;
+      --maia-sl-color-orange-low: #fceac5;
+      --maia-sl-color-green-high: #28650b;
+      --maia-sl-color-green: #4fdf0c;
+      --maia-sl-color-green-low: #defbd0;
+      --maia-sl-color-blue-high: #0f1c8a;
+      --maia-sl-color-blue: #3d50f5;
+      --maia-sl-color-blue-low: #cfd4fc;
+      --maia-sl-color-purple-high: #660891;
+      --maia-sl-color-purple: #bb3df5;
+      --maia-sl-color-purple-low: #edd1fa;
+      --maia-sl-color-red-high: #8a0f3a;
+      --maia-sl-color-red: #f53d7d;
+      --maia-sl-color-red-low: #fad1df;
+
+      --maia-sl-color-accent-high: #0f1c8a;
+      --maia-sl-color-accent: #3d50f5;
+      --maia-sl-color-accent-low: #cfd4fc;
+
+      --maia-sl-color-text: var(--maia-sl-color-gray-2);
+      --maia-sl-color-text-accent: var(--maia-sl-color-accent);
+      --maia-sl-color-text-invert: var(--maia-sl-color-black);
+      --maia-sl-color-bg: var(--maia-sl-color-black);
+      --maia-sl-color-bg-nav: var(--maia-sl-color-gray-7);
+      --maia-sl-color-bg-sidebar: var(--maia-sl-color-bg);
+      --maia-sl-color-bg-inline-code: var(--maia-sl-color-gray-6);
+      --maia-sl-color-bg-accent: var(--maia-sl-color-accent);
+      --maia-sl-color-hairline-light: var(--maia-sl-color-gray-6);
+      --maia-sl-color-hairline: var(--maia-sl-color-gray-6);
+      --maia-sl-color-hairline-shade: var(--maia-sl-color-gray-6);
+      --maia-sl-color-backdrop-overlay: #545864a8;
+
+      --maia-sl-shadow-sm: none;
+      --maia-sl-shadow-md: none;
+      --maia-sl-shadow-lg: none;
+    }
+
+    .print\:hidden {
+      display: none !important;
+    }
+    .print\:flex {
+      display: flex !important;
+    }
+    .print\:block {
+      display: block !important;
+    }
+
+    .maia-mdx :is(h1, h2, h3, h4, h5, h6) {
+      break-after: avoid;
+    }
+    .maia-mdx :is(p, li) {
+      orphans: 2;
+      widows: 2;
+    }
+    .maia-mdx pre {
+      overflow-x: hidden;
+      white-space: pre-wrap;
+    }
+
+    .maia-mdx code:not(pre code) {
+      background-color: transparent;
+      border-color: transparent;
+      padding: 0;
+      margin-block: unset;
+      font-size: 0.9375em;
+    }
+  }
+}

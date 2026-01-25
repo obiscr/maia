@@ -1,0 +1,1422 @@
+{
+  "app": {
+    "name": "Maia",
+    "subtitle": "Agent Orchestrator"
+  },
+  "nav": {
+    "home": "Home",
+    "workflows": "Workflows",
+    "agent": "Agent",
+    "runs": "Runs",
+    "jobs": "Jobs",
+    "schedules": "Schedules",
+    "batches": "Batches",
+    "operations": "Operations",
+    "adminUsers": "Users"
+  },
+  "sidebar": {
+    "workspace": "Workspace",
+    "agents": "Agent",
+    "admin": "Admin",
+    "settings": "Settings",
+    "preferences": "Preferences",
+    "logoutAction": "Log out",
+    "theme": "Theme",
+    "language": "Language",
+    "systemSettings": "System"
+  },
+  "admin": {
+    "users": {
+      "title": "Users",
+      "description": "Manage users for this instance",
+      "searchPlaceholder": "Search user…",
+      "showingTotal": "Showing {total} users",
+      "emptyState": "No users",
+      "noResultsTitle": "No users found",
+      "roleValues": {
+        "admin": "ADMIN",
+        "member": "MEMBER"
+      },
+      "actions": {
+        "copyUserIdAction": "Copy user ID",
+        "kickSessionsAction": "Kick sessions",
+        "createResetLinkAction": "Create password reset link"
+      },
+      "filters": {
+        "role": "Role",
+        "account": "Account",
+        "active": "Active",
+        "disabled": "Disabled"
+      },
+      "kickTitle": "Kick sessions?",
+      "kickDescription": "This will revoke all active sessions for this user; they will need to sign in again",
+      "kickConfirmAction": "Kick sessions",
+      "kickSuccess": "Revoked {count} sessions",
+      "kickFailed": "Kick sessions failed",
+      "resetTitle": "Create password reset link?",
+      "resetDescription": "This will create a one-time reset link (valid for 1 hour); you can send it to the user manually",
+      "resetConfirmAction": "Create reset link",
+      "resetLinkCopied": "Reset link copied",
+      "resetLinkCreated": "Reset link created",
+      "resetFailed": "Create reset link failed"
+    }
+  },
+  "settings": {
+    "overview": "Overview",
+    "description": "Personal preferences and app behavior",
+    "timezone": {
+      "title": "Timezone",
+      "description": "Used to display timestamps across the app"
+    },
+    "agent": {
+      "title": "Agent",
+      "description": "Configure API key and model for agent-assisted workflows",
+      "apiKey": "API key",
+      "apiKeyPlaceholder": "DeepSeek API key",
+      "model": "Model",
+      "modelPlaceholder": "Select a model",
+      "showAction": "Show",
+      "hideAction": "Hide",
+      "models": {
+        "deepseekChat": "deepseek-chat",
+        "deepseekReasoner": "deepseek-reasoner"
+      },
+      "saveFailed": "Save failed"
+    },
+    "system": {
+      "title": "System",
+      "description": "Instance-wide settings for registration and email delivery",
+      "saveFailed": "Save failed",
+      "common": {
+        "defaultLabel": "Default:",
+        "effectiveLabel": "Effective:",
+        "sourceLabel": "Source:",
+        "sources": {
+          "env": "Environment",
+          "default": "Default",
+          "invalid_env": "Environment (invalid; falling back)"
+        }
+      },
+      "envOnly": {
+        "set": "Set",
+        "unset": "Not set",
+        "invalidEnvHint": "Hint: the current environment value is invalid; runtime will fall back to default",
+        "copyNameAction": "Copy name",
+        "copyExampleAction": "Copy example",
+        "copyEnvSnippetAction": "Copy .env snippet",
+        "requiresRestart": "Changes to environment variables typically require a process restart to take effect"
+      },
+      "runtime": {
+        "runtimeTitle": "Instance secrets",
+        "storageTitle": "Data directory & mounts",
+        "runnerTitle": "Runner",
+        "performanceTitle": "Performance UI lock",
+        "runnerToken": "Runner auth token (App ↔ Runner); must match between maia and runner services",
+        "settingsEncryptionKey": "Encryption key for secrets-at-rest (user API keys, SMTP password, etc)",
+        "maiaDataMountType": "Maia data mount mode for Docker Compose (volume or bind)",
+        "maiaHostDataDir": "Host path used when MAIA_DATA_MOUNT_TYPE=bind (absolute path on host)",
+        "maiaDataDir": "Lock the instance data directory via environment variables (advanced)",
+        "maiaRunnerMountMode": "Sandbox container mount strategy (default or strict)",
+        "runnerDebugRetainFailed": "Keep failed sandbox containers for debugging (0/1)",
+        "runnerNofile": "nofile ulimit for sandbox containers (0 = keep runtime default)",
+        "runnerDockerApiVersion": "Docker Engine API version override (advanced)",
+        "runnerDefaultMountMode": "Default mount mode when caller doesn't specify (default/strict)",
+        "systemPerformanceLocked": "Lock Performance settings UI (GitOps-friendly)"
+      },
+      "performance": {
+        "sectionTitle": "Performance & limits"
+      },
+      "retention": {
+        "sectionTitle": "Retention & cleanup",
+        "hint": "Configure retention and cleanup via environment variables",
+        "opsCleanupEveryMinutes": "How often to run cleanup (best-effort; triggered by API traffic)",
+        "opsTtlDays": "Keep completed operations for N days",
+        "idempotencyTtlDays": "Keep idempotency keys for N days",
+        "opsRunningMaxAgeDays": "If an operation stays RUNNING with no updates past N days, auto-mark FAILED",
+        "opsOperationHeartbeatMs": "Heartbeat interval (ms) for long-running operations (best-effort)",
+        "opsCleanupEngineTickMs": "In-process cleanup scheduler tick interval (ms)"
+      },
+      "security": {
+        "sectionTitle": "Security & recovery",
+        "hint": "High-impact settings (env-only); review carefully in production",
+        "recoveryTitle": "Break-glass recovery",
+        "setupRepairToken": "In production, set this token to enable /setup/repair admin recovery",
+        "rateLimitTitle": "Rate limits",
+        "authRateLimitSignupWindowMs": "Signup window size (ms)",
+        "authRateLimitSignupPerIp": "Max signups per IP per window",
+        "authRateLimitPasswordForgotWindowMs": "Password-forgot window size (ms)",
+        "authRateLimitPasswordForgotPerIp": "Max password-forgot requests per IP per window",
+        "authRateLimitPasswordForgotPerIpEmail": "Max password-forgot requests per (IP,email) per window",
+        "passwordHashTitle": "Password hashing",
+        "authPasswordScryptNLog2": "Scrypt N parameter as log2(N); higher is slower and more secure",
+        "authPasswordScryptR": "Scrypt r parameter",
+        "authPasswordScryptP": "Scrypt p parameter",
+        "authPasswordScryptMaxmemMb": "Scrypt max memory (MB)"
+      },
+      "advanced": {
+        "hint": "These settings are persisted to the data directory and override env defaults; restart is recommended after changes",
+        "applyRecommendedAction": "Apply recommended",
+        "sources": {
+          "override": "UI override (data dir)"
+        },
+        "lockedHint": "Locked: this page is read-only; change env and restart the container to modify performance settings (SYSTEM_PERFORMANCE_LOCKED=1)",
+        "globalRunConcurrency": "Global run concurrency",
+        "globalRunConcurrencyHint": "Max number of runs executed concurrently across the system; higher increases throughput but uses more CPU and memory",
+        "perRunStepConcurrency": "Per-run step concurrency",
+        "perRunStepConcurrencyHint": "Max number of steps that can run concurrently within a single run; use this to limit fan-out and per-run resource spikes",
+        "defaultStepTimeoutMs": "Default step timeout (ms)",
+        "defaultStepTimeoutMsHint": "Default timeout applied to each step when the workflow doesn't specify one (milliseconds)",
+        "inputDownloadConcurrency": "Input download concurrency",
+        "inputDownloadConcurrencyHint": "Max number of input downloads that can happen concurrently",
+        "inputDownloadTimeoutMs": "Input download timeout (ms)",
+        "inputDownloadTimeoutMsHint": "Timeout for a single input download request (milliseconds)",
+        "inputDownloadMaxBytes": "Input download max bytes",
+        "inputDownloadMaxBytesHint": "Hard limit on how many bytes can be downloaded for a single input; helps prevent runaway downloads"
+      },
+      "registration": {
+        "sectionTitle": "Registration mode",
+        "mode": "Registration mode",
+        "modePlaceholder": "Select a mode",
+        "hint": "Controls whether users can self-register on /signup",
+        "modes": {
+          "disabled": "Disabled",
+          "open": "Open",
+          "inviteOnly": "Invite only"
+        }
+      },
+      "email": {
+        "sectionTitle": "Email",
+        "enableAction": "Enable email sending",
+        "enableActionHint": "Configure SMTP to enable email sending for notifications and password reset",
+        "enableActionToggleHint": "Turn on to enable SMTP email sending",
+        "host": "Host",
+        "port": "Port",
+        "secure": "Secure (TLS)",
+        "secureHint": "Enable for implicit TLS (commonly port 465)",
+        "username": "Username",
+        "password": "Password",
+        "passwordPlaceholder": "Email password / app password",
+        "fromEmail": "From email",
+        "fromName": "From name",
+        "testTo": "Test recipient",
+        "sendTestAction": "Send test email",
+        "testing": "Sending…",
+        "testMissingTo": "Please enter a recipient email",
+        "testSent": "Test email sent",
+        "testFailed": "Send test email failed"
+      }
+    }
+  },
+  "agent": {
+    "apiKey": "Agent API key"
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "language": {
+    "english": "English",
+    "chinese": "中文"
+  },
+  "monaco": {
+    "workflowCompletions": {
+      "ctx": {
+        "params": { "detail": "Run inputs" },
+        "upstream": { "detail": "Upstream outputs map" },
+        "files": { "detail": "Run files" },
+        "urls": { "detail": "Run URLs" },
+        "artifacts": { "detail": "Attempt artifacts" }
+      },
+      "artifacts": {
+        "writeText": {
+          "detail": "Write text artifact",
+          "documentation": "Signature:\n`await ctx.artifacts.writeText(name, text, { kind?, summary? })`\nReturns: `{ name, absPath }`"
+        },
+        "writeBytes": {
+          "detail": "Write binary artifact",
+          "documentation": "Signature:\n`await ctx.artifacts.writeBytes(name, bytes, { kind?, summary?, encoding? })`\nbytes: `Buffer | Uint8Array | ArrayBuffer | string`\nIf string: default `encoding=\"base64\"`.\nReturns: `{ name, absPath }`"
+        },
+        "registerFile": {
+          "detail": "Register file as artifact",
+          "documentation": "Signature:\n`await ctx.artifacts.registerFile(absPath, { kind?, name?, summary? })`\nNote: only files under the current attempt directory are accepted."
+        }
+      },
+      "upstream": {
+        "documentationNamed": "Upstream output for **{name}** (`{stepKey}`).\nShape: `{ ok, timestamp, data }`",
+        "documentationUnnamed": "Upstream output for `{stepKey}`.\nShape: `{ ok, timestamp, data }`"
+      }
+    }
+  },
+  "auth": {
+    "common": {
+      "notImplemented": "Not implemented"
+    },
+    "signin": {
+      "title": "Sign in",
+      "subtitle": "Sign in to your account",
+      "forgotPasswordAction": "Forgot your password?",
+      "submitAction": "Sign in",
+      "noAccount": "Don't have an account?",
+      "signupLinkAction": "Sign up",
+      "errors": {
+        "invalidCredentials": "Invalid email or password"
+      }
+    },
+    "signup": {
+      "title": "Create account",
+      "subtitle": "Create a new account",
+      "toasts": {
+        "registrationDisabled": "Registration is currently disabled; please contact your admin for an invite",
+        "inviteOnly": "Registration is invite-only; please contact your admin for an invite"
+      },
+      "name": "Full name",
+      "namePlaceholder": "John Doe",
+      "emailHint": "We’ll use this to contact you; we will not share your email with anyone else",
+      "passwordHint": "Must be at least 8 characters long",
+      "confirmPassword": "Confirm password",
+      "confirmPasswordHint": "Please confirm your password",
+      "submitAction": "Create account",
+      "alreadyHave": "Already have an account?",
+      "signinLinkAction": "Sign in"
+    },
+    "forgot": {
+      "title": "Forgot password",
+      "subtitle": "Request a password reset link",
+      "emailHint": "If the email exists, you’ll receive a message with a reset link",
+      "submitAction": "Send reset link",
+      "sentToast": "If the email exists, a reset link has been sent (check inbox/spam)",
+      "sentHint": "If the email exists, you’ll receive a message with a reset link (check inbox/spam)",
+      "backToSigninAction": "Back to sign in",
+      "errors": {
+        "smtpUnavailable": "Password reset by email is unavailable; please contact your admin",
+        "rateLimited": "Too many requests; please try again later",
+        "requestFailed": "Request failed; please try again"
+      }
+    },
+    "reset": {
+      "title": "Reset password",
+      "subtitle": "Choose a new password",
+      "newPassword": "New password",
+      "newPasswordHint": "At least 8 characters",
+      "confirmPassword": "Confirm new password",
+      "submitAction": "Reset password",
+      "success": "Password reset; please sign in with your new password",
+      "errors": {
+        "tokenMissing": "Missing reset token; please open the link from your email",
+        "tokenInvalidOrExpired": "Reset link is invalid or expired; please request a new one"
+      }
+    },
+    "otp": {
+      "title": "Verification",
+      "codeLabel": "Verification code",
+      "codeHint": "Enter the 6-digit code to continue",
+      "submitAction": "Verify",
+      "noCode": "Didn't receive a code?",
+      "resendAction": "Resend",
+      "errors": {
+        "invalidCode": "Invalid code",
+        "sessionExpired": "Session expired, please sign in again"
+      }
+    },
+    "repair": {
+      "title": "Recovery",
+      "subtitle": "Recover admin access",
+      "token": {
+        "label": "Repair token",
+        "placeholder": "Optional in dev; required in production",
+        "hint": "In production, set `SETUP_REPAIR_TOKEN` and enter it here to enable recovery"
+      }
+    },
+    "redirect": {
+      "loading": "Signing you in"
+    }
+  },
+  "setupWizard": {
+    "title": "Setup",
+    "fallbackStep": "Step",
+    "steps": {
+      "appearance": {
+        "title": "Appearance",
+        "short": "Appearance",
+        "description": "Choose a theme and language for this browser"
+      },
+      "data": {
+        "title": "Database",
+        "short": "Database",
+        "description": "Choose where to store the database"
+      },
+      "admin": {
+        "title": "Admin",
+        "short": "Admin",
+        "description": "Create the first admin account for this instance"
+      },
+      "done": {
+        "title": "Done",
+        "short": "Done",
+        "description": "Review and finish setup"
+      }
+    },
+    "appearance": {
+      "themeHint": "Pick a theme for this browser",
+      "themeSystemDesc": "Follow your system appearance",
+      "themeLightDesc": "Always use the light theme",
+      "themeDarkDesc": "Always use the dark theme",
+      "languageHint": "Pick a language for this browser",
+      "languagePlaceholder": "Select a language",
+      "languageSearchPlaceholder": "Search languages…",
+      "languageEmpty": "No languages found",
+      "continueAction": "Continue"
+    },
+    "dataDir": {
+      "label": "Database location",
+      "custom": "Custom",
+      "placeholder": "/Users/you/maia-data or /var/lib/maia-data",
+      "lockedHint": "This instance has been initialized; the database location can’t be changed",
+      "envLockedHint": "Controlled by MAIA_DATA_DIR; change it in your deployment environment and restart",
+      "initializeAndContinueAction": "Initialize & continue"
+    },
+    "actions": {
+      "backAction": "Back",
+      "skipAction": "Skip",
+      "saveAndContinueAction": "Save & continue",
+      "saveAndFinishAction": "Save & finish"
+    },
+    "admin": {
+      "namePlaceholder": "Admin",
+      "nameRequired": "Please enter a name",
+      "emailPlaceholder": "admin@example.com",
+      "emailHint": "This will be the first admin account for this instance",
+      "emailRequired": "Please enter an email address",
+      "emailInvalid": "Please enter a valid email address",
+      "passwordHint": "At least 8 characters",
+      "passwordRequired": "Please enter a password",
+      "passwordTooShort": "Password must be at least 8 characters",
+      "passwordTooLong": "Password must be at most 256 characters",
+      "confirmPassword": "Confirm password",
+      "confirmPasswordRequired": "Please confirm your password",
+      "continueAction": "Continue",
+      "created": "Admin created",
+      "createAndContinueAction": "Create admin & continue"
+    },
+    "done": {
+      "enterAppAction": "Enter app",
+      "completedTitle": "Setup completed",
+      "completedHint": "You’re all set; you can start using the app now"
+    }
+  },
+  "common": {
+    "beta": "Beta",
+    "info": "Info",
+    "copyAction": "Copy",
+    "copyActionIdAction": "Copy ID",
+    "copyActionLinkAction": "Copy link",
+    "copyActionFailed": "Copy failed",
+    "backAction": "Back",
+    "refreshAction": "Refresh",
+    "loading": "Loading…",
+    "loadFailed": "Load failed",
+    "notFound": "Not found",
+    "notFoundTitle": "Not found",
+    "notFoundDescription": "The page or resource you’re looking for doesn’t exist, or it may have been removed",
+    "goHomeAction": "Go home",
+    "cancelAction": "Cancel",
+    "confirmAction": "Confirm",
+    "editAction": "Edit",
+    "deleteAction": "Delete",
+    "deleting": "Deleting…",
+    "deleteActionFailed": "Delete failed",
+    "saveAction": "Save",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "updateFailed": "Update failed",
+    "unsavedChanges": "Unsaved changes",
+    "keepEditingAction": "Keep editing",
+    "discardAction": "Discard",
+    "createAction": "Create",
+    "settings": "Settings",
+    "optional": "Optional",
+    "summary": "Summary",
+    "actions": "Actions",
+    "showAction": "Show",
+    "hideAction": "Hide",
+    "openAction": "Open",
+    "openActionWorkflowAction": "Open workflow",
+    "downloadAction": "Download",
+    "importAction": "Import",
+    "exportAction": "Export",
+    "resetAction": "Reset",
+    "copied": "Copied",
+    "createActionVersionFromSnapshotTitle": "Restore as a new version?",
+    "createActionVersionFromSnapshotDescription": "This will create a new immutable version from the selected snapshot",
+    "createActionVersionFromSnapshotAction": "Restore version",
+    "createActionVersionFromSnapshotToast": "Version restored {version}",
+    "createActionVersionFromSnapshotFailed": "Restore failed",
+    "tabs": {
+      "chat": "Chat",
+      "canvas": "Canvas",
+      "details": "Details",
+      "graph": "Graph"
+    },
+    "graphControls": {
+      "panModeAriaLabel": "Pan mode",
+      "selectModeAriaLabel": "Select mode",
+      "fitViewAriaLabel": "Fit view",
+      "zoomInAriaLabel": "Zoom in",
+      "zoomOutAriaLabel": "Zoom out"
+    },
+    "entities": {
+      "batch": "Batch",
+      "agent": "Agent",
+      "operation": "Operation",
+      "workflow": "Workflow"
+    },
+    "any": "Any",
+    "sort": "Sort",
+    "sortNewest": "Newest first",
+    "sortOldest": "Oldest first",
+    "status": "Status",
+    "prevPageAction": "Previous page",
+    "nextPageAction": "Next page",
+    "error": "Something went wrong",
+    "errorDescription": "Please try again. If the problem persists, refresh the page and retry.",
+    "errorLabel": "Error",
+    "filters": {
+      "clearAction": "Clear filters"
+    },
+    "list": {
+      "noResultsDescription": "Try adjusting your search or filters"
+    },
+    "workflowCombobox": {
+      "searchPlaceholder": "Search workflow…",
+      "empty": "No workflow found"
+    },
+    "timezoneCombobox": {
+      "searchPlaceholder": "Search timezone…",
+      "empty": "No timezone found",
+      "commonGroup": "Common",
+      "allGroup": "All timezones"
+    },
+    "noData": "No data",
+    "fileViewer": {
+      "actions": {
+        "downloading": "Downloading…"
+      },
+      "badges": {
+        "originalUrl": "Original URL"
+      },
+      "source": {
+        "upload": "Upload",
+        "url": "URL",
+        "unknown": "Unknown"
+      },
+      "status": {
+        "ready": "Ready",
+        "fetching": "Fetching",
+        "failed": "Failed",
+        "unknown": "Unknown"
+      }
+    },
+    "statusValues": {
+      "failed": "Failed",
+      "running": "Running",
+      "succeeded": "Succeeded",
+      "canceled": "Canceled",
+      "queued": "Queued",
+      "queuedInputs": "Downloading input files",
+      "paused": "Paused",
+      "canceling": "Canceling"
+    },
+    "fields": {
+      "name": "Name",
+      "fullName": "Full name",
+      "email": "Email",
+      "password": "Password",
+      "createdAt": "Created",
+      "updatedAt": "Updated"
+    },
+    "inputs": "Inputs",
+    "inputsHint": "Inputs for this run (parameters + input files)",
+    "steps": "Steps",
+    "stepsDeletedToast": "{n} steps deleted",
+    "outputs": "Outputs",
+    "note": "Note",
+    "configured": "Configured",
+    "notConfigured": "Not configured",
+    "executionPolicies": "Execution policies",
+    "duration": "Duration",
+    "inputParams": "Input params",
+    "inputParamsHintRich": "<strong>Accepted shapes</strong><br/><code>{ items: [...] }</code> or <code>[ ... ]</code> or a single object<br/><br/><strong>Notes</strong><br/>Each item becomes a job input params object when the workflow has an input spec<br/>Do not include <code>files</code> (system-managed)",
+    "inputTemplate": "Input template",
+    "jobEnqueuedToast": "Job enqueued",
+    "source": {
+      "manual": "Manual"
+    },
+    "overview": "Overview",
+    "retryAction": "Retry",
+    "pinnedWorkflowVersion": "Pinned workflow version",
+    "scheduleRule": "Schedule rule",
+    "workflowRequiredTitle": "Create a workflow first",
+    "workflowRequiredDescription": "This feature requires an associated workflow to be enabled; create one in Workflows, then come back to continue",
+    "selectWorkflowForInputsTitle": "Select a workflow to preview inputs",
+    "selectWorkflowForInputsDescription": "Choose a workflow to see its input template and file requirements",
+    "noInputsTitle": "No inputs needed",
+    "noInputsDescription": "No parameters or file inputs are required",
+    "inputSpecMissingHint": "This workflow can run without an input spec"
+  },
+  "home": {
+    "dashboardTitle": "Dashboard",
+    "description": "Local workflow runner (DAG) with SQLite + SSE logs. Use the sidebar to manage workflows and runs.",
+    "quickNewWorkflow": "New workflow",
+    "quickNewRun": "New run",
+    "viewAllWorkflows": "All workflows",
+    "viewAllRuns": "All runs",
+    "viewRunningRuns": "Running runs",
+    "viewPendingInputsRuns": "Input file downloads",
+    "viewFailedRuns": "Failed runs",
+    "statsWorkflows": "Workflows",
+    "statsRuns": "Runs",
+    "statsRunsHint": "Total runs created (all statuses)",
+    "statsNeedsAttention": "Needs attention",
+    "statsNeedsAttentionHint": "Runs that failed in the last 24 hours",
+    "statsRunning": "Running",
+    "statsPendingInputs": "Downloading input files",
+    "recentRunsTitle": "Recent runs",
+    "recentRunsDescription": "Latest runs (all statuses)",
+    "emptyRecentRuns": "No runs yet",
+    "templatesTitle": "Templates",
+    "templatesDescription": "Start from a quick example",
+    "templatesEmpty": "No templates available",
+    "templatesViewMore": "View more ({n})",
+    "templatesSheetTitle": "Templates",
+    "templatesSheetDescription": "{n} templates available",
+    "templatesSearchPlaceholder": "Search templates: name / description…",
+    "templatesNoResults": "No templates found",
+    "templatesMenuView": "View templates",
+    "pendingInputsTitle": "Downloading input files",
+    "pendingInputsDescription": "Runs downloading input files",
+    "recentFailuresTitle": "Recent failures",
+    "recentFailuresDescription": "Latest failed runs",
+    "emptyPendingInputs": "No runs downloading input files",
+    "emptyFailures": "No failed runs recently",
+    "activeRunsTitle": "Active runs",
+    "activeRunsDescription": "Runs currently executing",
+    "emptyActiveRuns": "No active runs",
+    "recentWorkflowsTitle": "Recently updated",
+    "recentWorkflowsDescription": "Workflows updated most recently",
+    "emptyWorkflows": "No workflows yet"
+  },
+  "workflows": {
+    "title": "Workflows",
+    "filtersShort": {
+      "deps": "Deps",
+      "env": "Env"
+    },
+    "noResultsTitle": "No workflows found",
+    "emptyState": "No workflows yet",
+    "newWorkflowName": "New workflow",
+    "newWorkflow": "New workflow",
+    "aiOrchestrateAction": "Agent orchestration",
+    "newWorkflowDescription": "Create a workflow and start editing",
+    "listDescription": "Browse workflows and open one to edit",
+    "emptyTitle": "What kind of workflow do you want to build?",
+    "updatedAt": "Updated",
+    "workflowVersion": "Workflow version",
+    "versions": {
+      "title": "Versions",
+      "description": "Immutable versions (snapshots)",
+      "descriptionNamed": "Immutable versions (snapshots) for {name}",
+      "searchPlaceholder": "Search by version (v12) or description…",
+      "backToWorkflow": "Back to workflow",
+      "showingTotal": "{total} versions",
+      "empty": "No versions yet",
+      "noResultsTitle": "No versions found",
+      "detailTitle": "Version {version}",
+      "createdAtBadge": "Created: {ts}",
+      "stepsCount": "{n} steps",
+      "depsCount": "{n} npm deps",
+      "envCount": "{n} env vars",
+      "stepsEmpty": "No steps",
+      "stepTimeout": "Timeout: {duration}",
+      "depsHashLabel": "Deps hash",
+      "noStepSelected": "No step selected"
+    },
+    "lastRun": "Last run",
+    "searchPlaceholder": "Search: name / ID / description…",
+    "showingTotal": "{total} workflows",
+    "runs": "Runs",
+    "running": "Running",
+    "noRuns": "No runs",
+    "deletedToast": "Workflow deleted",
+    "createdToast": "Workflow created",
+    "depsInstalled": "Dependencies installed",
+    "name": "Name",
+    "description": "Description",
+    "addStepAction": "Add step",
+    "layout": "Layout",
+    "layoutCustom": "Custom layout",
+    "layoutLeftRight": "Left → Right",
+    "layoutTopBottom": "Top → Bottom",
+    "layoutResetAction": "Reset custom layout",
+    "layoutResetActionDescription": "This will clear your custom layout and rebuild node positions automatically",
+    "layoutCustomOutdatedTitle": "Custom layout may be outdated",
+    "layoutCustomOutdatedDescription": "We detected that the workflow structure has changed. Continuing with the old custom layout may result in messy node positions. What would you like to do?",
+    "layoutCustomOutdatedRebuildAction": "Rebuild custom layout for current structure",
+    "layoutCustomOutdatedResetAction": "Clear custom layout",
+    "layoutCustomClearedToast": "Custom layout cleared",
+    "layoutCustomRebuiltToast": "Custom layout rebuilt",
+    "stepBasics": "Basics",
+    "stepKey": "Unique key",
+    "timeoutMs": "Timeout (ms)",
+    "dependencies": "Dependencies",
+    "deleteStepAction": "Delete step",
+    "deleteStepActionDescription": "This will delete the step and remove it from other steps' dependencies",
+    "stepDeletedToast": "Step deleted",
+    "deleteSelectedStepsTitle": "Delete {n} steps?",
+    "deleteSelectedStepsDescription": "This will delete the selected steps and remove them from other steps' dependencies",
+    "createJobAction": "Create job",
+    "saveWorkflowAction": "Save workflow",
+    "createVersionAction": "Create version",
+    "createVersionActionDialogTitle": "Create version",
+    "createVersionActionDialogDescription": "Create an immutable snapshot version of this workflow. Add an optional note to describe what changed",
+    "createVersionActionDialogNoteLabel": "Version note",
+    "createVersionActionDialogNotePlaceholder": "What changed? (optional)",
+    "creatingVersion": "Creating…",
+    "versionCreatedToast": "Version created",
+    "deleteWorkflowAction": "Delete workflow",
+    "deleteWorkflowActionTitle": "Delete workflow “{name}”?",
+    "deleteWorkflowActionTitleFallback": "Delete workflow?",
+    "deleteWorkflowActionDescription": "This will permanently delete the workflow. This cannot be undone",
+    "scriptEsm": "Script (ESM)",
+    "scriptEsmTooltip": "Write the step script the engine will run",
+    "engineRunsTip": "Return { outputs: {...} } (outputs can be empty); downstream reads upstream.<stepKey>.data.outputs.<field>",
+    "engineRunsTipAgent": "AI-generated step scripts are saved to the workflow; you can edit them anytime in Workflow Details, or ask the agent to iterate and refine them",
+    "selectStepToEdit": "Select a step to edit",
+    "editWorkflowDescription": "Edit workflow settings and steps. Save to apply changes",
+    "selectedCount": "{n} selected",
+    "npmDependencies": "NPM dependencies",
+    "inputSpec": {
+      "title": "Input spec",
+      "description": "Define the workflow input spec used to validate inputs and guide the Create Job form",
+      "unsavedDescription": "You changed the input spec but haven't saved. Save before closing, or discard changes?",
+      "generateWithAi": "Generate with agent",
+      "generatingWithAi": "Generating…",
+      "insertDefaultAction": "Insert default",
+      "formatAction": "Format",
+      "summaryHint": "If set, inputs will be validated and the Create Job UI can render guided inputs",
+      "validJson": "Valid JSON",
+      "invalidSpec": "Valid JSON, but not a valid input spec. Use “Insert default” or “Generate with agent”",
+      "reservedKeys": "Input spec contains reserved field names: {keys}"
+    },
+    "outputsSpec": {
+      "title": "Outputs spec",
+      "description": "Define named run outputs (a stable contract) mapped from step outputs",
+      "generateWithAi": "Generate with agent",
+      "generatingWithAi": "Generating…",
+      "insertDefaultAction": "Insert default",
+      "formatAction": "Format",
+      "none": "None",
+      "summaryHint": "If set, the run summary can show stable, named outputs for integrations",
+      "validJson": "Valid JSON",
+      "invalidSpec": "Valid JSON, but not a valid outputs spec. Use “Insert default”"
+    },
+    "meta": {
+      "title": "Metadata",
+      "description": "Edit workflow ID, name, and description",
+      "errors": {
+        "nameRequired": "Name is required"
+      }
+    },
+    "env": {
+      "title": "Environment variables",
+      "description": "Workflow-scoped environment variables (key/value); available as the `env` argument in main(env, ctx)",
+      "empty": "No environment variables",
+      "columns": {
+        "key": "Key",
+        "value": "Value"
+      },
+      "actions": {
+        "addAction": "Add",
+        "selectAllAction": "Select all",
+        "selectRowAction": "Select row",
+        "showValue": "Show value",
+        "hideValue": "Hide value"
+      },
+      "errors": {
+        "whitespaceKey": "Invalid key (contains whitespace): \"{key}\"",
+        "duplicateKey": "Duplicate key: \"{key}\"",
+        "invalidKeyFormat": "Invalid key format: \"{key}\". Use letters, digits, and underscores only, starting with a letter or underscore.",
+        "keyTooLong": "Key is too long: \"{key}\" (max {max})",
+        "valueTooLong": "Value is too long for \"{key}\" (max {max} characters)"
+      }
+    },
+    "deps": {
+      "dialogDescription": "Manage npm dependencies",
+      "logsTab": "Install logs",
+      "noLogs": "No install logs yet",
+      "columns": {
+        "name": "Name",
+        "version": "Version"
+      },
+      "empty": "No dependencies",
+      "actions": {
+        "addAction": "Add",
+        "installDeps": "Install",
+        "selectAllAction": "Select all",
+        "selectRowAction": "Select row"
+      },
+      "status": {
+        "ready": "Ready",
+        "installing": "Installing",
+        "install": "Install required"
+      },
+      "errors": {
+        "whitespaceName": "Invalid package name (contains whitespace): \"{name}\"",
+        "duplicateName": "Duplicate package name: \"{name}\""
+      }
+    },
+    "preview": {
+      "showAllAction": "View all ({n})"
+    },
+    "importExport": {
+      "import": {
+        "title": "Import workflow",
+        "description": "Choose an exported workflow JSON file to preview and import",
+        "fileLabel": "Workflow JSON file",
+        "filePlaceholder": "Select a JSON file…",
+        "browseButton": "Choose file",
+        "invalidFileTitle": "Invalid import file",
+        "invalidFileDescription": "The file format is invalid or cannot be parsed",
+        "importedToast": "Workflow imported",
+        "depsRequiredToast": "This workflow requires installing dependencies",
+        "importAction": "Import",
+        "importing": "Importing…"
+      },
+      "export": {
+        "titleWorkflow": "Export workflow",
+        "titleVersion": "Export version",
+        "includeEnvTitle": "Include environment variables",
+        "includeEnvDescriptionUnchecked": "If checked, environment variables will be included in the exported JSON file",
+        "includeEnvDescriptionChecked": "Environment variables may contain sensitive values (e.g. keys/tokens). Do not share the exported JSON file",
+        "exportAction": "Export",
+        "exporting": "Exporting…"
+      },
+      "labels": {
+        "workflowId": "Workflow ID",
+        "description": "Description",
+        "exportedAt": "Exported at"
+      },
+      "empty": {
+        "noSteps": "No steps"
+      }
+    },
+    "orchestrator": {
+      "titleNew": "Agent Orchestration",
+      "subtitleNew": "Chat with the agent to plan and generate a workflow draft",
+      "titleEdit": "Agent: Edit workflow",
+      "subtitleEdit": "Chat with the agent to refine this workflow",
+      "generatingPlan": "Generating plan…",
+      "stepsRightTitle": "Step details",
+      "proposalReadyTitle": "Proposal ready",
+      "proposalReadyDescription": "The agent prepared an update. Apply it only after you confirm",
+      "draftReadyTitle": "Draft ready",
+      "draftReadyDescription": "A saveable draft has been generated (it may not have passed final validation yet); you can save now and refine it in the editor",
+      "stepSelectHint": "Select a step to view details",
+      "thinking": "Thinking…",
+      "composerPlaceholder": "Describe what you want — let the agent build a workflow…",
+      "sendAction": "Send",
+      "applyCreateAction": "Save as new workflow",
+      "createWorkflowQueued": "Agent workflow generation started",
+      "streamEndedEarly": "Agent stream ended early (received {done}/{total} steps); please retry",
+      "createInputSpecQueued": "Agent input spec generation started",
+      "createOutputsSpecQueued": "Agent outputs spec generation started",
+      "newChat": "New chat",
+      "newChatUnsavedDescription": "You have unsaved workflow changes. Save them before starting a new chat?",
+      "errors": {
+        "failed": "Agent request failed"
+      },
+      "examples": {
+        "difficulty": {
+          "simple": "Easy",
+          "medium": "Medium",
+          "hard": "Hard"
+        },
+        "items": {
+          "ex1": {
+            "title": "Web page title → summary JSON"
+          },
+          "ex2": {
+            "title": "CSV → basic stats report"
+          },
+          "ex3": {
+            "title": "3-step transform with validation"
+          },
+          "ex4": {
+            "title": "RSS → top 10 digest"
+          },
+          "ex5": {
+            "title": "Screenshot → OCR → normalized text"
+          },
+          "ex6": {
+            "title": "YouTube transcript → key takeaways"
+          },
+          "ex7": {
+            "title": "Markdown → structured outline"
+          },
+          "ex8": {
+            "title": "Log file → error hotspots"
+          },
+          "ex9": {
+            "title": "Product reviews → sentiment + topics"
+          },
+          "ex10": {
+            "title": "Invoice PDF → line items JSON"
+          },
+          "ex11": {
+            "title": "GitHub issue triage → labels + priority"
+          },
+          "ex12": {
+            "title": "Dataset → schema + constraints proposal"
+          },
+          "ex13": {
+            "title": "Multi-source news → merged digest"
+          },
+          "ex14": {
+            "title": "A/B experiment results → analysis report"
+          },
+          "ex15": {
+            "title": "Support tickets → routing + SLA risk"
+          },
+          "ex16": {
+            "title": "Large doc → hierarchical summary + index"
+          },
+          "ex17": {
+            "title": "End-to-end ETL with data quality gates"
+          },
+          "ex18": {
+            "title": "Multi-lingual website monitor + alerting"
+          },
+          "ex19": {
+            "title": "Knowledge base builder from mixed sources"
+          },
+          "ex20": {
+            "title": "Workflow generator with branching + rollback plan"
+          }
+        }
+      },
+      "progress": {
+        "planLabel": "Generate plan",
+        "validateLabel": "Validate workflow",
+        "inputSpecLabel": "Generate input spec",
+        "outputsSpecLabel": "Generate outputs spec",
+        "generatingStep": "Generating: {step}",
+        "validating": "Validating workflow…",
+        "generatingInputSpec": "Generating input spec…",
+        "generatingOutputsSpec": "Generating outputs spec…",
+        "doneBadge": "Done",
+        "completedCount": "{count} completed"
+      }
+    }
+  },
+  "runs": {
+    "rerunAction": "Rerun",
+    "rerunActionStepAction": "Rerun step",
+    "rerunActionStepActionHint": "Rerun this step from scratch (ignores any previous output for this step).",
+    "rerunActionStepActionHintOtherFailed": "Note: other steps are FAILED. Rerunning only this step may not make the run succeed.",
+    "recentRunsDescription": "Browse recent runs and open details",
+    "searchPlaceholder": "Search: workflow / run ID…",
+    "duration": "Run duration",
+    "emptyState": "No runs yet",
+    "noResultsTitle": "No runs found",
+    "newRun": "New run",
+    "showingTotal": "{total} runs",
+    "statusBlocked": "Waiting for upstream",
+    "statusSkipped": "Skipped",
+    "statusInterrupted": "Interrupted",
+    "results": "Outputs",
+    "stepInput": "Step input",
+    "artifactsHint": "Quick view: logs and artifacts",
+    "logsHint": "Logs for the selected step: stdout / stderr",
+    "stepInputHint": "Inputs for the selected step: JSON + files",
+    "stepOutputHint": "Outputs for the selected step: JSON + files",
+    "viewRunInputsAction": "Run inputs",
+    "stepDefinition": "Definition",
+    "stepDefinitionHint": "Read-only definition from the version used by this run — what actually executed",
+    "viewSnapshotAction": "View version",
+    "depsHash": "Deps hash",
+    "depsPackagesCount": "NPM deps: {n}",
+    "reservedInitialInputKeysCount": "Reserved keys: {n}",
+    "timeout": "Timeout",
+    "stepDepsCount": "Upstream: {n}",
+    "retryHintOtherFailed": "Note: other steps are FAILED. Retrying only this step may not make the run succeed — retry the failed steps or use “Restart from here”",
+    "restartFromHereAction": "Restart from here",
+    "parameters": "Input parameters",
+    "inputFiles": "Input files",
+    "outputFiles": "Output files",
+    "noOutputs": "No outputs",
+    "noArtifacts": "No artifacts",
+    "noParameters": "No input parameters",
+    "noInputFiles": "No input files",
+    "artifacts": "Artifacts",
+    "runInputs": "Run inputs",
+    "input": "Input",
+    "output": "Output",
+    "file": "File",
+    "stepOutput": "Step output",
+    "logs": "Logs",
+    "runHistory": "Attempts",
+    "runHistoryHint": "Attempt history for the selected step (errors + exit codes)",
+    "attemptShort": "Attempt {attemptNo}",
+    "attemptLine": "Run #{attemptNo}:",
+    "exit": "Exit {code}",
+    "deleteRunTitle": "Delete run?",
+    "deleteRunDescription": "This will delete the run and its local artifacts and logs",
+    "cancelRunTitle": "Cancel run?",
+    "cancelRunDescription": "This will cancel the run and terminate any running steps",
+    "cancelRunAction": "Cancel run",
+    "cancelFailed": "Cancel run failed",
+    "cancelReasonLabel": "Reason (optional)",
+    "cancelReasonPlaceholder": "Why are you canceling this run?",
+    "cancelReasonHint": "Saved for audit and troubleshooting. Max 200 characters",
+    "deletedToast": "Run deleted",
+    "canceledToast": "Run canceled",
+    "stepRetryQueuedToast": "Retry requested",
+    "stepRerunQueuedToast": "Rerun requested",
+    "restartFromQueuedToast": "Restart requested",
+    "forceStopTitle": "Force stop run?",
+    "forceStopDescription": "This will forcefully terminate the run if it doesn't stop after canceling",
+    "forceStopAction": "Force stop",
+    "forceStopFailed": "Force stop run failed",
+    "forceStopToast": "Force stop requested",
+    "followProgressAction": "Follow",
+    "unfollowProgressAction": "Unfollow",
+    "summaryTab": "Summary",
+    "summaryHint": "Step status counts: succeeded / failed / running / pending / skipped / canceled",
+    "viewDetailsAction": "View details",
+    "viewStepOutputAction": "View step output",
+    "viewStepDefinitionAction": "View definition",
+    "viewProgressAction": "View progress",
+    "stepError": {
+      "prefix": "Step failed",
+      "prefixSep": ": ",
+      "detailsLabel": "Details",
+      "detailsSuffix": " · {label}: {details}",
+      "codeSuffix": " ({code})",
+      "summaryTimeout": "Timed out ({duration})",
+      "summarySignal": "Terminated by signal {signal}",
+      "summaryExitCode": "Exited with code {code}",
+      "summaryOutputMissing": "Missing output.json",
+      "summaryOutputInvalid": "Invalid output.json: {reason}",
+      "reasonUnknown": "Unknown reason",
+      "summaryUnknown": "Unknown error"
+    }
+  },
+  "jobs": {
+    "startTitle": "Create a job",
+    "startDescription": "Pick a workflow and provide JSON parameters. The engine will create and execute a run from this job",
+    "startFailedTitle": "Create job failed",
+    "selectWorkflowTitle": "Select workflow",
+    "selectWorkflow": "Select a workflow",
+    "enqueueNowAction": "Enqueue now",
+    "createOnlyAction": "Create only",
+    "requiredFields": "Required",
+    "paramsMustBeObjectTitle": "Params must be an object",
+    "inputSpecInvalid": "Workflow input spec is invalid",
+    "invalid": "Invalid",
+    "urlFiles": "URL list",
+    "uploadFiles": "Upload files",
+    "pinnedWorkflowVersionBadge": "v{version}",
+    "pinnedWorkflowVersionTooltip": "Pinned to workflow version v{version} (copied from a run)",
+    "limitCount": "Limit: {count}/{max}",
+    "toastUploadsIgnored": "Max {max} files. Ignored {ignored}",
+    "toastUploadsMaxReached": "Upload limit reached (max {max})",
+    "toastUrlsTruncated": "Max {max} URLs. Extra lines were removed",
+    "toastSchemaInvalid": "Input spec schema is invalid",
+    "toastValidationFailed": "Input does not match the schema: {message}",
+    "recentJobsDescription": "Browse recent jobs and open details",
+    "searchPlaceholder": "Search: workflow / job ID / run ID…",
+    "emptyState": "No jobs yet",
+    "noResultsTitle": "No jobs found",
+    "newJob": "New job",
+    "showingTotal": "{total} jobs",
+    "deleteJobTitle": "Delete job?",
+    "deleteJobDescription": "This will delete the job record. Any linked run will not be deleted",
+    "deletedToast": "Job deleted",
+    "cancelRequestedToast": "Job cancel requested",
+    "createdToast": "Job created",
+    "list": {
+      "triggerTitle": "Trigger",
+      "triggerSchedule": "Schedule",
+      "triggerBatch": "Batch",
+      "triggerTooltipSchedule": "Schedule: {name}\nID: {id}",
+      "triggerTooltipBatch": "Batch: {name}\nID: {id}",
+      "plannedTimeTitle": "Planned time",
+      "plannedTimeTooltip": "Planned time: {iso}",
+      "queueDelayTitle": "Queue delay",
+      "nextAttemptTitle": "Next attempt",
+      "nextAttemptTooltip": "Next attempt: {iso}",
+      "workerTitle": "Worker",
+      "workerTooltip": "Worker: {by}\nClaimed at: {iso}",
+      "leaseTitle": "Lease",
+      "leaseTooltip": "Lease expires: {iso}",
+      "attemptsTitle": "Attempts",
+      "queuedAtTitle": "Queued at",
+      "runDurationTitle": "Run duration",
+      "actions": {
+        "startAction": "Start",
+        "cancelJobAction": "Cancel job",
+        "openWorkflowAction": "Open workflow",
+        "openRunAction": "Open run",
+        "openScheduleAction": "Open Schedule",
+        "openBatchAction": "Open Batch",
+        "copyJobIdAction": "Copy Job ID"
+      }
+    },
+    "detail": {
+      "subTitle": "{trigger} · {workflow}",
+      "jobId": "Job",
+      "cancellation": "Cancellation",
+      "timing": "Timing",
+      "leaseAndRetry": "Lease & retry",
+      "related": "Related",
+      "status": "Job status",
+      "trigger": "Trigger",
+      "attempts": "Attempts",
+      "attemptsTitle": "Job attempts",
+      "jobAttemptLine": "Job attempt #{attemptNo}:",
+      "attemptErrorDetailsHint": "Error details",
+      "runStatus": "Run status",
+      "scheduledFor": "Scheduled for",
+      "queuedAt": "Queued at",
+      "startedAt": "Started at",
+      "finishedAt": "Finished at",
+      "queueDelay": "Queue delay",
+      "nextAttemptAt": "Next attempt",
+      "claimedBy": "Claimed by",
+      "claimedAt": "Claimed at",
+      "leaseExpiresAt": "Lease expires",
+      "leaseRemaining": "Lease remaining",
+      "schedule": "Schedule",
+      "batch": "Batch",
+      "scheduleName": "Schedule name",
+      "batchName": "Batch name",
+      "batchStatus": "Batch status",
+      "scheduleNextRunAt": "Schedule next run",
+      "scheduleLastRunAt": "Schedule last run",
+      "batchStartedAt": "Batch started",
+      "batchFinishedAt": "Batch finished",
+      "lastError": "Last error",
+      "pendingInputsHint": "Downloading input files. The run will resume automatically",
+      "openRunToViewInputsAction": "Open Run"
+    }
+  },
+  "schedules": {
+    "recentSchedulesDescription": "Browse schedules and manage recurring jobs",
+    "searchPlaceholder": "Search: name / schedule ID / workflow…",
+    "emptyState": "No schedules yet",
+    "noResultsTitle": "No schedules found",
+    "newSchedule": "New schedule",
+    "editScheduleAction": "Edit schedule",
+    "showingTotal": "{total} schedules",
+    "sections": {
+      "basic": "Basic info"
+    },
+    "detail": {
+      "scheduleSpec": "Schedule spec",
+      "nextRuns": "Next runs",
+      "nextRunAt": "Next run",
+      "lastRunAt": "Last run",
+      "scheduleTextCron": "cron: {expr} · {timezone}",
+      "scheduleTextInterval": "Interval: {interval}",
+      "misfirePolicy": "Misfire policy",
+      "catchUpLimit": "Catch-up limit",
+      "overlapPolicy": "Overlap policy",
+      "recentJobs": "Recent jobs"
+    },
+    "policies": {
+      "misfire": {
+        "FIRE_ONCE": "Fire once (when late)",
+        "SKIP": "Skip missed fires",
+        "CATCH_UP": "Catch up missed fires"
+      },
+      "misfireHint": {
+        "FIRE_ONCE": "If one or more fires were missed, create one job immediately, then continue normally",
+        "SKIP": "If late, skip missed fires and jump to the next future fire time",
+        "CATCH_UP": "Create jobs for missed fire times (up to the catch-up limit)"
+      },
+      "overlap": {
+        "SKIP": "Skip when previous job is active",
+        "ALLOW": "Allow overlap"
+      },
+      "overlapHint": {
+        "SKIP": "If a previous job is still queued/running, skip this fire to avoid concurrent overlap",
+        "ALLOW": "Create a job even if a previous one is still active (use with care)"
+      },
+      "catchUpLimitHint": "Max jobs to create in one catch-up cycle. Range: 1–{max}",
+      "catchUpLimitDefault": "Default ({limit})",
+      "pinned": {
+        "latest": "Latest (auto)"
+      },
+      "pinnedMode": {
+        "latest": "Latest",
+        "pinned": "Pinned"
+      },
+      "pinnedSelectPlaceholder": "Select version…",
+      "pinnedNoVersions": "No versions yet",
+      "pinnedHint": "Optional. Pin to workflow version vN for reproducible execution"
+    },
+    "kind": "Kind",
+    "kindCron": "CRON expression",
+    "kindInterval": "Interval",
+    "cron": "CRON",
+    "timezone": "Timezone",
+    "timezoneSelect": "Select timezone",
+    "intervalMs": "Interval (ms)",
+    "enableAction": "Enable",
+    "disableAction": "Disable",
+    "enabledToast": "Schedule enabled",
+    "disabledToast": "Schedule disabled",
+    "statusEnabled": "Enabled",
+    "statusDisabled": "Disabled",
+    "runNowAction": "Trigger now",
+    "runNowActionFailed": "Run now failed",
+    "deleteScheduleTitle": "Delete schedule?",
+    "deleteScheduleDescription": "This will delete the schedule record",
+    "deletedToast": "Schedule deleted",
+    "createdToast": "Schedule created",
+    "updatedToast": "Schedule updated"
+  },
+  "batches": {
+    "recentBatchesDescription": "Browse batches and track bulk job dispatch progress",
+    "searchPlaceholder": "Search: name / batch ID / workflow…",
+    "emptyState": "No batches yet",
+    "noResultsTitle": "No batches found",
+    "newBatch": "New batch",
+    "newBatchDescription": "Create a batch to fan-out a seed into many jobs and track progress",
+    "showingTotal": "{total} batches",
+    "statusCreated": "Created",
+    "pinnedModeLatest": "Latest",
+    "pinnedModePinned": "Pinned",
+    "pinnedSelectPlaceholder": "Select a version…",
+    "pinnedNoVersions": "No versions found",
+    "pinnedHint": "Batches are snapshotted. After the first fan-out / enqueue, the version is locked",
+    "concurrencyLimit": "Concurrency limit",
+    "concurrencyLimitHint": "Max jobs from this batch running at the same time (optional)",
+    "rampUpSeconds": "Ramp-up seconds",
+    "rampUpSecondsHint": "If set with Auto max concurrency, batch concurrency ramps from 1 to the auto max over this duration. Manual concurrency limit overrides",
+    "autoMaxConcurrency": "Auto max concurrency",
+    "autoMaxConcurrencyHint": "Used only when manual concurrency limit is not set. Together with ramp-up seconds enables automatic ramp-up",
+    "failurePolicy": "Failure policy",
+    "failurePolicyHint": "How to handle remaining non-terminal jobs when failures occur (locked after fan-out)",
+    "failurePolicyModeFailFast": "Fail fast",
+    "failurePolicyModeMaxFailures": "Stop after failure threshold",
+    "maxFailures": "Max failures",
+    "maxFailuresHint": "If failed jobs reach this threshold, request cancellation for remaining non-terminal jobs. Locked after fan-out",
+    "urlFilesHint": "Shared URL inputs for all jobs in this batch (one per line). During fan-out, they are injected into each job’s input files; before execution, the engine downloads them to disk. Availability/requiredness/limits come from the selected workflow input spec",
+    "sourceJson": "Provenance",
+    "sourceJsonHint": "Why/where this batch came from (audit + reproducibility). Does not affect fan-out inputs. Must be valid JSON",
+    "sourceJsonPlaceholder": "{\n  \"source\": \"manual\",\n  \"owner\": \"alice\",\n  \"ticket\": \"WF-42\",\n  \"note\": \"Backfill 2026-01-16\",\n  \"dataset\": \"urls.csv\"\n}",
+    "sections": {
+      "basic": "Basics",
+      "provenance": "Provenance"
+    },
+    "provenance": {
+      "sourceLabel": "Source type",
+      "sourcePlaceholder": "Select a source…",
+      "sourceHelp": "Manual: you created it in the UI; Import/Migration: brought in from a file/elsewhere; Backfill: historical data backfill; API/Script: created via API or scripts",
+      "sourceImport": "Import/Migration",
+      "sourceBackfill": "Backfill",
+      "sourceApi": "API/Script",
+      "ticketLabel": "Ticket/Task",
+      "ticketPlaceholder": "e.g. WF-42 / JIRA-123 / #456",
+      "datasetLabel": "Dataset/Input",
+      "datasetPlaceholder": "e.g. urls.csv / s3://bucket/path",
+      "notePlaceholder": "Why are you creating this batch?",
+      "metaLabel": "Extra metadata",
+      "metaHint": "Optional: add any extra fields not covered above. Prefer a JSON object; if valid JSON, it’s stored as an object; otherwise stored as a string",
+      "metaPlaceholder": "{\n  \"range\": \"2026-01\",\n  \"reason\": \"backfill\",\n  \"extra\": {\n    \"foo\": \"bar\"\n  }\n}"
+    },
+    "controlPauseAction": "Pause",
+    "controlResumeAction": "Resume",
+    "controlCancelAction": "Cancel",
+    "deleteBatchTitle": "Delete batch?",
+    "deleteBatchDescription": "This will delete the batch record (jobs are not deleted)",
+    "deletedToast": "Batch deleted",
+    "createdToast": "Batch created",
+    "updatedToast": "Batch updated",
+    "pausedToast": "Batch paused",
+    "resumedToast": "Batch resumed",
+    "canceledToast": "Batch cancel requested",
+    "jobs": "Jobs",
+    "jobsTotal": "Total",
+    "fanoutTitle": "Fan-out",
+    "fanoutStartNowAction": "Start after enqueue",
+    "fanoutEnqueueAction": "Expand & enqueue",
+    "shardCount": "Shard count",
+    "shardCountHint": "Split expanded items into N buckets by index (group by idx % N). With shard index, only one bucket is created; 1 means no sharding",
+    "shardIndex": "Shard index",
+    "shardIndexHint": "Which shard to create (0 to shardCount-1). Rule: only items where idx % shardCount === shardIndex are created",
+    "fanoutCreatedToast": "Enqueued {count} jobs",
+    "fanoutTruncatedToast": "Seed expanded beyond limit; enqueued {count} jobs (truncated)"
+  },
+  "operations": {
+    "title": "Operations",
+    "recentOperationsDescription": "Inspect recent side-effecting operations and their results",
+    "searchPlaceholder": "Search: operation ID / target ID / action…",
+    "emptyState": "No operations yet",
+    "noResultsTitle": "No operations found",
+    "showingTotal": "{total} operations",
+    "pendingNewNotice": "{count} new operations",
+    "pendingNewLoadAction": "Load",
+    "pendingNewGoToNewestAction": "Go to newest",
+    "pendingNewSwitchToast": "Switch to the first page (Newest first) to load new operations",
+    "list": {
+      "actions": {
+        "copyOperationIdAction": "Copy operation ID"
+      }
+    },
+    "detail": {
+      "summary": "Summary",
+      "action": "Action",
+      "target": "Target",
+      "status": "Status",
+      "responseStatus": "Response",
+      "completedAt": "Completed",
+      "scope": "Scope",
+      "actor": "Actor",
+      "tenant": "Tenant",
+      "requestId": "Request ID",
+      "progress": "Progress",
+      "result": "Result",
+      "rootCause": "Root cause"
+    },
+    "progressMessages": {
+      "agentRunInProgress": "Agent run in progress",
+      "agentRunStarted": "Agent run started",
+      "agentRunCompleted": "Agent run completed",
+      "enqueueingJobs": "Enqueueing {total} jobs",
+      "createdJobs": "Created {created}/{total} jobs",
+      "installingDeps": "Installing dependencies"
+    },
+    "statusPending": "Pending"
+  },
+  "errors": {
+    "ajv": {
+      "additionalProperties": "Unexpected property{property}",
+      "required": "Missing required property{property}",
+      "type": "Must be {type}",
+      "enum": "Must be one of: {values}",
+      "const": "Must be {value}",
+      "minimum": "Must be ≥ {limit}",
+      "maximum": "Must be ≤ {limit}",
+      "exclusiveMinimum": "Must be > {limit}",
+      "exclusiveMaximum": "Must be < {limit}",
+      "minLength": "Must be at least {limit} characters",
+      "maxLength": "Must be at most {limit} characters",
+      "minItems": "Must have at least {limit} items",
+      "maxItems": "Must have at most {limit} items",
+      "minProperties": "Must have at least {limit} properties",
+      "maxProperties": "Must have at most {limit} properties",
+      "multipleOf": "Must be a multiple of {multipleOf}",
+      "uniqueItems": "Array items must be unique",
+      "oneOf": "Must match exactly one allowed schema",
+      "anyOf": "Must match at least one allowed schema",
+      "allOf": "Must match all required schemas",
+      "not": "Must NOT match this schema",
+      "pattern": "Invalid format",
+      "patternProperties": "Contains keys that do not match allowed patterns",
+      "format": "Must match format: {format}"
+    },
+    "issue": {
+      "reserved": "Reserved field (system-managed): {field}",
+      "disabled": "This field is disabled: {field}",
+      "notSupported": "This field is not supported here: {field}",
+      "notFound": "Not found",
+      "acceptMime": "File type is not allowed"
+    },
+    "json": {
+      "parseAt": "Invalid JSON (line {line}, column {column})"
+    },
+    "HTTP_ERROR": "Request failed",
+    "INVALID_QUERY": "Invalid query parameters",
+    "INVALID_BODY": "Invalid request body",
+    "INVALID_CREDENTIALS": "Invalid email or password",
+    "EMAIL_TAKEN": "Email is already in use",
+    "PASSWORD_TOO_SHORT": "Password must be at least 8 characters",
+    "PASSWORD_MISMATCH": "Passwords do not match",
+    "UNAUTHORIZED": "Unauthorized",
+    "FORBIDDEN": "Forbidden",
+    "NOT_INSTALLED": "Not installed",
+    "ALREADY_INITIALIZED": "Already initialized",
+    "DB_NOT_READY": "Database is not initialized yet; go back and click “Initialize & continue”",
+    "SQLITE_MIGRATION_FAILED": "Database migration failed",
+    "DATA_DIR_REQUIRED": "Please enter a directory path",
+    "DATA_DIR_MUST_BE_ABSOLUTE": "Please enter an absolute path",
+    "DATA_DIR_NOT_FOUND": "Directory does not exist. Please create it first",
+    "DATA_DIR_NOT_DIRECTORY": "Path is not a directory",
+    "DATA_DIR_STAT_FAILED": "Cannot access the path",
+    "DATA_DIR_CREATE_FAILED": "Cannot create the directory",
+    "DATA_DIR_NOT_ACCESSIBLE": "Directory is not accessible",
+    "DATA_DIR_NOT_WRITABLE": "Directory is not writable",
+    "DATA_DIR_LOCKED_BY_ENV": "Database location is controlled by MAIA_DATA_DIR",
+    "INVALID_JSON": "Invalid JSON",
+    "INVALID_URL_FILES": "Invalid URL list",
+    "WORKFLOW_ID_REQUIRED": "Workflow is required",
+    "WORKFLOW_NOT_FOUND": "Workflow not found",
+    "WORKFLOW_VERSION_NOT_FOUND": "Workflow version not found",
+    "WORKFLOW_INPUT_SPEC_INVALID": "Workflow input spec is invalid",
+    "INVALID_DEPENDENCIES": "Invalid dependencies",
+    "INVALID_ENV_JSON": "Invalid environment variables JSON",
+    "INVALID_INPUT_SPEC": "Invalid input spec",
+    "INVALID_INPUT_SPEC_SCHEMA": "Invalid input spec schema",
+    "INVALID_INPUT_SPEC_RESERVED_FIELDS": "Input spec uses reserved field names",
+    "INVALID_OUTPUTS_SPEC": "Invalid outputs spec",
+    "INVALID_INITIAL_INPUT": "Invalid input parameters",
+    "INVALID_INPUT_JSON": "Invalid input template",
+    "INVALID_INPUT_FILES": "Invalid file inputs",
+    "RESET_TOKEN_INVALID": "Reset link is invalid",
+    "RESET_TOKEN_USED": "Reset link has already been used",
+    "RESET_TOKEN_EXPIRED": "Reset link has expired",
+    "TOTP_REQUIRED": "Verification required",
+    "TOTP_INVALID": "Invalid verification code",
+    "CHALLENGE_INVALID": "Session expired",
+    "INVALID_CRON": "Invalid cron expression",
+    "INVALID_INTERVAL": "Invalid interval",
+    "MARKDOWN_RENDER_FAILED": "Markdown rendering failed",
+    "FILE_TOO_LARGE": "File is too large",
+    "FILE_NOT_FOUND": "File not found",
+    "INVALID_PATH": "File not found",
+    "RUN_NOT_FOUND": "Run not found",
+    "RUN_IS_RUNNING": "Run is in progress",
+    "INVALID_SNAPSHOT": "Version is invalid",
+    "RUN_NOT_PAUSED": "Run is not paused",
+    "JOB_NOT_PAUSED": "Job is not paused",
+    "RUN_NOW_FAILED": "Run now failed",
+    "SAVE_FAILED": "Save failed",
+    "UPDATE_FAILED": "Update failed",
+    "NO_URL_INPUTS": "No URL inputs to retry",
+    "NO_FAILED_URL_INPUTS": "No failed URL inputs to retry",
+    "URL_INPUT_NOT_FOUND": "URL input file not found",
+    "URL_INPUT_NOT_URL": "This input file is not from URL source",
+    "URL_INPUT_NOT_FAILED": "This URL input file is not in failed status",
+    "NO_RUN_INPUTS": "No run inputs yet",
+    "NO_LOGS": "No logs yet",
+    "NO_ATTEMPTS": "No run history yet",
+    "NO_ARTIFACTS": "No artifacts yet",
+    "NO_STEP_INPUT": "No step input yet",
+    "NO_STEP_OUTPUT": "No step output yet",
+    "NO_STEP_DEFINITION": "No step definition available",
+    "NO_SUCCESSFUL_ATTEMPTS": "No successful runs yet",
+    "DEPS_INSTALL_FAILED": "Dependency installation failed (see install logs)",
+    "AGENT_API_KEY_MISSING": "Agent API key is missing (go to Preferences → Agent)",
+    "DEEPSEEK_HTTP_ERROR": "Agent request failed (upstream service error)",
+    "AGENT_STREAM_FAILED": "Agent stream failed",
+    "AGENT_UPSTREAM_TIMEOUT": "Agent timed out (upstream took too long)",
+    "AGENT_IDLE_TIMEOUT": "Agent timed out (no upstream output)",
+    "AGENT_MAX_ROUNDS_REACHED": "Agent stopped early (max tool rounds reached)",
+    "INPUT_SPEC_GENERATION_FAILED": "Input spec generation failed",
+    "WORKFLOW_VALIDATION_FAILED": "Workflow draft validation failed",
+    "INVALID_WORKFLOW_SNAPSHOT": "Workflow snapshot is invalid",
+    "REQUEST_ABORTED": "Request aborted"
+  }
+}

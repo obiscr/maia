@@ -1,0 +1,237 @@
+@layer maia.base {
+  :root {
+    --maia-radius: 0.625rem;
+
+    /*
+      App font stacks (local/system only).
+      IMPORTANT: avoid `ui-sans-serif` / `system-ui` at the front, because their actual resolved font
+      can change with `<html lang>` (e.g. zh-cn vs en), making 16px look visually different.
+      We prefer explicit Latin UI fonts first, then add CJK fallbacks.
+    */
+    --maia-font-sans:
+      -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB",
+      "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+      "Segoe UI Symbol", "Noto Color Emoji";
+    --maia-font-mono:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+    --maia-color-background: #ffffff;
+    --maia-color-foreground: #171717;
+    --maia-color-card: #ffffff;
+    --maia-color-card-foreground: #0a0a0a;
+    --maia-color-popover: #ffffff;
+    --maia-color-popover-foreground: #0a0a0a;
+    --maia-color-primary: #404fec;
+    --maia-color-primary-foreground: #fafafa;
+    --maia-color-secondary: #f6f7f9;
+    --maia-color-overlay: #f6f7f9cc;
+    --maia-color-secondary-foreground: #171717;
+    --maia-color-muted: #f6f8fa;
+    --maia-color-muted-foreground: #59636e;
+    --maia-color-accent: #f5f5f5;
+    --maia-color-accent-foreground: #171717;
+    --maia-color-destructive: #e7000b;
+    --maia-color-destructive-foreground: #fafafa;
+
+    --maia-color-border: #d7dae3;
+    --maia-color-border-hover: #8f95a6;
+    --maia-color-input: #e5e5e5;
+    --maia-color-ring: #a1a1a1;
+
+    --maia-color-chart-1: #f54900;
+    --maia-color-chart-2: #009689;
+    --maia-color-chart-3: #104e64;
+    --maia-color-chart-4: #ffb900;
+    --maia-color-chart-5: #fe9a00;
+
+    --maia-color-sidebar: #fafafa;
+    --maia-color-sidebar-foreground: #0a0a0a;
+    --maia-color-sidebar-primary: #171717;
+    --maia-color-sidebar-primary-foreground: #fafafa;
+    --maia-color-sidebar-accent: #f5f5f5;
+    --maia-color-sidebar-accent-foreground: #171717;
+    --maia-color-sidebar-border: #e5e5e5;
+    --maia-color-sidebar-ring: #a1a1a1;
+
+    --maia-indicator-active: var(--maia-color-background);
+    --maia-indicator-muted: var(--maia-color-primary);
+    --maia-indicator-hover: #ffffffcc;
+    --maia-indicator-ring: #ffffff4d;
+    --maia-indicator-shell-bg: #00000000;
+    --maia-indicator-shell-bg-hover: #ffffff0f;
+    --maia-indicator-shell-border: #ffffff1f;
+
+    --maia-header-h: 64px;
+    --maia-tab-bar-h: 64px;
+    --maia-safe-bottom: env(safe-area-inset-bottom, 0px);
+    --maia-mobile-tabbar-h: calc(var(--maia-tab-bar-h) + var(--maia-safe-bottom));
+    --maia-viewport-chrome-offset-y: var(--maia-header-h);
+
+    --maia-scrollbar-thumb: #c1c3c8;
+    --maia-scrollbar-track: transparent;
+
+    --maia-sl-color-white: #17181c;
+    --maia-sl-color-gray-1: #23262f;
+    --maia-sl-color-gray-2: #353841;
+    --maia-sl-color-gray-3: #555962;
+    --maia-sl-color-gray-4: #888c96;
+    --maia-sl-color-gray-5: #c1c3c8;
+    --maia-sl-color-gray-6: #edeef3;
+    --maia-sl-color-gray-7: #f6f7f9;
+    --maia-sl-color-black: #ffffff;
+
+    --maia-sl-hue-orange: 41;
+    --maia-sl-hue-green: 101;
+    --maia-sl-hue-blue: 234;
+    --maia-sl-hue-purple: 281;
+    --maia-sl-hue-red: 339;
+
+    --maia-sl-color-orange-high: #73520d;
+    --maia-sl-color-orange: #f5bb3d;
+    --maia-sl-color-orange-low: #fceac5;
+    --maia-sl-color-green-high: #28650b;
+    --maia-sl-color-green: #4fdf0c;
+    --maia-sl-color-green-low: #defbd0;
+    --maia-sl-color-blue-high: #0f1c8a;
+    --maia-sl-color-blue: #3d50f5;
+    --maia-sl-color-blue-low: #cfd4fc;
+    --maia-sl-color-purple-high: #660891;
+    --maia-sl-color-purple: #bb3df5;
+    --maia-sl-color-purple-low: #edd1fa;
+    --maia-sl-color-red-high: #8a0f3a;
+    --maia-sl-color-red: #f53d7d;
+    --maia-sl-color-red-low: #fad1df;
+
+    --maia-sl-color-accent-high: #0f1c8a;
+    --maia-sl-color-accent: #3d50f5;
+    --maia-sl-color-accent-low: #cfd4fc;
+
+    --maia-sl-color-text: var(--maia-sl-color-gray-2);
+    --maia-sl-color-text-accent: var(--maia-sl-color-accent);
+    --maia-sl-color-text-invert: var(--maia-sl-color-black);
+    --maia-sl-color-bg: var(--maia-sl-color-black);
+    --maia-sl-color-bg-nav: var(--maia-sl-color-gray-7);
+    --maia-sl-color-bg-sidebar: var(--maia-sl-color-bg);
+    --maia-sl-color-bg-inline-code: var(--maia-sl-color-gray-6);
+    --maia-sl-color-bg-accent: var(--maia-sl-color-accent);
+    --maia-sl-color-hairline-light: var(--maia-sl-color-gray-6);
+    --maia-sl-color-hairline: var(--maia-sl-color-gray-6);
+    --maia-sl-color-hairline-shade: var(--maia-sl-color-gray-6);
+    --maia-sl-color-backdrop-overlay: #545864a8;
+
+    --maia-sl-shadow-sm: 0px 1px 1px #0000000f, 0px 2px 1px #0000000f;
+    --maia-sl-shadow-md: 0px 8px 4px #00000008, 0px 5px 2px #00000008, 0px 3px 2px #0000000f, 0px 1px 1px #0000000f;
+    --maia-sl-shadow-lg:
+      0px 25px 7px #00000003, 0px 16px 6px #00000008, 0px 9px 5px #16181d14, 0px 4px 4px #00000029,
+      0px 4px 2px #0000000a;
+
+    --maia-brand-bg: var(--maia-color-primary);
+  }
+
+  @media (max-width: 959px) {
+    :root {
+      --maia-viewport-chrome-offset-y: calc(var(--maia-header-h) + var(--maia-mobile-tabbar-h));
+    }
+  }
+
+  .dark {
+    --maia-color-background: #17181c;
+    --maia-color-foreground: #fafafa;
+    --maia-color-card: #171717;
+    --maia-color-card-foreground: #fafafa;
+    --maia-color-popover: #171717;
+    --maia-color-popover-foreground: #fafafa;
+    --maia-color-primary: #b7c6fb;
+    --maia-color-primary-foreground: #171717;
+    --maia-color-secondary: #24262e;
+    --maia-color-overlay: #24262eb3;
+    --maia-color-secondary-foreground: #fafafa;
+    --maia-color-muted: #262c36;
+    --maia-color-muted-foreground: #9198a1;
+    --maia-color-accent: #262626;
+    --maia-color-accent-foreground: #fafafa;
+    --maia-color-destructive: #ff6467;
+    --maia-color-destructive-foreground: #fafafa;
+
+    --maia-color-border: #2f323b;
+    --maia-color-border-hover: #6b7283;
+    --maia-color-input: #ffffff26;
+    --maia-color-ring: #737373;
+
+    --maia-color-chart-1: #1447e6;
+    --maia-color-chart-2: #00bc7d;
+    --maia-color-chart-3: #fe9a00;
+    --maia-color-chart-4: #ad46ff;
+    --maia-color-chart-5: #ff2056;
+
+    --maia-color-sidebar: #171717;
+    --maia-color-sidebar-foreground: #fafafa;
+    --maia-color-sidebar-primary: #1447e6;
+    --maia-color-sidebar-primary-foreground: #fafafa;
+    --maia-color-sidebar-accent: #262626;
+    --maia-color-sidebar-accent-foreground: #fafafa;
+    --maia-color-sidebar-border: #ffffff1a;
+    --maia-color-sidebar-ring: #737373;
+
+    --maia-indicator-active: var(--maia-color-background);
+    --maia-indicator-muted: var(--maia-color-primary);
+    --maia-indicator-hover: #ffffffbf;
+    --maia-indicator-ring: #ffffff59;
+    --maia-indicator-shell-bg: #00000000;
+    --maia-indicator-shell-bg-hover: #ffffff0f;
+    --maia-indicator-shell-border: #ffffff1f;
+
+    --maia-scrollbar-thumb: #3a3d45;
+    --maia-scrollbar-track: transparent;
+
+    --maia-sl-color-white: #ffffff;
+    --maia-sl-color-gray-1: #edeef3;
+    --maia-sl-color-gray-2: #c1c3c8;
+    --maia-sl-color-gray-3: #888c96;
+    --maia-sl-color-gray-4: #555962;
+    --maia-sl-color-gray-5: #353841;
+    --maia-sl-color-gray-6: #23262f;
+
+    --maia-sl-color-gray-7: #272b34;
+    --maia-sl-color-black: #17181c;
+
+    --maia-sl-color-orange-low: #4e4022;
+    --maia-sl-color-orange: #eebd53;
+    --maia-sl-color-orange-high: #f9e8c3;
+    --maia-sl-color-green-low: #304e22;
+    --maia-sl-color-green: #84ee53;
+    --maia-sl-color-green-high: #bdf6a2;
+    --maia-sl-color-blue-low: #171d4f;
+    --maia-sl-color-blue: #3369ff;
+    --maia-sl-color-blue-high: #bdc3ff;
+    --maia-sl-color-purple-low: #40224e;
+    --maia-sl-color-purple: #bd53ee;
+    --maia-sl-color-purple-high: #ebccfa;
+    --maia-sl-color-red-low: #4e2232;
+    --maia-sl-color-red: #ee5389;
+    --maia-sl-color-red-high: #f9c3d6;
+
+    --maia-sl-color-accent-low: #17264f;
+    --maia-sl-color-accent: #3369ff;
+    --maia-sl-color-accent-high: #b3c7ff;
+
+    --maia-sl-color-text: var(--maia-sl-color-gray-2);
+    --maia-sl-color-text-accent: var(--maia-sl-color-accent-high);
+    --maia-sl-color-text-invert: var(--maia-sl-color-accent-low);
+    --maia-sl-color-bg: var(--maia-sl-color-black);
+    --maia-sl-color-bg-nav: var(--maia-sl-color-gray-6);
+    --maia-sl-color-bg-sidebar: var(--maia-sl-color-gray-6);
+    --maia-sl-color-bg-inline-code: var(--maia-sl-color-gray-5);
+    --maia-sl-color-bg-accent: var(--maia-sl-color-accent-high);
+    --maia-sl-color-hairline-light: var(--maia-sl-color-gray-5);
+    --maia-sl-color-hairline: var(--maia-sl-color-gray-6);
+    --maia-sl-color-hairline-shade: var(--maia-sl-color-black);
+    --maia-sl-color-backdrop-overlay: #16181da8;
+
+    --maia-sl-shadow-sm: 0px 1px 1px #0000001f, 0px 2px 1px #0000003d;
+    --maia-sl-shadow-md: 0px 8px 4px #00000014, 0px 5px 2px #00000014, 0px 3px 2px #0000001f, 0px 1px 1px #00000026;
+    --maia-sl-shadow-lg:
+      0px 25px 7px #00000008, 0px 16px 6px #0000001a, 0px 9px 5px #16181d54, 0px 4px 4px #000000bf,
+      0px 4px 2px #00000040;
+  }
+}

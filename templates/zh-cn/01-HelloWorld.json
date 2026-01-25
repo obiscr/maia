@@ -1,0 +1,54 @@
+{
+  "format": "maia.workflow.export.v1",
+  "exportedAt": "2026-01-24T00:00:00.000Z",
+  "workflow": {
+    "id": "wf-example-01",
+    "name": "Hello World",
+    "description": "最小可运行工作流：1 个步骤，演示 step 脚本基本结构与 outputsSpec 映射。"
+  },
+  "version": null,
+  "flags": {
+    "envIncluded": false
+  },
+  "data": {
+    "meta": {
+      "name": "Hello World",
+      "description": "最小可运行工作流：无输入参数，1 个步骤，固定输出 Hello World。"
+    },
+    "steps": [
+      {
+        "stepKey": "step_hello",
+        "name": "输出 Hello World",
+        "scriptEsm": "export default {\n  async main(env, ctx) {\n    const greeting = \"Hello World\"\n    ctx.log(\"[hello] greeting=\", greeting)\n\n    return {\n      outputs: {\n        greeting,\n      },\n    }\n  },\n}\n",
+        "timeoutMs": 60000,
+        "deps": []
+      }
+    ],
+    "env": {},
+    "dependencies": {},
+    "inputSpec": {
+      "version": 1,
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "examples": [{ "name": "默认运行", "description": "无需输入参数。", "params": {} }],
+      "fileInputs": {
+        "urlFiles": { "enabled": false, "required": false },
+        "uploads": { "enabled": false, "required": false }
+      }
+    },
+    "outputsSpec": {
+      "version": 1,
+      "outputs": {
+        "greeting": {
+          "stepKey": "step_hello",
+          "field": "greeting",
+          "title": "输出",
+          "description": "固定输出：Hello World"
+        }
+      }
+    }
+  }
+}

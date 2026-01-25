@@ -1,0 +1,24 @@
+@import "reactflow/dist/style.css";
+
+.react-flow__nodesselection {
+  background: transparent !important;
+}
+.react-flow__nodesselection-rect {
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.react-flow__node-stepNode > div {
+  transition: border-color 150ms ease;
+}
+
+.react-flow__node-stepNode.selectable:hover > div,
+.react-flow__node-stepNode.draggable:hover > div {
+  border-color: var(--maia-color-border-hover);
+}
+
+.react-flow__node-stepNode.selectable.selected > div {
+  border-color: var(--maia-color-primary);
+}

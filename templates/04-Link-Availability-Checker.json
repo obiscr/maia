@@ -1,0 +1,223 @@
+{
+  "format": "maia.workflow.export.v1",
+  "exportedAt": "2026-01-24T00:00:00.000Z",
+  "workflow": {
+    "id": "wf-example-04",
+    "name": "Link Availability Checker",
+    "description": "Perform availability checks on a set of URLs: prioritize HEAD probing, automatically fallback to GET when necessary, and generate a Markdown report."
+  },
+  "version": null,
+  "flags": {
+    "envIncluded": false
+  },
+  "data": {
+    "meta": {
+      "name": "Link Availability Checker",
+      "description": "Perform availability checks on a set of URLs: prioritize HEAD probing, automatically fallback to GET when necessary, and generate a Markdown report."
+    },
+    "steps": [
+      {
+        "stepKey": "prepare_targets",
+        "name": "Prepare Target Links",
+        "scriptEsm": "export default {\n  async main(env, ctx) {\n    const p = ctx?.params || {};\n\n    const input = p.targets;\n    const maxTargets = Number(p.maxTargets ?? 50) || 50;\n\n    const meta = {\n      received: {\n        isArray: Array.isArray(input),\n        length: Array.isArray(input) ? input.length : 0,\n        maxTargets,\n      },\n      stats: {\n        parsed: 0,\n        normalized: 0,\n        deduped: 0,\n        droppedInvalid: 0,\n        truncated: false,\n      },\n      warnings: [],\n      errors: [],\n      preparedAt: new Date().toISOString(),\n    };\n\n    if (!Array.isArray(input)) {\n      meta.errors.push('`targets` must be an array of URL strings (e.g. [\"https://a.com\",\"https://b.com\"])');\n      return { outputs: { targets: [], meta } };\n    }\n\n    meta.stats.parsed = input.length;\n\n    const seen = new Set();\n    const targets = [];\n\n    const normalizeOne = (raw) => {\n      let s = String(raw || \"\").trim();\n      if (!s) return null;\n\n      // Allow shorthand: example.com/path -> https://example.com/path\n      if (!/^https?:\\/\\//i.test(s)) {\n        if (/^[a-z0-9.-]+\\.[a-z]{2,}(\\/.*)?$/i.test(s)) s = `https://${s}`;\n      }\n\n      try {\n        const u = new URL(s);\n        if (!/^https?:$/.test(u.protocol)) return null;\n        // Remove hash for stable dedupe.\n        u.hash = \"\";\n        return u.toString();\n      } catch {\n        return null;\n      }\n    };\n\n    for (const raw of input) {\n      if (typeof raw !== \"string\") {\n        meta.stats.droppedInvalid += 1;\n        continue;\n      }\n\n      const normalized = normalizeOne(raw);\n      if (!normalized) {\n        meta.stats.droppedInvalid += 1;\n        continue;\n      }\n\n      const key = normalized.toLowerCase();\n      if (seen.has(key)) continue;\n      seen.add(key);\n\n      targets.push({\n        url: normalized,\n        original: raw,\n        host: (() => {\n          try {\n            return new URL(normalized).host;\n          } catch {\n            return \"\";\n          }\n        })(),\n      });\n\n      if (targets.length >= maxTargets) {\n        meta.stats.truncated = input.length > maxTargets;\n        break;\n      }\n    }\n\n    meta.stats.normalized = targets.length + meta.stats.droppedInvalid;\n    meta.stats.deduped = targets.length;\n\n    if (targets.length === 0) {\n      meta.errors.push(\"No valid URLs found in `targets`.\");\n    }\n\n    if (meta.stats.truncated) meta.warnings.push(`Too many targets, truncated to ${maxTargets}`);\n    if (meta.stats.droppedInvalid > 0) meta.warnings.push(`Dropped ${meta.stats.droppedInvalid} invalid/non-string URLs`);\n\n    return {\n      outputs: {\n        targets,\n        meta,\n      },\n    };\n  },\n};\n",
+        "timeoutMs": 60000,
+        "deps": []
+      },
+      {
+        "stepKey": "head_check",
+        "name": "HEAD Probe",
+        "scriptEsm": "function nowMs() {\n  return Date.now();\n}\n\nasync function withConcurrency(items, concurrency, worker) {\n  const arr = Array.isArray(items) ? items : [];\n  const c = Math.max(1, Math.min(50, Number(concurrency) || 5));\n  const results = new Array(arr.length);\n  let idx = 0;\n\n  async function runOne() {\n    while (true) {\n      const i = idx++;\n      if (i >= arr.length) return;\n      results[i] = await worker(arr[i], i);\n    }\n  }\n\n  const pool = new Array(Math.min(c, arr.length)).fill(0).map(() => runOne());\n  await Promise.all(pool);\n  return results;\n}\n\nasync function fetchWithTimeout(url, init, timeoutMs) {\n  const controller = new AbortController();\n  const t = setTimeout(() => controller.abort(), Math.max(1, Number(timeoutMs) || 10000));\n  try {\n    const res = await fetch(url, { ...init, signal: controller.signal });\n    return res;\n  } finally {\n    clearTimeout(t);\n  }\n}\n\nexport default {\n  async main(env, ctx) {\n    const p = ctx?.params || {};\n    const upstream = ctx?.upstream || {};\n\n    const prepared = upstream.prepare_targets?.data;\n    const targets = Array.isArray(prepared?.outputs?.targets) ? prepared.outputs.targets : [];\n\n    const timeoutMs = Number(p.timeoutMs ?? 10000) || 10000;\n    const concurrency = Number(p.concurrency ?? 5) || 5;\n    const followRedirects = Boolean(p.followRedirects ?? true);\n    const userAgent = String(p.userAgent ?? \"Mozilla/5.0 (compatible; Maia-Link-Checker/1.0)\");\n\n    const meta = {\n      timeoutMs,\n      concurrency,\n      followRedirects,\n      userAgent,\n      checkedAt: new Date().toISOString(),\n      errors: [],\n      warnings: [],\n    };\n\n    if (!targets.length) {\n      meta.errors.push(\"Upstream has no valid targets\");\n      return { outputs: { results: [], meta } };\n    }\n\n    const redirect = followRedirects ? \"follow\" : \"manual\";\n\n    const results = await withConcurrency(targets, concurrency, async (t) => {\n      const url = String(t?.url || \"\");\n      const started = nowMs();\n\n      try {\n        const res = await fetchWithTimeout(\n          url,\n          {\n            method: \"HEAD\",\n            redirect,\n            headers: {\n              \"User-Agent\": userAgent,\n              Accept: \"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\",\n            },\n          },\n          timeoutMs\n        );\n\n        const latency_ms = nowMs() - started;\n        return {\n          url,\n          method: \"HEAD\",\n          ok: res.status >= 200 && res.status < 400,\n          status: res.status,\n          final_url: String(res.url || url),\n          redirected: Boolean(res.redirected),\n          latency_ms,\n          error: null,\n        };\n      } catch (e) {\n        const latency_ms = nowMs() - started;\n        const msg = e instanceof Error ? e.message : String(e);\n        const name = e && typeof e === \"object\" && \"name\" in e ? String(e.name) : \"\";\n        const isTimeout = name === \"AbortError\";\n        return {\n          url,\n          method: \"HEAD\",\n          ok: false,\n          status: 0,\n          final_url: url,\n          redirected: false,\n          latency_ms,\n          error: isTimeout ? `timeout: ${msg}` : msg,\n        };\n      }\n    });\n\n    return {\n      outputs: {\n        results,\n        meta,\n      },\n    };\n  },\n};\n",
+        "timeoutMs": 600000,
+        "deps": ["prepare_targets"]
+      },
+      {
+        "stepKey": "get_fallback",
+        "name": "GET Fallback",
+        "scriptEsm": "function nowMs() {\n  return Date.now();\n}\n\nasync function withConcurrency(items, concurrency, worker) {\n  const arr = Array.isArray(items) ? items : [];\n  const c = Math.max(1, Math.min(50, Number(concurrency) || 5));\n  const results = new Array(arr.length);\n  let idx = 0;\n\n  async function runOne() {\n    while (true) {\n      const i = idx++;\n      if (i >= arr.length) return;\n      results[i] = await worker(arr[i], i);\n    }\n  }\n\n  const pool = new Array(Math.min(c, arr.length)).fill(0).map(() => runOne());\n  await Promise.all(pool);\n  return results;\n}\n\nasync function fetchWithTimeout(url, init, timeoutMs) {\n  const controller = new AbortController();\n  const t = setTimeout(() => controller.abort(), Math.max(1, Number(timeoutMs) || 10000));\n  try {\n    const res = await fetch(url, { ...init, signal: controller.signal });\n    return res;\n  } finally {\n    clearTimeout(t);\n  }\n}\n\nexport default {\n  async main(env, ctx) {\n    const p = ctx?.params || {};\n    const upstream = ctx?.upstream || {};\n\n    const head = upstream.head_check?.data;\n    const headResults = Array.isArray(head?.outputs?.results) ? head.outputs.results : [];\n\n    const timeoutMs = Number(p.timeoutMs ?? 10000) || 10000;\n    const concurrency = Number(p.concurrency ?? 5) || 5;\n    const followRedirects = Boolean(p.followRedirects ?? true);\n    const userAgent = String(p.userAgent ?? \"Mozilla/5.0 (compatible; Maia-Link-Checker/1.0)\");\n\n    const meta = {\n      timeoutMs,\n      concurrency,\n      followRedirects,\n      userAgent,\n      fallbackFor: {\n        statuses: [0, 403, 405],\n        reason: \"When HEAD times out/fails/403/405, use GET for fallback probing (try not to download body)\",\n      },\n      checkedAt: new Date().toISOString(),\n      errors: [],\n      warnings: [],\n    };\n\n    if (!headResults.length) {\n      meta.warnings.push(\"HEAD results are empty: no targets to fallback\");\n      return { outputs: { results_patch: [], meta } };\n    }\n\n    const needsFallback = headResults.filter((r) => {\n      const status = Number(r?.status || 0) || 0;\n      return status === 0 || status === 403 || status === 405;\n    });\n\n    if (!needsFallback.length) {\n      return { outputs: { results_patch: [], meta } };\n    }\n\n    const redirect = followRedirects ? \"follow\" : \"manual\";\n\n    const results_patch = await withConcurrency(needsFallback, concurrency, async (r) => {\n      const url = String(r?.url || \"\");\n      const started = nowMs();\n\n      try {\n        const res = await fetchWithTimeout(\n          url,\n          {\n            method: \"GET\",\n            redirect,\n            headers: {\n              \"User-Agent\": userAgent,\n              Accept: \"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\",\n              // Try to avoid downloading full body: only fetch first byte (some servers don't support Range, will return 200/full response headers)\n              Range: \"bytes=0-0\",\n              \"Accept-Encoding\": \"identity\",\n            },\n          },\n          timeoutMs\n        );\n\n        // Don't read body (if exists), release resources as soon as possible\n        try {\n          res.body?.cancel();\n        } catch {}\n\n        const latency_ms = nowMs() - started;\n        return {\n          url,\n          method: \"GET\",\n          ok: res.status >= 200 && res.status < 400,\n          status: res.status,\n          final_url: String(res.url || url),\n          redirected: Boolean(res.redirected),\n          latency_ms,\n          error: null,\n        };\n      } catch (e) {\n        const latency_ms = nowMs() - started;\n        const msg = e instanceof Error ? e.message : String(e);\n        const name = e && typeof e === \"object\" && \"name\" in e ? String(e.name) : \"\";\n        const isTimeout = name === \"AbortError\";\n        return {\n          url,\n          method: \"GET\",\n          ok: false,\n          status: 0,\n          final_url: url,\n          redirected: false,\n          latency_ms,\n          error: isTimeout ? `timeout: ${msg}` : msg,\n        };\n      }\n    });\n\n    return {\n      outputs: {\n        results_patch,\n        meta,\n      },\n    };\n  },\n};\n",
+        "timeoutMs": 600000,
+        "deps": ["head_check"]
+      },
+      {
+        "stepKey": "merge_results",
+        "name": "Merge Results",
+        "scriptEsm": "export default {\n  async main(env, ctx) {\n    const upstream = ctx?.upstream || {};\n\n    const prepared = upstream.prepare_targets?.data;\n    const targets = Array.isArray(prepared?.outputs?.targets) ? prepared.outputs.targets : [];\n\n    const head = upstream.head_check?.data;\n    const headResults = Array.isArray(head?.outputs?.results) ? head.outputs.results : [];\n\n    const fb = upstream.get_fallback?.data;\n    const patch = Array.isArray(fb?.outputs?.results_patch) ? fb.outputs.results_patch : [];\n\n    const meta = {\n      mergedAt: new Date().toISOString(),\n      errors: [],\n      warnings: [],\n      stats: {\n        targets: targets.length,\n        headResults: headResults.length,\n        fallbackPatched: patch.length,\n      },\n    };\n\n    const byUrl = new Map();\n\n    for (const r of headResults) {\n      const url = String(r?.url || \"\");\n      if (!url) continue;\n      byUrl.set(url, r);\n    }\n\n    for (const r of patch) {\n      const url = String(r?.url || \"\");\n      if (!url) continue;\n      // Fallback results override HEAD\n      byUrl.set(url, r);\n    }\n\n    const results = [];\n    for (const t of targets) {\n      const url = String(t?.url || \"\");\n      const r = byUrl.get(url);\n      results.push(\n        r || {\n          url,\n          method: null,\n          ok: false,\n          status: 0,\n          final_url: url,\n          redirected: false,\n          latency_ms: null,\n          error: \"missing_result\",\n        }\n      );\n    }\n\n    const okCount = results.filter((r) => Boolean(r?.ok)).length;\n    const failCount = results.length - okCount;\n\n    const summary = {\n      total: results.length,\n      ok: okCount,\n      failed: failCount,\n    };\n\n    return {\n      outputs: {\n        summary,\n        results,\n        meta,\n      },\n    };\n  },\n};\n",
+        "timeoutMs": 60000,
+        "deps": ["prepare_targets", "head_check", "get_fallback"]
+      },
+      {
+        "stepKey": "build_report",
+        "name": "Generate Markdown Report",
+        "scriptEsm": "function escMd(s) {\n  return String(s ?? \"\").replace(/\\|/g, \"\\\\|\").replace(/\\r?\\n/g, \" \");\n}\n\nexport default {\n  async main(env, ctx) {\n    const upstream = ctx?.upstream || {};\n\n    const merged = upstream.merge_results?.data;\n    const summary = merged?.outputs?.summary || { total: 0, ok: 0, failed: 0 };\n    const results = Array.isArray(merged?.outputs?.results) ? merged.outputs.results : [];\n\n    const meta = {\n      builtAt: new Date().toISOString(),\n      errors: [],\n      warnings: [],\n      wroteFile: false,\n      fileName: \"link-check-report.md\",\n      filePath: null,\n    };\n\n    const lines = [];\n    lines.push(`# Link Availability Report`);\n    lines.push(\"\");\n    lines.push(`- Generated at: ${new Date().toISOString()}`);\n    lines.push(`- Total: ${Number(summary.total || 0)}`);\n    lines.push(`- Passed: ${Number(summary.ok || 0)}`);\n    lines.push(`- Failed: ${Number(summary.failed || 0)}`);\n    lines.push(\"\");\n\n    lines.push(\"## Results Details\");\n    lines.push(\"\");\n    lines.push(\"| # | URL | Method | Status | OK | Final URL | Latency(ms) | Error |\");\n    lines.push(\"| - | --- | ------ | ------ | -- | --------- | ---------- | ----- |\");\n\n    for (let i = 0; i < results.length; i++) {\n      const r = results[i] || {};\n      const url = escMd(r.url || \"\");\n      const method = escMd(r.method || \"-\");\n      const status = String(r.status ?? \"-\");\n      const ok = r.ok ? \"✅\" : \"❌\";\n      const finalUrl = escMd(r.final_url || \"-\");\n      const latency = r.latency_ms == null ? \"-\" : String(r.latency_ms);\n      const err = escMd(r.error || \"\");\n\n      lines.push(`| ${i + 1} | ${url} | ${method} | ${status} | ${ok} | ${finalUrl} | ${latency} | ${err} |`);\n    }\n\n    lines.push(\"\");\n    lines.push(\"## Usage Suggestions\");\n    lines.push(\"\");\n    lines.push(\"- If there are many `timeout` failures: increase `timeoutMs`, or decrease `concurrency`.\");\n    lines.push(\"- If HEAD commonly returns 405/403: this is common (many sites disable HEAD), GET fallback will override results.\");\n    lines.push(\"- If you're on intranet/CI: ensure DNS/proxy/firewall policies allow access to these domains.\");\n\n    const report_md = lines.join(\"\\n\");\n\n    try {\n      const r = await ctx.artifacts.writeText(meta.fileName, report_md, { kind: \"file\", summary: \"Link check report (Markdown)\" });\n      meta.wroteFile = true;\n      meta.filePath = r?.absPath || null;\n    } catch (e) {\n      meta.errors.push(`Failed to write/register artifact: ${e instanceof Error ? e.message : String(e)}`);\n    }\n\n    return {\n      outputs: {\n        report_md,\n        file_name: meta.fileName,\n        file_path: meta.filePath,\n        wrote_file: meta.wroteFile,\n        meta,\n      },\n    };\n  },\n};\n",
+        "timeoutMs": 60000,
+        "deps": ["merge_results"]
+      }
+    ],
+    "env": {},
+    "dependencies": {},
+    "inputSpec": {
+      "version": 1,
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "targets": {
+            "type": "array",
+            "title": "Targets (URL array)",
+            "description": "An array of URL strings. Each item can be a full http/https URL, or a shorthand like example.com (we'll auto-prefix https://).",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "title": "Request Timeout (ms)",
+            "description": "HEAD/GET request timeout (default 10000).",
+            "minimum": 1000,
+            "maximum": 600000,
+            "default": 10000
+          },
+          "concurrency": {
+            "type": "integer",
+            "title": "Concurrency",
+            "description": "Number of links to probe simultaneously (default 5). If encountering timeouts or rate limiting, decrease it.",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 5
+          },
+          "followRedirects": {
+            "type": "boolean",
+            "title": "Follow Redirects",
+            "description": "Default true: automatically follow 301/302 redirects, final URL will be recorded in results.",
+            "default": true
+          },
+          "maxTargets": {
+            "type": "integer",
+            "title": "Maximum Links to Check",
+            "description": "Prevent too many inputs causing long runtime (default 50).",
+            "minimum": 1,
+            "maximum": 500,
+            "default": 50
+          },
+          "userAgent": {
+            "type": "string",
+            "title": "User-Agent",
+            "description": "UA string when making requests. Some sites decide whether to allow access based on UA.",
+            "minLength": 1,
+            "default": "Mozilla/5.0 (compatible; Maia-Link-Checker/1.0)"
+          }
+        },
+        "required": ["targets"]
+      },
+      "examples": [
+        {
+          "name": "Documentation/Dependency Site Check (Real Requests, Dozens of URLs)",
+          "description": "Input JSON array string (dozens of real URLs) for real probing and generate report artifact.",
+          "params": {
+            "timeoutMs": 15000,
+            "concurrency": 5,
+            "followRedirects": true,
+            "maxTargets": 50,
+            "userAgent": "Mozilla/5.0 (compatible; Maia-Link-Checker/1.0)",
+            "targets": [
+              "https://example.com/",
+              "https://github.com/",
+              "https://www.npmjs.com/",
+              "https://nodejs.org/",
+              "https://pnpm.io/",
+              "https://www.typescriptlang.org/",
+              "https://react.dev/",
+              "https://nextjs.org/",
+              "https://tailwindcss.com/",
+              "https://developer.mozilla.org/",
+              "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
+              "https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API",
+              "https://docs.github.com/",
+              "https://docs.github.com/en/actions",
+              "https://docs.docker.com/",
+              "https://www.docker.com/",
+              "https://kubernetes.io/",
+              "https://helm.sh/",
+              "https://prometheus.io/",
+              "https://grafana.com/",
+              "https://www.postgresql.org/",
+              "https://www.sqlite.org/",
+              "https://redis.io/",
+              "https://cloudflare.com/",
+              "https://openai.com/",
+              "https://stripe.com/",
+              "https://www.paypal.com/",
+              "https://news.ycombinator.com/",
+              "https://lobste.rs/",
+              "https://www.wikipedia.org/",
+              "https://en.wikipedia.org/wiki/Workflow",
+              "https://www.rfc-editor.org/",
+              "https://www.rfc-editor.org/rfc/rfc9110",
+              "https://www.rfc-editor.org/rfc/rfc9111",
+              "https://www.iana.org/",
+              "https://www.iana.org/domains/reserved",
+              "https://pypi.org/",
+              "https://python.org/",
+              "https://golang.org/",
+              "https://rust-lang.org/",
+              "https://deno.com/",
+              "https://bun.sh/",
+              "https://code.visualstudio.com/",
+              "https://marketplace.visualstudio.com/",
+              "https://github.blog/",
+              "https://status.github.com/",
+              "https://www.cloudflarestatus.com/",
+              "https://api.github.com/",
+              "https://google.com",
+              "https://www.microsoft.com/",
+              "https://www.apple.com/"
+            ]
+          }
+        }
+      ],
+      "fileInputs": {
+        "urlFiles": { "enabled": false, "required": false },
+        "uploads": { "enabled": false, "required": false }
+      }
+    },
+    "outputsSpec": {
+      "version": 1,
+      "outputs": {
+        "summary": {
+          "stepKey": "merge_results",
+          "field": "summary",
+          "title": "Summary Statistics",
+          "description": "Contains total/ok/failed counts."
+        },
+        "results": {
+          "stepKey": "merge_results",
+          "field": "results",
+          "title": "Check Results",
+          "description": "Output final check results for each URL in input order (HEAD or GET fallback override)."
+        },
+        "report_md": {
+          "stepKey": "build_report",
+          "field": "report_md",
+          "title": "Markdown Report Content",
+          "description": "Markdown report that can be directly copied to issue/PR/Feishu/DingTalk/Notion."
+        },
+        "file_name": {
+          "stepKey": "build_report",
+          "field": "file_name",
+          "title": "Report File Name",
+          "description": "Markdown file name written to artifacts."
+        },
+        "wrote_file": {
+          "stepKey": "build_report",
+          "field": "wrote_file",
+          "title": "File Written",
+          "description": "Whether successfully written and registered artifacts."
+        },
+        "meta": {
+          "stepKey": "build_report",
+          "field": "meta",
+          "title": "Execution Meta",
+          "description": "Contains errors/warnings and artifact write information."
+        }
+      }
+    }
+  }
+}

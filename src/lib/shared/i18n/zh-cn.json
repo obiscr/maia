@@ -1,0 +1,1422 @@
+{
+  "app": {
+    "name": "Maia",
+    "subtitle": "智能体编排器"
+  },
+  "nav": {
+    "home": "首页",
+    "workflows": "工作流",
+    "agent": "智能体",
+    "runs": "运行",
+    "jobs": "任务",
+    "schedules": "定时",
+    "batches": "批次",
+    "operations": "操作",
+    "adminUsers": "用户"
+  },
+  "sidebar": {
+    "workspace": "工作区",
+    "agents": "智能体",
+    "admin": "管理员",
+    "settings": "设置",
+    "preferences": "偏好",
+    "logoutAction": "退出登录",
+    "theme": "主题",
+    "language": "语言",
+    "systemSettings": "系统"
+  },
+  "admin": {
+    "users": {
+      "title": "用户",
+      "description": "管理本实例内的用户",
+      "searchPlaceholder": "搜索用户…",
+      "showingTotal": "共 {total} 个用户",
+      "emptyState": "暂无用户",
+      "noResultsTitle": "没有找到用户",
+      "roleValues": {
+        "admin": "管理员",
+        "member": "成员"
+      },
+      "actions": {
+        "copyUserIdAction": "复制用户 ID",
+        "kickSessionsAction": "踢下线",
+        "createResetLinkAction": "生成重置密码链接"
+      },
+      "filters": {
+        "role": "角色",
+        "account": "账号",
+        "active": "正常",
+        "disabled": "已禁用"
+      },
+      "kickTitle": "踢下线？",
+      "kickDescription": "这会撤销该用户的所有活跃会话；对方需要重新登录",
+      "kickConfirmAction": "踢下线",
+      "kickSuccess": "已撤销 {count} 个会话",
+      "kickFailed": "踢下线失败",
+      "resetTitle": "生成重置密码链接？",
+      "resetDescription": "将生成一次性重置链接，有效期 1 小时；你可以手动发送给用户",
+      "resetConfirmAction": "生成重置链接",
+      "resetLinkCopied": "重置链接已复制",
+      "resetLinkCreated": "重置链接已生成",
+      "resetFailed": "生成重置链接失败"
+    }
+  },
+  "settings": {
+    "overview": "概览",
+    "description": "偏好与应用行为配置",
+    "timezone": {
+      "title": "时区",
+      "description": "用于在全站显示时间"
+    },
+    "agent": {
+      "title": "智能体",
+      "description": "配置 API Key 和模型，用于智能体辅助编排工作流",
+      "apiKey": "API Key",
+      "apiKeyPlaceholder": "DeepSeek API Key",
+      "model": "模型",
+      "modelPlaceholder": "选择模型",
+      "showAction": "显示",
+      "hideAction": "隐藏",
+      "models": {
+        "deepseekChat": "deepseek-chat",
+        "deepseekReasoner": "deepseek-reasoner"
+      },
+      "saveFailed": "保存失败"
+    },
+    "system": {
+      "title": "系统",
+      "description": "实例级设置（注册与邮件）",
+      "saveFailed": "保存失败",
+      "common": {
+        "defaultLabel": "默认值：",
+        "effectiveLabel": "当前生效：",
+        "sourceLabel": "来源：",
+        "sources": {
+          "env": "环境变量",
+          "default": "默认值",
+          "invalid_env": "环境变量（无效，已回退默认）"
+        }
+      },
+      "envOnly": {
+        "set": "已设置",
+        "unset": "未设置",
+        "invalidEnvHint": "提示：当前环境变量值不可用，实际运行会回退到默认值",
+        "copyNameAction": "复制名称",
+        "copyExampleAction": "复制示例",
+        "copyEnvSnippetAction": "复制 .env 片段",
+        "requiresRestart": "环境变量的修改通常需要重启进程后生效"
+      },
+      "runtime": {
+        "runtimeTitle": "实例密钥",
+        "storageTitle": "数据目录与挂载",
+        "runnerTitle": "运行器",
+        "performanceTitle": "性能设置锁定",
+        "runnerToken": "Runner 鉴权 token（App ↔ Runner）；`maia` 与 `runner` 服务必须一致",
+        "settingsEncryptionKey": "用于 secrets-at-rest 的加密 key（用户 API Key、SMTP 密码等）",
+        "maiaDataMountType": "Docker Compose 数据挂载模式（volume 或 bind）",
+        "maiaHostDataDir": "当 MAIA_DATA_MOUNT_TYPE=bind 时使用的宿主机目录（绝对路径）",
+        "maiaDataDir": "通过环境变量锁定实例数据目录（高级）",
+        "maiaRunnerMountMode": "Sandbox 容器挂载策略（default 或 strict）",
+        "runnerDebugRetainFailed": "保留失败的 sandbox 容器以便调试（0/1）",
+        "runnerNofile": "sandbox 容器的 nofile ulimit（0 表示保持运行时默认）",
+        "runnerDockerApiVersion": "Docker Engine API version 覆盖（高级）",
+        "runnerDefaultMountMode": "调用方未指定时的默认挂载模式（default/strict）",
+        "systemPerformanceLocked": "锁定“性能与限制”页面（GitOps 友好）"
+      },
+      "performance": {
+        "sectionTitle": "性能与限制"
+      },
+      "retention": {
+        "sectionTitle": "保留与清理",
+        "hint": "通过环境变量配置数据保留与清理策略",
+        "opsCleanupEveryMinutes": "清理任务触发间隔（分钟，尽力而为；由 API 流量触发）",
+        "opsTtlDays": "已完成的操作保留 N 天",
+        "idempotencyTtlDays": "幂等键保留 N 天",
+        "opsRunningMaxAgeDays": "RUNNING 状态超过 N 天且无更新的操作将自动标记为 FAILED",
+        "opsOperationHeartbeatMs": "长时间运行的操作心跳间隔（毫秒，尽力而为）",
+        "opsCleanupEngineTickMs": "进程内清理调度 tick 间隔（毫秒）"
+      },
+      "security": {
+        "sectionTitle": "安全与恢复",
+        "hint": "高影响设置（仅环境变量）；生产环境请谨慎调整",
+        "recoveryTitle": "紧急恢复",
+        "setupRepairToken": "生产环境设置该 token 以启用 /setup/repair 的管理员恢复能力",
+        "rateLimitTitle": "限流",
+        "authRateLimitSignupWindowMs": "注册限流窗口大小（毫秒）",
+        "authRateLimitSignupPerIp": "每个 IP 在窗口内最多注册次数",
+        "authRateLimitPasswordForgotWindowMs": "找回密码限流窗口大小（毫秒）",
+        "authRateLimitPasswordForgotPerIp": "每个 IP 在窗口内最多找回密码请求次数",
+        "authRateLimitPasswordForgotPerIpEmail": "每个（IP,邮箱）在窗口内最多找回密码请求次数",
+        "passwordHashTitle": "密码哈希",
+        "authPasswordScryptNLog2": "Scrypt 参数 N 的 log2(N)；更高更安全但更慢",
+        "authPasswordScryptR": "Scrypt 参数 r",
+        "authPasswordScryptP": "Scrypt 参数 p",
+        "authPasswordScryptMaxmemMb": "Scrypt 最大内存（MB）"
+      },
+      "advanced": {
+        "hint": "这些设置会持久化到数据目录，并覆盖 env 默认值；修改后建议重启生效",
+        "applyRecommendedAction": "应用推荐值",
+        "sources": {
+          "override": "平台覆盖值（数据目录）"
+        },
+        "lockedHint": "已锁定：该页面仅展示生效值与来源。请通过环境变量与重启容器来修改（SYSTEM_PERFORMANCE_LOCKED=1）",
+        "globalRunConcurrency": "全局运行并发",
+        "globalRunConcurrencyHint": "全局最多同时运行的 run 数量；越高吞吐越大，但会占用更多 CPU 与内存",
+        "perRunStepConcurrency": "单次运行内步骤并发",
+        "perRunStepConcurrencyHint": "单次 run 内可同时执行的步骤上限，用于限制单个 run 的并发与资源峰值",
+        "defaultStepTimeoutMs": "默认步骤超时（毫秒）",
+        "defaultStepTimeoutMsHint": "工作流未单独设置时，每个步骤使用的默认超时时间（毫秒）",
+        "inputDownloadConcurrency": "输入下载并发",
+        "inputDownloadConcurrencyHint": "输入文件的并行下载上限；越高下载更快，但也会增加带宽、CPU 与内存占用",
+        "inputDownloadTimeoutMs": "输入下载超时（毫秒）",
+        "inputDownloadTimeoutMsHint": "单个输入下载请求的超时时间（毫秒）",
+        "inputDownloadMaxBytes": "输入下载最大字节数",
+        "inputDownloadMaxBytesHint": "单个输入允许下载的最大字节数上限，用于防止下载过大导致资源占用"
+      },
+      "registration": {
+        "sectionTitle": "注册模式",
+        "mode": "注册模式",
+        "modePlaceholder": "选择模式",
+        "hint": "控制用户是否可以在 /signup 自助注册",
+        "modes": {
+          "disabled": "关闭",
+          "open": "开放注册",
+          "inviteOnly": "邀请制"
+        }
+      },
+      "email": {
+        "sectionTitle": "邮件",
+        "enableAction": "启用邮件发送",
+        "enableActionHint": "配置 SMTP 后即可启用邮件发送，用于通知与密码重置等功能",
+        "enableActionToggleHint": "开启后将启用 SMTP 邮件发送",
+        "host": "主机",
+        "port": "端口",
+        "secure": "安全连接（TLS）",
+        "secureHint": "开启用于隐式 TLS（常见端口 465）",
+        "username": "用户名",
+        "password": "密码",
+        "passwordPlaceholder": "邮箱密码 / 应用专用密码",
+        "fromEmail": "发件邮箱",
+        "fromName": "发件人名称",
+        "testTo": "测试收件人",
+        "sendTestAction": "发送测试邮件",
+        "testing": "发送中…",
+        "testMissingTo": "请填写收件人邮箱",
+        "testSent": "测试邮件已发送",
+        "testFailed": "发送测试邮件失败"
+      }
+    }
+  },
+  "agent": {
+    "apiKey": "智能体 API Key"
+  },
+  "theme": {
+    "light": "亮色",
+    "dark": "暗色",
+    "system": "跟随系统"
+  },
+  "language": {
+    "english": "English",
+    "chinese": "中文"
+  },
+  "monaco": {
+    "workflowCompletions": {
+      "ctx": {
+        "params": { "detail": "运行输入" },
+        "upstream": { "detail": "上游输出映射" },
+        "files": { "detail": "运行文件" },
+        "urls": { "detail": "运行 URL" },
+        "artifacts": { "detail": "尝试产物" }
+      },
+      "artifacts": {
+        "writeText": {
+          "detail": "写入文本产物",
+          "documentation": "签名：\n`await ctx.artifacts.writeText(name, text, { kind?, summary? })`\n返回：`{ name, absPath }`"
+        },
+        "writeBytes": {
+          "detail": "写入二进制产物",
+          "documentation": "签名：\n`await ctx.artifacts.writeBytes(name, bytes, { kind?, summary?, encoding? })`\nbytes：`Buffer | Uint8Array | ArrayBuffer | string`\nbytes 为 string 时：encoding 默认 `\"base64\"`。\n返回：`{ name, absPath }`"
+        },
+        "registerFile": {
+          "detail": "登记文件为产物",
+          "documentation": "签名：\n`await ctx.artifacts.registerFile(absPath, { kind?, name?, summary? })`\n注意：仅支持当前 attempt 目录下的文件。"
+        }
+      },
+      "upstream": {
+        "documentationNamed": "上游输出：**{name}**（`{stepKey}`）\n结构：`{ ok, timestamp, data }`",
+        "documentationUnnamed": "上游输出：`{stepKey}`\n结构：`{ ok, timestamp, data }`"
+      }
+    }
+  },
+  "auth": {
+    "common": {
+      "notImplemented": "暂未实现"
+    },
+    "signin": {
+      "title": "登录",
+      "subtitle": "登录到你的账号",
+      "forgotPasswordAction": "忘记密码？",
+      "submitAction": "登录",
+      "noAccount": "还没有账号？",
+      "signupLinkAction": "注册",
+      "errors": {
+        "invalidCredentials": "邮箱或密码错误"
+      }
+    },
+    "signup": {
+      "title": "创建账号",
+      "subtitle": "创建一个新账号",
+      "toasts": {
+        "registrationDisabled": "当前未开放注册；请联系管理员获取邀请",
+        "inviteOnly": "当前为邀请制注册；请联系管理员获取邀请"
+      },
+      "name": "姓名",
+      "namePlaceholder": "张三",
+      "emailHint": "我们将使用此邮箱与你联系，不会与他人共享",
+      "passwordHint": "至少 8 位字符",
+      "confirmPassword": "确认密码",
+      "confirmPasswordHint": "请再次输入密码",
+      "submitAction": "创建账号",
+      "alreadyHave": "已有账号？",
+      "signinLinkAction": "登录"
+    },
+    "forgot": {
+      "title": "找回密码",
+      "subtitle": "获取密码重置链接",
+      "emailHint": "如果邮箱存在，你将收到一封包含重置链接的邮件",
+      "submitAction": "发送重置链接",
+      "sentToast": "如果邮箱存在，重置链接已发送（请检查收件箱/垃圾箱）",
+      "sentHint": "如果邮箱存在，你会收到一封包含重置链接的邮件（请检查收件箱/垃圾箱）",
+      "backToSigninAction": "返回登录",
+      "errors": {
+        "smtpUnavailable": "无法自助找回密码；请联系管理员重置密码",
+        "rateLimited": "请求过于频繁，请稍后再试",
+        "requestFailed": "发送失败，请稍后重试"
+      }
+    },
+    "reset": {
+      "title": "重置密码",
+      "subtitle": "设置新密码",
+      "newPassword": "新密码",
+      "newPasswordHint": "至少 8 位字符",
+      "confirmPassword": "确认新密码",
+      "submitAction": "重置密码",
+      "success": "密码已重置，请使用新密码登录",
+      "errors": {
+        "tokenMissing": "缺少重置 token，请从邮件链接进入",
+        "tokenInvalidOrExpired": "重置链接无效或已过期，请重新发起找回"
+      }
+    },
+    "otp": {
+      "title": "验证码验证",
+      "codeLabel": "验证码",
+      "codeHint": "请输入 6 位验证码以继续",
+      "submitAction": "验证",
+      "noCode": "没收到验证码？",
+      "resendAction": "重新发送",
+      "errors": {
+        "invalidCode": "验证码错误",
+        "sessionExpired": "会话已过期，请重新登录"
+      }
+    },
+    "repair": {
+      "title": "恢复",
+      "subtitle": "恢复管理员权限",
+      "token": {
+        "label": "修复令牌",
+        "placeholder": "开发环境可选；生产环境必填",
+        "hint": "生产环境请设置 `SETUP_REPAIR_TOKEN`，并在此处输入以启用恢复"
+      }
+    },
+    "redirect": {
+      "loading": "正在登录"
+    }
+  },
+  "setupWizard": {
+    "title": "安装向导",
+    "fallbackStep": "步骤",
+    "steps": {
+      "appearance": {
+        "title": "外观",
+        "short": "外观",
+        "description": "选择本浏览器的主题与显示语言"
+      },
+      "data": {
+        "title": "数据库",
+        "short": "数据库",
+        "description": "选择数据库的存储位置"
+      },
+      "admin": {
+        "title": "管理员",
+        "short": "管理员",
+        "description": "创建本实例的第一个管理员账号"
+      },
+      "done": {
+        "title": "完成",
+        "short": "完成",
+        "description": "确认并完成安装向导"
+      }
+    },
+    "appearance": {
+      "themeHint": "选择本浏览器的主题",
+      "themeSystemDesc": "跟随系统主题",
+      "themeLightDesc": "始终使用亮色主题",
+      "themeDarkDesc": "始终使用暗色主题",
+      "languageHint": "选择本浏览器的显示语言",
+      "languagePlaceholder": "选择语言",
+      "languageSearchPlaceholder": "搜索语言…",
+      "languageEmpty": "没有找到语言",
+      "continueAction": "继续"
+    },
+    "dataDir": {
+      "label": "数据库位置",
+      "custom": "自定义",
+      "placeholder": "/Users/you/maia-data 或 /var/lib/maia-data",
+      "lockedHint": "实例已初始化，数据库位置不可修改",
+      "envLockedHint": "由环境变量 MAIA_DATA_DIR 控制；请在部署环境中修改并重启",
+      "initializeAndContinueAction": "初始化并继续"
+    },
+    "actions": {
+      "backAction": "上一步",
+      "skipAction": "跳过",
+      "saveAndContinueAction": "保存并继续",
+      "saveAndFinishAction": "保存并完成"
+    },
+    "admin": {
+      "namePlaceholder": "管理员",
+      "nameRequired": "请输入姓名",
+      "emailPlaceholder": "admin@example.com",
+      "emailHint": "这是本实例的第一个管理员账号",
+      "emailRequired": "请输入邮箱地址",
+      "emailInvalid": "请输入有效的邮箱地址",
+      "passwordHint": "至少 8 位字符",
+      "passwordRequired": "请输入密码",
+      "passwordTooShort": "密码至少 8 位字符",
+      "passwordTooLong": "密码最多 256 位字符",
+      "confirmPassword": "确认密码",
+      "confirmPasswordRequired": "请再次输入密码",
+      "continueAction": "继续",
+      "created": "管理员已创建",
+      "createAndContinueAction": "创建管理员并继续"
+    },
+    "done": {
+      "enterAppAction": "进入应用",
+      "completedTitle": "安装完成",
+      "completedHint": "设置已完成，你可以开始使用应用了"
+    }
+  },
+  "common": {
+    "beta": "内测",
+    "info": "说明",
+    "copyAction": "复制",
+    "copyActionIdAction": "复制 ID",
+    "copyActionLinkAction": "复制链接",
+    "copyActionFailed": "复制失败",
+    "backAction": "返回",
+    "refreshAction": "刷新",
+    "loading": "加载中…",
+    "loadFailed": "加载失败",
+    "notFound": "未找到",
+    "notFoundTitle": "未找到",
+    "notFoundDescription": "你访问的页面或资源不存在，或已被删除",
+    "goHomeAction": "返回首页",
+    "cancelAction": "取消",
+    "confirmAction": "确认",
+    "editAction": "编辑",
+    "deleteAction": "删除",
+    "deleting": "删除中…",
+    "deleteActionFailed": "删除失败",
+    "saveAction": "保存",
+    "saving": "保存中…",
+    "saved": "已保存",
+    "updateFailed": "更新失败",
+    "unsavedChanges": "有未保存的更改",
+    "keepEditingAction": "继续编辑",
+    "discardAction": "放弃更改",
+    "createAction": "创建",
+    "settings": "设置",
+    "optional": "可选",
+    "summary": "摘要",
+    "actions": "操作",
+    "showAction": "显示",
+    "hideAction": "隐藏",
+    "openAction": "打开",
+    "openActionWorkflowAction": "打开工作流",
+    "downloadAction": "下载",
+    "importAction": "导入",
+    "exportAction": "导出",
+    "resetAction": "重置",
+    "copied": "已复制",
+    "createActionVersionFromSnapshotTitle": "从版本快照恢复为新版本？",
+    "createActionVersionFromSnapshotDescription": "这将从选中的版本快照创建一个新的不可变版本",
+    "createActionVersionFromSnapshotAction": "恢复为新版本",
+    "createActionVersionFromSnapshotToast": "已恢复版本 {version}",
+    "createActionVersionFromSnapshotFailed": "恢复失败",
+    "tabs": {
+      "chat": "对话",
+      "canvas": "画布",
+      "details": "详情",
+      "graph": "节点"
+    },
+    "graphControls": {
+      "panModeAriaLabel": "平移模式",
+      "selectModeAriaLabel": "选择模式",
+      "fitViewAriaLabel": "适配视图",
+      "zoomInAriaLabel": "放大",
+      "zoomOutAriaLabel": "缩小"
+    },
+    "entities": {
+      "batch": "批次",
+      "agent": "智能体",
+      "operation": "操作",
+      "workflow": "工作流"
+    },
+    "any": "不限",
+    "sort": "排序",
+    "sortNewest": "最新优先",
+    "sortOldest": "最旧优先",
+    "status": "状态",
+    "prevPageAction": "上一页",
+    "nextPageAction": "下一页",
+    "error": "出错了，请稍后重试",
+    "errorDescription": "请稍后重试。如问题持续，建议刷新页面后再试。",
+    "errorLabel": "错误",
+    "filters": {
+      "clearAction": "清空筛选"
+    },
+    "list": {
+      "noResultsDescription": "请尝试修改搜索词或过滤条件"
+    },
+    "workflowCombobox": {
+      "searchPlaceholder": "搜索工作流…",
+      "empty": "没有找到工作流"
+    },
+    "timezoneCombobox": {
+      "searchPlaceholder": "搜索时区…",
+      "empty": "没有找到时区",
+      "commonGroup": "常用",
+      "allGroup": "全部时区"
+    },
+    "noData": "无数据",
+    "fileViewer": {
+      "actions": {
+        "downloading": "下载中…"
+      },
+      "badges": {
+        "originalUrl": "原始 URL"
+      },
+      "source": {
+        "upload": "上传",
+        "url": "URL",
+        "unknown": "未知"
+      },
+      "status": {
+        "ready": "就绪",
+        "fetching": "下载中",
+        "failed": "失败",
+        "unknown": "未知"
+      }
+    },
+    "statusValues": {
+      "failed": "失败",
+      "running": "运行中",
+      "succeeded": "成功",
+      "canceled": "已取消",
+      "queued": "排队中",
+      "queuedInputs": "输入文件下载中",
+      "paused": "已暂停",
+      "canceling": "取消中"
+    },
+    "fields": {
+      "name": "名称",
+      "fullName": "姓名",
+      "email": "邮箱",
+      "password": "密码",
+      "createdAt": "创建时间",
+      "updatedAt": "更新时间"
+    },
+    "inputs": "输入",
+    "inputsHint": "本次运行的输入（参数 / 输入文件）",
+    "steps": "步骤",
+    "stepsDeletedToast": "已删除 {n} 个步骤",
+    "outputs": "输出",
+    "note": "备注",
+    "configured": "已配置",
+    "notConfigured": "未配置",
+    "executionPolicies": "执行策略",
+    "duration": "耗时",
+    "inputParams": "输入参数",
+    "inputParamsHintRich": "<strong>支持的格式</strong><br/><code>{ items: [...] }</code> 或 <code>[ ... ]</code> 或单个对象<br/><br/><strong>注意</strong><br/>如果工作流定义了输入规范，每个 item 必须是对象并作为任务输入参数<br/>不要包含 <code>files</code>（系统字段）",
+    "inputTemplate": "输入模板",
+    "jobEnqueuedToast": "任务已入队",
+    "source": {
+      "manual": "手动"
+    },
+    "overview": "概览",
+    "retryAction": "重试",
+    "pinnedWorkflowVersion": "锁定工作流版本",
+    "scheduleRule": "触发规则",
+    "workflowRequiredTitle": "请先创建一个工作流",
+    "workflowRequiredDescription": "该功能需要关联工作流才能使用；请先创建一个工作流，然后再回来继续",
+    "selectWorkflowForInputsTitle": "请选择一个工作流以预览输入",
+    "selectWorkflowForInputsDescription": "选择工作流后，将显示输入模板与文件输入要求",
+    "noInputsTitle": "无需输入",
+    "noInputsDescription": "该工作流无需输入参数或文件输入",
+    "inputSpecMissingHint": "该工作流未配置输入规范"
+  },
+  "home": {
+    "dashboardTitle": "概览",
+    "description": "本地工作流运行器（DAG），基于 SQLite + SSE 日志。使用侧边栏管理工作流与运行。",
+    "quickNewWorkflow": "新建工作流",
+    "quickNewRun": "新建运行",
+    "viewAllWorkflows": "全部工作流",
+    "viewAllRuns": "全部运行",
+    "viewRunningRuns": "查看运行中",
+    "viewPendingInputsRuns": "查看输入文件下载中",
+    "viewFailedRuns": "查看失败",
+    "statsWorkflows": "工作流",
+    "statsRuns": "运行",
+    "statsRunsHint": "运行总数（所有状态）",
+    "statsNeedsAttention": "需处理",
+    "statsNeedsAttentionHint": "最近 24 小时内失败的运行",
+    "statsRunning": "运行中",
+    "statsPendingInputs": "输入文件下载中",
+    "recentRunsTitle": "最近运行",
+    "recentRunsDescription": "最新的运行（所有状态）",
+    "emptyRecentRuns": "暂无运行",
+    "templatesTitle": "模板",
+    "templatesDescription": "从示例快速开始",
+    "templatesEmpty": "暂无可用模板",
+    "templatesViewMore": "查看更多（{n}）",
+    "templatesSheetTitle": "模板",
+    "templatesSheetDescription": "共 {n} 个模板",
+    "templatesSearchPlaceholder": "搜索模板：名称 / 描述…",
+    "templatesNoResults": "没有找到模板",
+    "templatesMenuView": "查看模板",
+    "pendingInputsTitle": "输入文件下载中",
+    "pendingInputsDescription": "正在下载输入文件的运行",
+    "recentFailuresTitle": "最近失败",
+    "recentFailuresDescription": "最近的失败运行",
+    "emptyPendingInputs": "暂无输入文件下载中的运行",
+    "emptyFailures": "最近没有失败的运行",
+    "activeRunsTitle": "运行队列",
+    "activeRunsDescription": "正在执行中的运行",
+    "emptyActiveRuns": "当前没有进行中的运行",
+    "recentWorkflowsTitle": "最近更新",
+    "recentWorkflowsDescription": "最近更新过的工作流",
+    "emptyWorkflows": "暂无工作流"
+  },
+  "workflows": {
+    "title": "工作流",
+    "filtersShort": {
+      "deps": "依赖",
+      "env": "环境"
+    },
+    "noResultsTitle": "没有找到工作流",
+    "emptyState": "暂无工作流",
+    "newWorkflowName": "新建工作流",
+    "newWorkflow": "新建工作流",
+    "aiOrchestrateAction": "智能体编排",
+    "newWorkflowDescription": "创建工作流并开始编辑",
+    "listDescription": "浏览工作流并打开编辑",
+    "emptyTitle": "你想要构建什么样的工作流？",
+    "updatedAt": "更新",
+    "workflowVersion": "工作流版本",
+    "versions": {
+      "title": "版本",
+      "description": "不可变版本（快照）",
+      "descriptionNamed": "{name} 的不可变版本（快照）",
+      "searchPlaceholder": "搜索：版本号（v12）或描述…",
+      "backToWorkflow": "返回工作流",
+      "showingTotal": "{total} 个版本",
+      "empty": "暂无版本",
+      "noResultsTitle": "没有找到版本",
+      "detailTitle": "版本 {version}",
+      "createdAtBadge": "创建于 {ts}",
+      "stepsCount": "{n} 个步骤",
+      "depsCount": "{n} 个 NPM 依赖",
+      "envCount": "{n} 个环境变量",
+      "stepsEmpty": "暂无步骤",
+      "stepTimeout": "超时：{duration}",
+      "depsHashLabel": "依赖哈希",
+      "noStepSelected": "未选择步骤"
+    },
+    "lastRun": "上次运行",
+    "searchPlaceholder": "搜索：名称 / ID / 描述…",
+    "showingTotal": "{total} 个工作流",
+    "runs": "运行",
+    "running": "运行中",
+    "noRuns": "暂无运行",
+    "deletedToast": "工作流已删除",
+    "createdToast": "工作流已创建",
+    "depsInstalled": "依赖已安装",
+    "name": "名称",
+    "description": "描述",
+    "addStepAction": "添加步骤",
+    "layout": "布局",
+    "layoutCustom": "自定义布局",
+    "layoutLeftRight": "从左到右",
+    "layoutTopBottom": "从上到下",
+    "layoutResetAction": "重置自定义布局",
+    "layoutResetActionDescription": "这将清空自定义布局，并自动重建节点位置",
+    "layoutCustomOutdatedTitle": "自定义布局可能已过期",
+    "layoutCustomOutdatedDescription": "检测到工作流结构已变化。继续使用旧自定义布局可能会导致节点位置混乱。你想如何处理？",
+    "layoutCustomOutdatedRebuildAction": "按当前结构重建自定义布局",
+    "layoutCustomOutdatedResetAction": "清空自定义布局",
+    "layoutCustomClearedToast": "自定义布局已清空",
+    "layoutCustomRebuiltToast": "自定义布局已重建",
+    "stepBasics": "基本信息",
+    "stepKey": "步骤标识",
+    "timeoutMs": "超时（ms）",
+    "dependencies": "依赖配置",
+    "deleteStepAction": "删除步骤",
+    "deleteStepActionDescription": "这将删除该步骤，并从其他步骤的依赖中移除它",
+    "stepDeletedToast": "步骤已删除",
+    "deleteSelectedStepsTitle": "删除 {n} 个步骤？",
+    "deleteSelectedStepsDescription": "这将删除选中的步骤，并从其他步骤的依赖中移除它们",
+    "createJobAction": "创建任务",
+    "saveWorkflowAction": "保存工作流",
+    "createVersionAction": "创建版本",
+    "createVersionActionDialogTitle": "创建版本",
+    "createVersionActionDialogDescription": "创建该工作流的不可变快照版本。你可以填写一段可选备注来说明本次变更",
+    "createVersionActionDialogNoteLabel": "版本备注",
+    "createVersionActionDialogNotePlaceholder": "本次变更说明（可选）",
+    "creatingVersion": "创建中…",
+    "versionCreatedToast": "版本已创建",
+    "deleteWorkflowAction": "删除工作流",
+    "deleteWorkflowActionTitle": "删除工作流 {name}？",
+    "deleteWorkflowActionTitleFallback": "删除工作流？",
+    "deleteWorkflowActionDescription": "该操作会永久删除工作流，且无法撤销",
+    "scriptEsm": "脚本（ESM）",
+    "scriptEsmTooltip": "在这里编写引擎要执行的步骤脚本",
+    "engineRunsTip": "返回 { outputs: {...} }（outputs 可为空）；下游读取 upstream.<stepKey>.data.outputs.<field>",
+    "engineRunsTipAgent": "AI 生成的步骤脚本会保存到工作流中；你可以在工作流详情中随时编辑，也可以让 AI 继续迭代优化",
+    "selectStepToEdit": "请选择要编辑的步骤",
+    "editWorkflowDescription": "编辑工作流设置与步骤，保存后生效",
+    "selectedCount": "已选 {n} 项",
+    "npmDependencies": "NPM 依赖",
+    "inputSpec": {
+      "title": "输入规范",
+      "description": "定义工作流的输入契约，用于校验输入，并在创建任务时提供引导填写",
+      "unsavedDescription": "你修改了输入规范，但还没有保存。要保存后关闭，还是放弃更改？",
+      "generateWithAi": "智能体生成",
+      "generatingWithAi": "生成中…",
+      "insertDefaultAction": "插入默认模板",
+      "formatAction": "格式化",
+      "summaryHint": "配置后：创建任务会按规范校验，并提供引导式填写界面",
+      "validJson": "JSON 有效",
+      "invalidSpec": "JSON 有效，但不符合输入规范结构。请使用“插入默认模板”或“智能体生成”",
+      "reservedKeys": "输入规范包含系统保留字段名：{keys}"
+    },
+    "outputsSpec": {
+      "title": "输出规范",
+      "description": "定义运行输出的命名契约，并从步骤 outputs 映射生成，用于标准化对外消费",
+      "generateWithAi": "智能体生成",
+      "generatingWithAi": "生成中…",
+      "insertDefaultAction": "插入默认模板",
+      "formatAction": "格式化",
+      "none": "未配置",
+      "summaryHint": "配置后：运行汇总可展示稳定命名的 outputs，便于集成与对外引用",
+      "validJson": "JSON 有效",
+      "invalidSpec": "JSON 有效，但不符合输出规范结构。请使用“插入默认模板”"
+    },
+    "meta": {
+      "title": "元信息",
+      "description": "编辑工作流的 ID、名称与描述",
+      "errors": {
+        "nameRequired": "名称不能为空"
+      }
+    },
+    "env": {
+      "title": "环境变量",
+      "description": "定义工作流级别的环境变量（键值对），步骤会在 main(env, ctx) 中通过 env 参数读取",
+      "empty": "暂无环境变量",
+      "columns": {
+        "key": "键",
+        "value": "值"
+      },
+      "actions": {
+        "addAction": "添加",
+        "selectAllAction": "全选",
+        "selectRowAction": "选择行",
+        "showValue": "显示值",
+        "hideValue": "隐藏值"
+      },
+      "errors": {
+        "whitespaceKey": "键不能包含空格：{key}",
+        "duplicateKey": "键重复：{key}",
+        "invalidKeyFormat": "键格式不正确：{key}。只能使用字母、数字和下划线，并且必须以字母或下划线开头",
+        "keyTooLong": "键太长：{key}，最大 {max}",
+        "valueTooLong": "值太长：{key}，最大 {max} 字符"
+      }
+    },
+    "deps": {
+      "dialogDescription": "管理 NPM 依赖",
+      "logsTab": "安装日志",
+      "noLogs": "暂无安装日志",
+      "columns": {
+        "name": "名称",
+        "version": "版本"
+      },
+      "empty": "暂无依赖",
+      "actions": {
+        "addAction": "添加",
+        "installDeps": "安装",
+        "selectAllAction": "全选",
+        "selectRowAction": "选择行"
+      },
+      "status": {
+        "ready": "就绪",
+        "installing": "安装中",
+        "install": "需要安装"
+      },
+      "errors": {
+        "whitespaceName": "包名不能包含空格：{name}",
+        "duplicateName": "包名重复：{name}"
+      }
+    },
+    "preview": {
+      "showAllAction": "查看全部（共 {n} 项）"
+    },
+    "importExport": {
+      "import": {
+        "title": "导入工作流",
+        "description": "选择一个导出的工作流 JSON 文件，预览后导入",
+        "fileLabel": "工作流 JSON 文件",
+        "filePlaceholder": "选择一个 JSON 文件…",
+        "browseButton": "选择文件",
+        "invalidFileTitle": "导入文件不可用",
+        "invalidFileDescription": "文件格式不正确或无法解析",
+        "importedToast": "工作流已导入",
+        "depsRequiredToast": "该工作流需要安装依赖",
+        "importAction": "导入",
+        "importing": "导入中…"
+      },
+      "export": {
+        "titleWorkflow": "导出工作流",
+        "titleVersion": "导出版本",
+        "includeEnvTitle": "包含环境变量",
+        "includeEnvDescriptionUnchecked": "勾选后会将环境变量写入导出的 JSON 文件",
+        "includeEnvDescriptionChecked": "环境变量可能包含 Key/Token 等敏感信息，请勿分享导出的 JSON 文件",
+        "exportAction": "导出",
+        "exporting": "导出中…"
+      },
+      "labels": {
+        "workflowId": "工作流 ID",
+        "description": "描述",
+        "exportedAt": "导出时间"
+      },
+      "empty": {
+        "noSteps": "无步骤"
+      }
+    },
+    "orchestrator": {
+      "titleNew": "智能体编排",
+      "subtitleNew": "与智能体对话，规划并生成工作流草稿",
+      "titleEdit": "智能体：编辑工作流",
+      "subtitleEdit": "与智能体对话，改进该工作流",
+      "generatingPlan": "正在生成计划…",
+      "stepsRightTitle": "步骤详情",
+      "proposalReadyTitle": "智能体提议已生成",
+      "proposalReadyDescription": "智能体已准备好可应用的更新。确认后才会应用",
+      "draftReadyTitle": "草稿已生成",
+      "draftReadyDescription": "已生成可保存的工作流草稿，可能尚未通过最终校验；你可以先保存，再在编辑器里继续调整",
+      "stepSelectHint": "请选择一个步骤查看详情",
+      "thinking": "思考中…",
+      "composerPlaceholder": "描述你的需求，让智能体帮你构建工作流…",
+      "sendAction": "发送",
+      "applyCreateAction": "保存为新工作流",
+      "createWorkflowQueued": "智能体：开始生成工作流",
+      "streamEndedEarly": "智能体流式生成提前结束：已收到 {done}/{total} 个步骤；请重试",
+      "createInputSpecQueued": "智能体：开始生成输入规范",
+      "createOutputsSpecQueued": "智能体：开始生成输出规范",
+      "newChat": "新建对话",
+      "newChatUnsavedDescription": "当前工作流还有未保存的更改。要先保存再开始新的对话吗？",
+      "errors": {
+        "failed": "智能体请求失败"
+      },
+      "examples": {
+        "difficulty": {
+          "simple": "简单",
+          "medium": "中等",
+          "hard": "复杂"
+        },
+        "items": {
+          "ex1": {
+            "title": "网页标题 → 摘要 JSON"
+          },
+          "ex2": {
+            "title": "CSV → 基础统计报告"
+          },
+          "ex3": {
+            "title": "三步转换（含校验）"
+          },
+          "ex4": {
+            "title": "RSS → Top10 摘要"
+          },
+          "ex5": {
+            "title": "截图 → OCR → 规范化文本"
+          },
+          "ex6": {
+            "title": "视频字幕 → 关键要点与行动项"
+          },
+          "ex7": {
+            "title": "Markdown → 结构化大纲"
+          },
+          "ex8": {
+            "title": "日志 → 错误热点分析"
+          },
+          "ex9": {
+            "title": "评论 → 情感 + 主题分析"
+          },
+          "ex10": {
+            "title": "发票 PDF → 明细 JSON"
+          },
+          "ex11": {
+            "title": "Issue 分诊 → 标签 + 优先级"
+          },
+          "ex12": {
+            "title": "数据样本 → Schema + 约束建议"
+          },
+          "ex13": {
+            "title": "多源资讯 → 合并去重摘要"
+          },
+          "ex14": {
+            "title": "A/B 实验 → 统计分析报告"
+          },
+          "ex15": {
+            "title": "客服工单 → 路由 + SLA 风险"
+          },
+          "ex16": {
+            "title": "长文档 → 分层摘要 + 索引"
+          },
+          "ex17": {
+            "title": "端到端 ETL（含质量闸门）"
+          },
+          "ex18": {
+            "title": "多语言站点监控 + 告警"
+          },
+          "ex19": {
+            "title": "混合来源 → 知识库构建"
+          },
+          "ex20": {
+            "title": "带分支与回滚的工作流生成器"
+          }
+        }
+      },
+      "progress": {
+        "planLabel": "生成计划",
+        "validateLabel": "验证工作流",
+        "inputSpecLabel": "生成输入规范",
+        "outputsSpecLabel": "生成输出规范",
+        "generatingStep": "正在生成：{step}",
+        "validating": "正在校验工作流…",
+        "generatingInputSpec": "正在生成输入规范…",
+        "generatingOutputsSpec": "正在生成输出规范…",
+        "doneBadge": "已完成",
+        "completedCount": "已完成 {count} 项"
+      }
+    }
+  },
+  "runs": {
+    "rerunAction": "重新运行",
+    "rerunActionStepAction": "重新运行此步骤",
+    "rerunActionStepActionHint": "从头重新运行该步骤（忽略此步骤之前的输出）",
+    "rerunActionStepActionHintOtherFailed": "注意：当前还有其他步骤处于失败状态。仅重新运行此步骤可能无法使本次运行成功",
+    "recentRunsDescription": "查看最近的运行记录并打开详情",
+    "searchPlaceholder": "搜索：工作流 / 运行 ID…",
+    "duration": "运行耗时",
+    "emptyState": "暂无运行记录",
+    "noResultsTitle": "没有找到运行记录",
+    "newRun": "新建运行",
+    "showingTotal": "{total} 条运行记录",
+    "statusBlocked": "等待上游步骤",
+    "statusSkipped": "已跳过",
+    "statusInterrupted": "已中断",
+    "results": "输出",
+    "stepInput": "步骤输入",
+    "artifactsHint": "快速查看运行产物：日志与产物",
+    "logsHint": "当前选中步骤的日志输出：stdout / stderr",
+    "stepInputHint": "当前选中步骤的输入：JSON + 文件",
+    "stepOutputHint": "当前选中步骤的输出：JSON + 文件",
+    "viewRunInputsAction": "运行输入",
+    "stepDefinition": "定义",
+    "stepDefinitionHint": "来自本次运行使用的版本，只读定义，代表本次实际执行的内容",
+    "viewSnapshotAction": "查看版本",
+    "depsHash": "依赖哈希",
+    "depsPackagesCount": "NPM 依赖：{n}",
+    "reservedInitialInputKeysCount": "保留字段：{n}",
+    "timeout": "超时",
+    "stepDepsCount": "上游：{n}",
+    "retryHintOtherFailed": "注意：当前还有其他步骤处于失败状态。仅重试此步骤可能无法使本次运行成功——请重试失败的步骤或使用“从此处重启”",
+    "restartFromHereAction": "从此处重启",
+    "parameters": "输入参数",
+    "inputFiles": "输入文件",
+    "outputFiles": "输出文件",
+    "noOutputs": "暂无输出",
+    "noArtifacts": "暂无产物",
+    "noParameters": "暂无输入参数",
+    "noInputFiles": "暂无输入文件",
+    "artifacts": "产物",
+    "runInputs": "运行输入",
+    "input": "输入",
+    "output": "输出",
+    "file": "文件",
+    "stepOutput": "步骤输出",
+    "logs": "日志",
+    "runHistory": "尝试记录",
+    "runHistoryHint": "当前选中步骤的执行尝试记录（含错误与退出码）",
+    "attemptShort": "第 {attemptNo} 次",
+    "attemptLine": "第 {attemptNo} 次运行：",
+    "exit": "退出码：{code}",
+    "deleteRunTitle": "删除运行？",
+    "deleteRunDescription": "这将删除该运行及其本地产物与日志",
+    "cancelRunTitle": "取消运行？",
+    "cancelRunDescription": "这将取消该运行并终止正在执行的步骤",
+    "cancelRunAction": "取消运行",
+    "cancelFailed": "取消运行失败",
+    "cancelReasonLabel": "取消原因（可选）",
+    "cancelReasonPlaceholder": "为什么要取消这次运行？",
+    "cancelReasonHint": "用于审计与排障，最多 200 个字符",
+    "deletedToast": "运行已删除",
+    "canceledToast": "运行已取消",
+    "stepRetryQueuedToast": "已发起重试",
+    "stepRerunQueuedToast": "已发起重新运行",
+    "restartFromQueuedToast": "已发起从此处重启",
+    "forceStopTitle": "强制停止运行？",
+    "forceStopDescription": "如果运行在“取消中”长时间没有停止，可使用强制停止终止执行",
+    "forceStopAction": "强制停止",
+    "forceStopFailed": "强制停止失败",
+    "forceStopToast": "已发起强制停止",
+    "followProgressAction": "跟随",
+    "unfollowProgressAction": "取消跟随",
+    "summaryTab": "汇总",
+    "summaryHint": "步骤状态统计：成功 / 失败 / 运行中 / 排队中 / 已跳过 / 已取消",
+    "viewDetailsAction": "查看详情",
+    "viewStepOutputAction": "查看步骤输出",
+    "viewStepDefinitionAction": "查看定义",
+    "viewProgressAction": "查看进度",
+    "stepError": {
+      "prefix": "步骤失败",
+      "prefixSep": "：",
+      "detailsLabel": "详情信息",
+      "detailsSuffix": " · {label}：{details}",
+      "codeSuffix": "（{code}）",
+      "summaryTimeout": "超时（{duration}）",
+      "summarySignal": "被信号终止（{signal}）",
+      "summaryExitCode": "退出码 {code}",
+      "summaryOutputMissing": "缺少 output.json",
+      "summaryOutputInvalid": "output.json 无效：{reason}",
+      "reasonUnknown": "未知原因",
+      "summaryUnknown": "未知错误"
+    }
+  },
+  "jobs": {
+    "startTitle": "创建任务",
+    "startDescription": "选择工作流并填写 JSON 参数，引擎会基于该任务创建并执行一次运行",
+    "startFailedTitle": "创建任务失败",
+    "selectWorkflowTitle": "选择工作流",
+    "selectWorkflow": "选择一个工作流",
+    "enqueueNowAction": "立即入队",
+    "createOnlyAction": "仅创建",
+    "requiredFields": "必填",
+    "paramsMustBeObjectTitle": "参数必须是对象",
+    "inputSpecInvalid": "工作流输入规范无效",
+    "invalid": "无效",
+    "urlFiles": "URL 列表",
+    "uploadFiles": "上传文件",
+    "pinnedWorkflowVersionBadge": "v{version}",
+    "pinnedWorkflowVersionTooltip": "已固定到工作流版本 v{version}，从运行复制创建",
+    "limitCount": "限制：{count}/{max}",
+    "toastUploadsIgnored": "最多可上传 {max} 个文件，已忽略 {ignored} 个",
+    "toastUploadsMaxReached": "已达到最大上传数量：{max}",
+    "toastUrlsTruncated": "URL 最多 {max} 行，已自动截断多余行",
+    "toastSchemaInvalid": "输入规范 Schema 无效",
+    "toastValidationFailed": "输入不符合规范：{message}",
+    "recentJobsDescription": "查看最近的任务记录并打开详情",
+    "searchPlaceholder": "搜索：工作流 / 任务 ID / 运行 ID…",
+    "emptyState": "暂无任务记录",
+    "noResultsTitle": "没有找到任务记录",
+    "newJob": "新建任务",
+    "showingTotal": "{total} 条任务记录",
+    "deleteJobTitle": "删除任务？",
+    "deleteJobDescription": "这将删除任务记录；如果已关联运行，不会删除运行记录",
+    "deletedToast": "任务已删除",
+    "cancelRequestedToast": "已发起任务取消",
+    "createdToast": "任务已创建",
+    "list": {
+      "triggerTitle": "触发来源",
+      "triggerSchedule": "定时",
+      "triggerBatch": "批次",
+      "triggerTooltipSchedule": "定时：{name}\nID：{id}",
+      "triggerTooltipBatch": "批次：{name}\nID：{id}",
+      "plannedTimeTitle": "计划时间",
+      "plannedTimeTooltip": "计划时间：{iso}",
+      "queueDelayTitle": "排队等待",
+      "nextAttemptTitle": "下次重试",
+      "nextAttemptTooltip": "下次重试：{iso}",
+      "workerTitle": "执行者",
+      "workerTooltip": "执行者：{by}\n领取时间：{iso}",
+      "leaseTitle": "租约到期",
+      "leaseTooltip": "租约到期：{iso}",
+      "attemptsTitle": "重试次数",
+      "queuedAtTitle": "入队时间",
+      "runDurationTitle": "运行耗时",
+      "actions": {
+        "startAction": "开始",
+        "cancelJobAction": "取消任务",
+        "openWorkflowAction": "打开工作流",
+        "openRunAction": "打开运行",
+        "openScheduleAction": "打开定时",
+        "openBatchAction": "打开批次",
+        "copyJobIdAction": "复制任务 ID"
+      }
+    },
+    "detail": {
+      "subTitle": "{trigger} · {workflow}",
+      "jobId": "任务",
+      "cancellation": "取消信息",
+      "timing": "时间线",
+      "leaseAndRetry": "租约与重试",
+      "related": "关联资源",
+      "status": "任务状态",
+      "trigger": "触发来源",
+      "attempts": "重试次数",
+      "attemptsTitle": "任务运行记录",
+      "jobAttemptLine": "任务第 {attemptNo} 次运行：",
+      "attemptErrorDetailsHint": "错误详情",
+      "runStatus": "运行状态",
+      "scheduledFor": "计划触发时间",
+      "queuedAt": "入队时间",
+      "startedAt": "开始时间",
+      "finishedAt": "结束时间",
+      "queueDelay": "排队延迟",
+      "nextAttemptAt": "下次重试",
+      "claimedBy": "领取者",
+      "claimedAt": "领取时间",
+      "leaseExpiresAt": "租约到期",
+      "leaseRemaining": "租约剩余",
+      "schedule": "定时",
+      "batch": "批次",
+      "scheduleName": "定时名称",
+      "batchName": "批次名称",
+      "batchStatus": "批次状态",
+      "scheduleNextRunAt": "下次触发",
+      "scheduleLastRunAt": "上次触发",
+      "batchStartedAt": "批次开始时间",
+      "batchFinishedAt": "批次结束时间",
+      "lastError": "最近错误",
+      "pendingInputsHint": "正在下载输入文件，完成后将自动继续运行",
+      "openRunToViewInputsAction": "打开运行"
+    }
+  },
+  "schedules": {
+    "recentSchedulesDescription": "浏览定时规则并管理周期任务",
+    "searchPlaceholder": "搜索：名称 / 定时 ID / 工作流…",
+    "emptyState": "暂无定时规则",
+    "noResultsTitle": "没有找到定时规则",
+    "newSchedule": "新建定时",
+    "editScheduleAction": "编辑定时",
+    "showingTotal": "{total} 条定时规则",
+    "sections": {
+      "basic": "基础信息"
+    },
+    "detail": {
+      "scheduleSpec": "触发配置",
+      "nextRuns": "未来触发",
+      "nextRunAt": "下次触发",
+      "lastRunAt": "上次触发",
+      "scheduleTextCron": "cron：{expr} · {timezone}",
+      "scheduleTextInterval": "间隔：{interval}",
+      "misfirePolicy": "错过触发策略",
+      "catchUpLimit": "补偿上限",
+      "overlapPolicy": "重叠策略",
+      "recentJobs": "最近任务"
+    },
+    "policies": {
+      "misfire": {
+        "FIRE_ONCE": "错过时补 1 次",
+        "SKIP": "跳过错过的触发",
+        "CATCH_UP": "补齐错过的触发"
+      },
+      "misfireHint": {
+        "FIRE_ONCE": "如果错过了 1 次或多次触发，只会立刻补跑 1 次，然后回到正常节奏",
+        "SKIP": "如果已经晚了，则跳过错过的触发点，直接跳到下一次未来触发",
+        "CATCH_UP": "会为错过的触发点补齐创建任务，受补偿上限限制"
+      },
+      "overlap": {
+        "SKIP": "上次未结束则跳过",
+        "ALLOW": "允许重叠并发"
+      },
+      "overlapHint": {
+        "SKIP": "如果上一次任务仍处于排队或运行中，本次触发将跳过，避免并发重叠",
+        "ALLOW": "即使上一次任务仍在执行，也会继续创建新任务，请谨慎使用"
+      },
+      "catchUpLimitHint": "一次补偿周期最多创建多少个任务，范围 1–{max}",
+      "catchUpLimitDefault": "默认：{limit}",
+      "pinned": {
+        "latest": "最新（自动）"
+      },
+      "pinnedMode": {
+        "latest": "最新",
+        "pinned": "锁定"
+      },
+      "pinnedSelectPlaceholder": "选择版本…",
+      "pinnedNoVersions": "暂无版本",
+      "pinnedHint": "可选：填写工作流版本号 vN 以锁定版本，保证执行可复现"
+    },
+    "kind": "类型",
+    "kindCron": "CRON 表达式",
+    "kindInterval": "时间间隔",
+    "cron": "CRON",
+    "timezone": "时区",
+    "timezoneSelect": "选择时区",
+    "intervalMs": "间隔（ms）",
+    "enableAction": "启用",
+    "disableAction": "停用",
+    "enabledToast": "定时已启用",
+    "disabledToast": "定时已停用",
+    "statusEnabled": "已启用",
+    "statusDisabled": "已停用",
+    "runNowAction": "立即触发",
+    "runNowActionFailed": "立即触发失败",
+    "deleteScheduleTitle": "删除定时？",
+    "deleteScheduleDescription": "这将删除该定时规则记录",
+    "deletedToast": "定时已删除",
+    "createdToast": "定时已创建",
+    "updatedToast": "定时已更新"
+  },
+  "batches": {
+    "recentBatchesDescription": "浏览批次并跟踪批量派发进度",
+    "searchPlaceholder": "搜索：名称 / 批次 ID / 工作流…",
+    "emptyState": "暂无批次记录",
+    "noResultsTitle": "没有找到批次记录",
+    "newBatch": "新建批次",
+    "newBatchDescription": "创建批次后，可在详情页展开 seed 并批量生成任务，然后跟踪进度",
+    "showingTotal": "{total} 条批次记录",
+    "statusCreated": "已创建",
+    "pinnedModeLatest": "最新版本",
+    "pinnedModePinned": "锁定版本",
+    "pinnedSelectPlaceholder": "选择一个版本…",
+    "pinnedNoVersions": "暂无版本",
+    "pinnedHint": "批次为一次性快照：首次展开派发或入队后版本将锁定",
+    "concurrencyLimit": "并发上限",
+    "concurrencyLimitHint": "该批次同时运行的最大任务数（可选）",
+    "rampUpSeconds": "放量时长（秒）",
+    "rampUpSecondsHint": "与自动并发上限一起使用：在该时长内并发从 1 线性提升至自动上限；手动并发上限优先",
+    "autoMaxConcurrency": "自动并发上限",
+    "autoMaxConcurrencyHint": "仅在未设置手动并发上限时生效；与放量时长一起启用自动放量",
+    "failurePolicy": "失败策略",
+    "failurePolicyHint": "当任务失败时如何处理剩余未完成任务，展开派发后锁定",
+    "failurePolicyModeFailFast": "失败即停止",
+    "failurePolicyModeMaxFailures": "失败达到阈值后停止",
+    "maxFailures": "最大失败数",
+    "maxFailuresHint": "失败任务数达到阈值后，将对剩余未完成任务发起取消请求，展开派发后锁定",
+    "urlFilesHint": "该批次下所有任务共享的 URL 输入（每行一个）。展开派发时会注入到每个任务的输入文件中；运行开始前由引擎下载并落盘。是否启用、是否必填、数量限制由所选工作流的输入规范决定",
+    "sourceJson": "来源信息",
+    "sourceJsonHint": "说明该批次从何而来或为何创建（用于审计与复现）。不会影响展开派发的输入。必须是有效 JSON",
+    "sourceJsonPlaceholder": "{\n  \"source\": \"manual\",\n  \"owner\": \"alice\",\n  \"ticket\": \"WF-42\",\n  \"note\": \"回填 2026-01-16\",\n  \"dataset\": \"urls.csv\"\n}",
+    "sections": {
+      "basic": "基础信息",
+      "provenance": "来源信息"
+    },
+    "provenance": {
+      "sourceLabel": "来源类型",
+      "sourcePlaceholder": "选择来源…",
+      "sourceHelp": "手动：你在页面上点创建；导入/迁移：从文件/别处导入；回填/补数：补历史数据；API/脚本：通过接口或脚本创建。",
+      "sourceImport": "导入/迁移",
+      "sourceBackfill": "回填/补数",
+      "sourceApi": "API/脚本",
+      "ticketLabel": "关联工单/任务",
+      "ticketPlaceholder": "例如：WF-42 / JIRA-123 / #456",
+      "datasetLabel": "数据集/输入",
+      "datasetPlaceholder": "例如：urls.csv / s3://bucket/path",
+      "notePlaceholder": "为什么要创建这次批次？",
+      "metaLabel": "额外元数据",
+      "metaHint": "可选：补充以上字段未覆盖的任意信息。推荐填写 JSON 对象；若为有效 JSON 会按对象保存，否则按字符串保存",
+      "metaPlaceholder": "{\n  \"range\": \"2026-01\",\n  \"reason\": \"backfill\",\n  \"extra\": {\n    \"foo\": \"bar\"\n  }\n}"
+    },
+    "controlPauseAction": "暂停",
+    "controlResumeAction": "继续",
+    "controlCancelAction": "取消",
+    "deleteBatchTitle": "删除批次？",
+    "deleteBatchDescription": "这将删除批次记录，不会删除该批次下的任务",
+    "deletedToast": "批次已删除",
+    "createdToast": "批次已创建",
+    "updatedToast": "批次已更新",
+    "pausedToast": "批次已暂停",
+    "resumedToast": "批次已继续",
+    "canceledToast": "已发起批次取消",
+    "jobs": "任务",
+    "jobsTotal": "总数",
+    "fanoutTitle": "展开派发",
+    "fanoutStartNowAction": "入队后立即启动",
+    "fanoutEnqueueAction": "展开并入队",
+    "shardCount": "分片总数",
+    "shardCountHint": "把展开后的 items 按索引分成 N 份，规则：idx % N 分组。配合“分片索引”只创建其中一份任务；默认 1 表示不分片",
+    "shardIndex": "分片索引",
+    "shardIndexHint": "当前要创建哪一份分片，取值范围 0 到 分片总数-1。规则：只创建满足 idx % 分片总数 === 分片索引 的 items",
+    "fanoutCreatedToast": "已入队 {count} 个任务",
+    "fanoutTruncatedToast": "展开结果超过限制；已入队 {count} 个任务（已截断）"
+  },
+  "operations": {
+    "title": "操作",
+    "recentOperationsDescription": "查看最近的操作记录并打开详情",
+    "searchPlaceholder": "搜索：操作 ID / 目标 ID / 动作…",
+    "emptyState": "暂无操作记录",
+    "noResultsTitle": "没有找到操作记录",
+    "showingTotal": "{total} 条操作记录",
+    "pendingNewNotice": "有 {count} 条新操作",
+    "pendingNewLoadAction": "加载",
+    "pendingNewGoToNewestAction": "查看最新",
+    "pendingNewSwitchToast": "请切回第一页，并选择“最新优先”以查看新操作",
+    "list": {
+      "actions": {
+        "copyOperationIdAction": "复制操作 ID"
+      }
+    },
+    "detail": {
+      "summary": "摘要",
+      "action": "动作",
+      "target": "目标",
+      "status": "状态",
+      "responseStatus": "响应",
+      "completedAt": "完成时间",
+      "scope": "范围",
+      "actor": "操作者",
+      "tenant": "租户",
+      "requestId": "请求 ID",
+      "progress": "进度",
+      "result": "结果",
+      "rootCause": "根因"
+    },
+    "progressMessages": {
+      "agentRunInProgress": "智能体运行中",
+      "agentRunStarted": "智能体运行已开始",
+      "agentRunCompleted": "智能体运行已完成",
+      "enqueueingJobs": "正在入队 {total} 个任务",
+      "createdJobs": "已创建 {created}/{total} 个任务",
+      "installingDeps": "正在安装依赖"
+    },
+    "statusPending": "等待中"
+  },
+  "errors": {
+    "ajv": {
+      "additionalProperties": "存在未允许的字段 {property}",
+      "required": "缺少必填字段 {property}",
+      "type": "类型必须为 {type}",
+      "enum": "必须为以下值之一：{values}",
+      "const": "必须为 {value}",
+      "minimum": "必须 ≥ {limit}",
+      "maximum": "必须 ≤ {limit}",
+      "exclusiveMinimum": "必须 > {limit}",
+      "exclusiveMaximum": "必须 < {limit}",
+      "minLength": "长度至少为 {limit} 个字符",
+      "maxLength": "长度最多为 {limit} 个字符",
+      "minItems": "至少需要 {limit} 项",
+      "maxItems": "最多允许 {limit} 项",
+      "minProperties": "至少需要 {limit} 个字段",
+      "maxProperties": "最多允许 {limit} 个字段",
+      "multipleOf": "必须是 {multipleOf} 的倍数",
+      "uniqueItems": "数组项不能重复",
+      "oneOf": "必须且只能匹配一种允许的结构",
+      "anyOf": "至少需要匹配一种允许的结构",
+      "allOf": "必须匹配所有要求的结构",
+      "not": "不能匹配该结构",
+      "pattern": "格式不正确",
+      "patternProperties": "包含不符合允许模式的字段名",
+      "format": "必须符合格式：{format}"
+    },
+    "issue": {
+      "reserved": "该字段由系统管理，不能手动填写：{field}",
+      "disabled": "该字段当前不可用：{field}",
+      "notSupported": "这里不支持该字段：{field}",
+      "notFound": "未找到对应资源",
+      "acceptMime": "文件类型不被允许"
+    },
+    "json": {
+      "parseAt": "JSON 格式不正确（第 {line} 行，第 {column} 列）"
+    },
+    "HTTP_ERROR": "请求失败",
+    "INVALID_QUERY": "请求参数不正确",
+    "INVALID_BODY": "请求体不正确",
+    "INVALID_CREDENTIALS": "邮箱或密码错误",
+    "EMAIL_TAKEN": "邮箱已被占用",
+    "PASSWORD_TOO_SHORT": "密码至少 8 位字符",
+    "PASSWORD_MISMATCH": "两次密码不一致",
+    "UNAUTHORIZED": "未登录",
+    "FORBIDDEN": "无权限",
+    "NOT_INSTALLED": "尚未安装",
+    "ALREADY_INITIALIZED": "已初始化，无法修改",
+    "DB_NOT_READY": "数据库尚未初始化，请返回上一步点击“初始化并继续”",
+    "SQLITE_MIGRATION_FAILED": "数据库迁移失败",
+    "DATA_DIR_REQUIRED": "请输入目录路径",
+    "DATA_DIR_MUST_BE_ABSOLUTE": "请输入绝对路径",
+    "DATA_DIR_NOT_FOUND": "目录不存在，请先创建",
+    "DATA_DIR_NOT_DIRECTORY": "该路径不是目录",
+    "DATA_DIR_STAT_FAILED": "无法访问该路径",
+    "DATA_DIR_CREATE_FAILED": "无法创建目录",
+    "DATA_DIR_NOT_ACCESSIBLE": "目录不可读写",
+    "DATA_DIR_NOT_WRITABLE": "目录不可写",
+    "DATA_DIR_LOCKED_BY_ENV": "数据库位置由 MAIA_DATA_DIR 控制",
+    "INVALID_JSON": "JSON 格式不正确",
+    "INVALID_URL_FILES": "URL 列表不正确",
+    "WORKFLOW_ID_REQUIRED": "请选择工作流",
+    "WORKFLOW_NOT_FOUND": "工作流不存在",
+    "WORKFLOW_VERSION_NOT_FOUND": "工作流版本不存在",
+    "WORKFLOW_INPUT_SPEC_INVALID": "工作流输入规范无效",
+    "INVALID_DEPENDENCIES": "依赖配置不正确",
+    "INVALID_ENV_JSON": "环境变量 JSON 不正确",
+    "INVALID_INPUT_SPEC": "输入规范不正确",
+    "INVALID_INPUT_SPEC_SCHEMA": "输入规范的 Schema 不正确",
+    "INVALID_INPUT_SPEC_RESERVED_FIELDS": "输入规范使用了系统保留字段名",
+    "INVALID_OUTPUTS_SPEC": "输出规范不正确",
+    "INVALID_INITIAL_INPUT": "输入参数不正确",
+    "INVALID_INPUT_JSON": "输入模板不符合要求",
+    "INVALID_INPUT_FILES": "文件输入不符合要求",
+    "RESET_TOKEN_INVALID": "重置链接无效",
+    "RESET_TOKEN_USED": "重置链接已使用",
+    "RESET_TOKEN_EXPIRED": "重置链接已过期",
+    "TOTP_REQUIRED": "需要验证码",
+    "TOTP_INVALID": "验证码错误",
+    "CHALLENGE_INVALID": "会话已过期",
+    "INVALID_CRON": "CRON 表达式不正确",
+    "INVALID_INTERVAL": "间隔时间不正确",
+    "MARKDOWN_RENDER_FAILED": "Markdown 渲染失败",
+    "FILE_TOO_LARGE": "文件过大",
+    "FILE_NOT_FOUND": "文件不存在",
+    "INVALID_PATH": "文件不存在",
+    "RUN_NOT_FOUND": "运行不存在",
+    "RUN_IS_RUNNING": "运行进行中，无法执行该操作",
+    "INVALID_SNAPSHOT": "版本无效",
+    "RUN_NOT_PAUSED": "运行未处于暂停状态",
+    "JOB_NOT_PAUSED": "任务未处于暂停状态",
+    "RUN_NOW_FAILED": "立即运行失败",
+    "SAVE_FAILED": "保存失败",
+    "UPDATE_FAILED": "更新失败",
+    "NO_URL_INPUTS": "没有可重试的 URL 输入",
+    "NO_FAILED_URL_INPUTS": "没有失败的 URL 输入可重试",
+    "URL_INPUT_NOT_FOUND": "未找到该 URL 输入文件",
+    "URL_INPUT_NOT_URL": "该输入文件不是 URL 来源",
+    "URL_INPUT_NOT_FAILED": "该 URL 输入文件当前不是失败状态",
+    "NO_RUN_INPUTS": "暂无运行输入",
+    "NO_LOGS": "暂无日志",
+    "NO_ATTEMPTS": "暂无运行记录",
+    "NO_ARTIFACTS": "暂无产物",
+    "NO_STEP_INPUT": "暂无步骤输入",
+    "NO_STEP_OUTPUT": "暂无步骤输出",
+    "NO_STEP_DEFINITION": "暂无步骤定义",
+    "NO_SUCCESSFUL_ATTEMPTS": "暂无成功的运行记录",
+    "DEPS_INSTALL_FAILED": "依赖安装失败（请查看安装日志）",
+    "AGENT_API_KEY_MISSING": "未配置智能体 API Key（请到 偏好 → 智能体 中配置）",
+    "DEEPSEEK_HTTP_ERROR": "智能体请求失败（上游服务错误）",
+    "AGENT_STREAM_FAILED": "智能体流式请求失败",
+    "AGENT_UPSTREAM_TIMEOUT": "智能体超时（上游响应过慢）",
+    "AGENT_IDLE_TIMEOUT": "智能体超时（上游长时间无输出）",
+    "AGENT_MAX_ROUNDS_REACHED": "智能体提前停止（达到工具调用轮次上限）",
+    "INPUT_SPEC_GENERATION_FAILED": "输入规范生成失败",
+    "WORKFLOW_VALIDATION_FAILED": "工作流草稿校验失败",
+    "INVALID_WORKFLOW_SNAPSHOT": "工作流快照无效",
+    "REQUEST_ABORTED": "请求已取消"
+  }
+}

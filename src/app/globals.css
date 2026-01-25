@@ -1,0 +1,13 @@
+/* -----------------------------------------------------------------------------
+ * Global CSS entry (Next.js)
+ *
+ * Scope:
+ * - Loads Tailwind v4 and then the Maia CSS bundle under `src/styles/maia/*`.
+ * - Keep this file minimal: most styling lives in the bundle.
+ * -------------------------------------------------------------------------- */
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Import the Maia bundle (tokens, layers, base/reset, components, content, print). */
+@import "../styles/maia/index.css";

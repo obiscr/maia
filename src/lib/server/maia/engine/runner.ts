@@ -1,0 +1,704 @@
+import "server-only"
+
+import fs from "fs/promises"
+import path from "path"
+import { spawn } from "child_process"
+
+import { AttemptStatus, LogLevel, LogSource, RunStatus, StepStatus } from "@prisma/client"
+import type { Prisma } from "@prisma/client"
+
+import { prisma } from "@/lib/server/db"
+import { recordArtifact } from "@/lib/server/maia/artifacts"
+import { linesFromChunk, safeJsonStringify } from "@/lib/server/maia/engine/helpers"
+import { readStepOutput } from "@/lib/server/maia/engine/read-step-output"
+import type { RunningProc } from "@/lib/server/maia/engine/types"
+import { ensureWorkflowDepsInstalled } from "@/lib/server/maia/deps"
+import { ensureDir, pathExists, readJsonFile, writeJsonAtomic, writeTextAtomic } from "@/lib/server/maia/fs"
+import { emitLogLine, emitLogLineWithMeta, emitStepError, emitStepStatus, emitSystem } from "@/lib/server/maia/logging"
+import { attemptDir, runDir, workflowDepsDir } from "@/lib/server/maia/paths"
+import {
+  buildStepExecEnv,
+  getRunnerConfigFromEnv,
+  type RunnerMountMode,
+  runnerCancelExec,
+  runnerExecStepNdjson,
+} from "@/lib/server/maia/runner-client"
+import { workflowSnapshotSchema } from "@/lib/server/maia/snapshot"
+import type { RunStepErrorCode } from "@/lib/server/maia/logging"
+
+type StepFailureMeta =
+  | { timeoutMs: number }
+  | { signal: string }
+  | { exitCode: number | null }
+  | { outputParseError: string }
+  | { detail: string }
+  | Record<string, never>
+
+export async function executeAttempt(params: {
+  runId: string
+  stepKey: string
+  attemptNo: number
+  running: Map<string, RunningProc>
+  finishRun: (runId: string, status: RunStatus) => Promise<void>
+}) {
+  const { runId, stepKey, attemptNo, running } = params
+  const key = `${runId}:${stepKey}`
+  if (running.has(key)) return
+
+  const run = await prisma.run.findUnique({ where: { id: runId } })
+  if (!run) return
+
+  const snap = workflowSnapshotSchema.parse(JSON.parse(run.workflowSnap))
+  // Ensure deps for the exact snapshot (prevents drift across workflow edits).
+  await ensureWorkflowDepsInstalled(snap.workflowId, { depsHash: snap.depsHash, dependencies: snap.dependencies })
+
+  const rs = await prisma.runStep.findUnique({ where: { runId_stepKey: { runId, stepKey } } })
+  if (!rs) return
+
+  const dir = attemptDir(runId, stepKey, attemptNo)
+  await ensureDir(dir)
+
+  const hostOutputPath = path.join(dir, "output.json")
+  const hostInputPath = path.join(dir, "input.json")
+  const scriptPath = path.join(dir, "step.mjs")
+  const runnerPath = path.join(dir, "runner.mjs")
+
+  const deps = JSON.parse(rs.depsJson) as string[]
+  const upstream: Record<string, unknown> = {}
+  for (const d of deps) {
+    upstream[d] = await readStepOutput(runId, d)
+  }
+
+  // Load workflow-scoped env(KV) from the run snapshot (reproducible across workflow edits).
+  let workflowEnv: Record<string, string> = {}
+  try {
+    const raw = String(snap.envJson ?? "{}")
+    if (raw.trim().length) {
+      const parsed = JSON.parse(raw)
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+        throw new Error("envJson must be a JSON object")
+      const obj: Record<string, string> = {}
+      for (const [k, v] of Object.entries(parsed as Record<string, unknown>))
+        if (typeof v === "string") obj[String(k)] = v
+      workflowEnv = obj
+    } else {
+      workflowEnv = {}
+    }
+  } catch (e) {
+    console.error("[engine] failed to load/parse workflow envJson from snapshot", e)
+  }
+
+  const input = {
+    runId,
+    stepKey,
+    attemptNo,
+    initialInput: JSON.parse(run.initialInput) as unknown,
+    upstream,
+    env: workflowEnv,
+    dirs: {
+      runDir: runDir(runId),
+      attemptDir: dir,
+    },
+    paths: {
+      inputPath: hostInputPath,
+      outputPath: hostOutputPath,
+    },
+  }
+
+  await writeJsonAtomic(hostInputPath, input)
+  try {
+    await recordArtifact({ runId, stepKey, attemptNo, kind: "input", absPath: hostInputPath })
+  } catch (e) {
+    console.error("[engine] recordArtifact(input) failed", e)
+  }
+
+  await writeTextAtomic(scriptPath, rs.scriptEsm)
+
+  const depsDir = workflowDepsDir(snap.workflowId, snap.depsHash)
+  const wfNodeModules = path.join(depsDir, "node_modules")
+
+  // ESM resolution needs node_modules in a parent directory of the step script.
+  // Since attemptDir lives outside workflowDir, create a node_modules symlink inside attemptDir.
+  try {
+    if (await pathExists(wfNodeModules)) {
+      const linkPath = path.join(dir, "node_modules")
+      if (!(await pathExists(linkPath))) {
+        await fs.symlink(wfNodeModules, linkPath, "dir")
+      }
+    }
+  } catch (e) {
+    console.error("[engine] failed to ensure node_modules symlink for step", e)
+  }
+
+  // Worker-style ESM runner:
+  // - Loads step module via dynamic import
+  // - Calls default export's main(env, ctx) (B-only)
+  // - Writes output.json from returned value
+  const runnerMjs = `// Auto-generated by MAIA engine. Do not edit.
+import fs from "fs";
+import fsp from "fs/promises";
+import path from "path";
+
+async function run() {
+  const inputPath = process.env.MAIA_INPUT_PATH;
+  const outputPath = process.env.MAIA_OUTPUT_PATH;
+  if (!inputPath) throw new Error("Missing env: MAIA_INPUT_PATH");
+  if (!outputPath) throw new Error("Missing env: MAIA_OUTPUT_PATH");
+
+  const input = JSON.parse(fs.readFileSync(inputPath, "utf8"));
+  const env = (input && input.env && typeof input.env === "object") ? input.env : {};
+
+  const runId = String(input.runId || "");
+  const stepKey = String(input.stepKey || "");
+  const attemptNo = Number(input.attemptNo || 0);
+  const attemptDir = (input && input.dirs && typeof input.dirs === "object" && input.dirs.attemptDir) ? String(input.dirs.attemptDir) : "";
+
+  const artifactManifestPath = attemptDir ? path.join(attemptDir, ".maia-artifacts.jsonl") : "";
+  const artifactsDir = attemptDir ? path.join(attemptDir, "artifacts") : "";
+
+  const sanitizeBasename = (name) => {
+    const s0 = String(name || "").trim();
+    const s1 = s0.replace(/\\\\/g, "/").split("/").pop() || "artifact";
+    // Keep a conservative charset; avoid traversal & weird control chars.
+    const s2 = s1.replace(/[^a-zA-Z0-9._ -]+/g, "_").trim();
+    const s3 = s2.replace(/^\\.+/g, "").trim(); // avoid ".env" style hidden files
+    return s3 || "artifact";
+  };
+
+  const registerArtifact = async (entry) => {
+    if (!artifactManifestPath) throw new Error("Missing attemptDir; cannot register artifacts");
+    const line = JSON.stringify(entry);
+    await fsp.appendFile(artifactManifestPath, line + "\\n", "utf8");
+  };
+
+  const ctx = {
+    input,
+    params: (input && input.initialInput && typeof input.initialInput === "object") ? input.initialInput : {},
+    upstream: (input && input.upstream && typeof input.upstream === "object") ? input.upstream : {},
+    files: { dirs: input.dirs || {}, paths: input.paths || {} },
+    run: { runId, stepKey, attemptNo },
+    artifacts: {
+      /**
+       * Write a UTF-8 text file into attemptDir/artifacts and register it as an artifact.
+       * Returns { name, absPath }.
+       */
+      writeText: async (name, text, opts) => {
+        if (!attemptDir) throw new Error("Missing attemptDir; cannot write artifacts");
+        const base = sanitizeBasename(name);
+        await fsp.mkdir(artifactsDir, { recursive: true });
+        const absPath = path.join(artifactsDir, base);
+        await fsp.writeFile(absPath, String(text ?? ""), "utf8");
+        await registerArtifact({
+          kind: (opts && typeof opts.kind === "string" && opts.kind.trim()) ? String(opts.kind) : "file",
+          name: base,
+          absPath,
+          summary: (opts && typeof opts.summary === "string" && opts.summary.trim()) ? String(opts.summary) : null,
+        });
+        return { name: base, absPath };
+      },
+      /**
+       * Write a binary file into attemptDir/artifacts and register it as an artifact.
+       *
+       * Accepts:
+       * - Buffer
+       * - Uint8Array / ArrayBuffer
+       * - base64 string (default)
+       * - string with opts.encoding: "utf8" | "base64"
+       *
+       * Returns { name, absPath }.
+       */
+      writeBytes: async (name, bytes, opts) => {
+        if (!attemptDir) throw new Error("Missing attemptDir; cannot write artifacts");
+        const base = sanitizeBasename(name);
+        await fsp.mkdir(artifactsDir, { recursive: true });
+        const absPath = path.join(artifactsDir, base);
+
+        let buf = null;
+        // Buffer (Node)
+        if (bytes && typeof bytes === "object" && typeof Buffer !== "undefined" && Buffer.isBuffer(bytes)) {
+          buf = bytes;
+        }
+        // ArrayBuffer
+        else if (bytes && typeof bytes === "object" && bytes instanceof ArrayBuffer) {
+          buf = Buffer.from(bytes);
+        }
+        // Uint8Array (and Buffer-like views)
+        else if (bytes && typeof bytes === "object" && typeof bytes.byteLength === "number") {
+          try {
+            buf = Buffer.from(bytes);
+          } catch {}
+        }
+        // string
+        else if (typeof bytes === "string") {
+          const enc = (opts && typeof opts.encoding === "string" && opts.encoding.trim()) ? String(opts.encoding).trim() : "base64";
+          if (enc !== "base64" && enc !== "utf8") throw new Error('Invalid opts.encoding; expected "base64" or "utf8"');
+          buf = Buffer.from(bytes, enc);
+        }
+
+        if (!buf) throw new Error("Invalid bytes; expected Buffer/Uint8Array/ArrayBuffer or string");
+
+        await fsp.writeFile(absPath, buf);
+        await registerArtifact({
+          kind: (opts && typeof opts.kind === "string" && opts.kind.trim()) ? String(opts.kind) : "file",
+          name: base,
+          absPath,
+          summary: (opts && typeof opts.summary === "string" && opts.summary.trim()) ? String(opts.summary) : null,
+        });
+        return { name: base, absPath };
+      },
+      /**
+       * Register an existing file as an artifact.
+       * Security: the engine will only accept files under this attemptDir.
+       */
+      registerFile: async (absPath, opts) => {
+        const p = String(absPath || "").trim();
+        if (!p) throw new Error("absPath required");
+        await registerArtifact({
+          kind: (opts && typeof opts.kind === "string" && opts.kind.trim()) ? String(opts.kind) : "file",
+          name: (opts && typeof opts.name === "string" && opts.name.trim()) ? sanitizeBasename(opts.name) : null,
+          absPath: p,
+          summary: (opts && typeof opts.summary === "string" && opts.summary.trim()) ? String(opts.summary) : null,
+        });
+        return { absPath: p };
+      },
+    },
+    urls: {
+      input: \`/api/runs/\${encodeURIComponent(runId)}/steps/\${encodeURIComponent(stepKey)}/input\`,
+      output: \`/api/runs/\${encodeURIComponent(runId)}/steps/\${encodeURIComponent(stepKey)}/output\`,
+      artifacts: \`/api/runs/\${encodeURIComponent(runId)}/steps/\${encodeURIComponent(stepKey)}/artifacts\`
+
+    },
+    log: (...args) => console.log(...args),
+    warn: (...args) => console.warn(...args),
+    error: (...args) => console.error(...args),
+  };
+
+  const mod = await import("./step.mjs");
+  const handler = mod && mod.default ? mod.default : null;
+  const main = handler && typeof handler.main === "function" ? handler.main : (typeof mod.main === "function" ? mod.main : null);
+  if (!main) {
+    throw new Error("Step must export default { async main(env, ctx) { ... } } (ESM).");
+  }
+
+  const ret = await main(env, ctx);
+  if (typeof ret === "undefined") {
+    throw new Error("Step main(env, ctx) must return a JSON-serializable value.");
+  }
+
+  // Enforce output contract:
+  // - Steps must return an object that includes an "outputs" object (can be empty).
+  const isPlainObject = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+  if (!isPlainObject(ret)) {
+    throw new Error('Step main(env, ctx) must return an object. Recommended shape: { outputs: { ... } }.');
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(ret, "outputs")) {
+    throw new Error('Step return value must include an "outputs" object. Example: return { outputs: {} }.');
+  }
+  if (!isPlainObject(ret.outputs)) {
+    throw new Error('Step return value must include an "outputs" object. Example: return { outputs: {} }.');
+  }
+
+  const out = { ok: true, timestamp: new Date().toISOString(), data: ret };
+  fs.writeFileSync(outputPath, JSON.stringify(out, null, 2));
+}
+
+run().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
+`
+  await writeTextAtomic(runnerPath, runnerMjs)
+
+  // Build allowlisted env for step execution (no inheritance from App env).
+  const allowlistedEnv = buildStepExecEnv({
+    workflowEnv,
+    maia: {
+      runId,
+      stepKey,
+      attemptNo,
+      inputPath: hostInputPath,
+      outputPath: hostOutputPath,
+      runDir: runDir(runId),
+      attemptDir: dir,
+      workflowId: snap.workflowId,
+      depsHash: snap.depsHash,
+    },
+  })
+  // Some runtime types in this repo expect NODE_ENV to exist; set it explicitly (non-secret).
+  const nodeEnv: "development" | "production" | "test" =
+    process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test" || process.env.NODE_ENV === "production"
+      ? process.env.NODE_ENV
+      : "production"
+  const processEnv: NodeJS.ProcessEnv = {
+    NODE_ENV: nodeEnv,
+    ...allowlistedEnv,
+  }
+  const runnerEnv = {
+    ...allowlistedEnv,
+    NODE_ENV: nodeEnv,
+  }
+
+  const mountMode: RunnerMountMode =
+    String(process.env.MAIA_RUNNER_MOUNT_MODE ?? "").trim() === "strict" ? "strict" : "default"
+
+  const runnerCfg = getRunnerConfigFromEnv()
+  const onTerminal = async (params2: { exitCode: number | null; signal: string | null; proc: RunningProc }) => {
+    const { exitCode, signal, proc } = params2
+    const okExit = exitCode === 0
+
+    const outputExists = okExit ? await pathExists(hostOutputPath) : false
+
+    let outputOk = false
+    let outputParseError: string | null = null
+    if (okExit && outputExists) {
+      try {
+        await readJsonFile(hostOutputPath)
+        outputOk = true
+      } catch (e) {
+        outputParseError = e instanceof Error ? e.message : String(e)
+      }
+    }
+
+    if (okExit && outputOk) {
+      try {
+        await recordArtifact({ runId, stepKey, attemptNo, kind: "output", absPath: hostOutputPath })
+      } catch (e) {
+        console.error("[engine] recordArtifact(output) failed", e)
+      }
+
+      // Record user-declared artifacts (standard mechanism: explicit registration via ctx.artifacts).
+      // The step runtime writes a JSONL manifest into attemptDir. We only allow paths under attemptDir.
+      try {
+        const manifestPath = path.join(dir, ".maia-artifacts.jsonl")
+        if (await pathExists(manifestPath)) {
+          const raw = await fs.readFile(manifestPath, "utf8")
+          const lines = raw
+            .replace(/\r\n/g, "\n")
+            .split("\n")
+            .map((x) => x.trim())
+            .filter(Boolean)
+
+          for (const line of lines) {
+            let rec: unknown = null
+            try {
+              rec = JSON.parse(line)
+            } catch {
+              continue
+            }
+            if (!rec || typeof rec !== "object" || Array.isArray(rec)) continue
+            const obj = rec as Record<string, unknown>
+            const absRaw = typeof obj.absPath === "string" ? obj.absPath.trim() : ""
+            if (!absRaw) continue
+
+            const abs = path.resolve(absRaw)
+            const attemptRoot = path.resolve(dir) + path.sep
+            if (!abs.startsWith(attemptRoot)) continue
+
+            const kind = typeof obj.kind === "string" && obj.kind.trim() ? obj.kind.trim() : "file"
+            const summary = typeof obj.summary === "string" && obj.summary.trim() ? obj.summary.trim() : undefined
+
+            // Avoid double-recording system files.
+            if (abs === hostInputPath || abs === hostOutputPath || abs === scriptPath || abs === runnerPath) continue
+
+            try {
+              await recordArtifact({ runId, stepKey, attemptNo, kind, absPath: abs, summary })
+            } catch (e) {
+              console.error("[engine] recordArtifact(user) failed", e)
+            }
+          }
+        }
+      } catch (e) {
+        console.error("[engine] read/record user artifacts manifest failed", e)
+      }
+
+      const applied = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        const at = await tx.attempt.findUnique({
+          where: { runId_stepKey_attemptNo: { runId, stepKey, attemptNo } },
+          select: { status: true },
+        })
+        if (!at || at.status !== AttemptStatus.RUNNING) return false
+        await tx.attempt.update({
+          where: { runId_stepKey_attemptNo: { runId, stepKey, attemptNo } },
+          data: {
+            status: AttemptStatus.SUCCEEDED,
+            finishedAt: new Date(),
+            exitCode: exitCode ?? 0,
+            errorCode: null,
+            errorMessage: null,
+            errorMetaJson: null,
+            errorAt: null,
+          },
+        })
+        await tx.runStep.update({
+          where: { runId_stepKey: { runId, stepKey } },
+          data: { status: StepStatus.SUCCEEDED, finishedAt: new Date() },
+        })
+        return true
+      })
+      if (!applied) return
+      await emitLogLineWithMeta({
+        runId,
+        stepKey,
+        attemptNo,
+        stream: "stdout",
+        line: "Step succeeded",
+        level: LogLevel.INFO,
+        source: LogSource.SYSTEM,
+        kind: "status",
+      })
+      await emitStepStatus(runId, stepKey, StepStatus.SUCCEEDED, attemptNo)
+    } else {
+      const failure = ((): { code: RunStepErrorCode; message: string; meta: StepFailureMeta } => {
+        if (!okExit) {
+          if (proc.kind === "runner" && proc.execErrorMessage) {
+            return {
+              code: "RUNNER_EXEC_FAILED" as const,
+              message: String(proc.execErrorMessage),
+              meta: { detail: String(proc.execErrorMessage) },
+            }
+          }
+          if (proc.timedOut) {
+            return {
+              code: "STEP_TIMEOUT" as const,
+              message: `Timed out after ${proc.timeoutMs}ms`,
+              meta: { timeoutMs: proc.timeoutMs },
+            }
+          }
+          if (signal) {
+            return {
+              code: "STEP_SIGNAL" as const,
+              message: `Terminated by signal ${signal}`,
+              meta: { signal: String(signal) },
+            }
+          }
+          return {
+            code: "STEP_EXIT_CODE" as const,
+            message: `Exited with code ${exitCode}`,
+            meta: { exitCode },
+          }
+        }
+
+        if (!outputExists) {
+          return { code: "OUTPUT_MISSING" as const, message: "Missing output.json", meta: {} }
+        }
+
+        return {
+          code: "OUTPUT_INVALID" as const,
+          message: `Invalid output.json: ${outputParseError ?? "parse error"}`,
+          meta: { outputParseError: outputParseError ?? "parse error" },
+        }
+      })()
+
+      const errMessage = String(failure.message ?? "")
+      const errMetaJson = safeJsonStringify(failure.meta ?? null)
+
+      const applied = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        const at = await tx.attempt.findUnique({
+          where: { runId_stepKey_attemptNo: { runId, stepKey, attemptNo } },
+          select: { status: true },
+        })
+        if (!at || at.status !== AttemptStatus.RUNNING) return false
+        await tx.attempt.update({
+          where: { runId_stepKey_attemptNo: { runId, stepKey, attemptNo } },
+          data: {
+            status: AttemptStatus.FAILED,
+            finishedAt: new Date(),
+            exitCode,
+            errorCode: String(failure.code),
+            errorMessage: errMessage,
+            errorMetaJson: errMetaJson,
+            errorAt: new Date(),
+          },
+        })
+        await tx.runStep.update({
+          where: { runId_stepKey: { runId, stepKey } },
+          data: { status: StepStatus.FAILED, finishedAt: new Date() },
+        })
+        return true
+      })
+      if (!applied) return
+
+      const meta = failure.meta
+      await emitStepError({
+        runId,
+        stepKey,
+        attemptNo,
+        code: failure.code,
+        meta: {
+          timeoutMs: "timeoutMs" in meta ? meta.timeoutMs : null,
+          signal: "signal" in meta ? meta.signal : null,
+          exitCode: "exitCode" in meta ? (meta.exitCode ?? null) : null,
+          outputParseError: "outputParseError" in meta ? meta.outputParseError : null,
+          detail: "detail" in meta ? meta.detail : null,
+        },
+      })
+      await emitLogLineWithMeta({
+        runId,
+        stepKey,
+        attemptNo,
+        stream: "stderr",
+        line: `Step failed: [${failure.code}] ${errMessage}`,
+        level: LogLevel.ERROR,
+        source: LogSource.SYSTEM,
+        kind: "status",
+      })
+      await emitStepStatus(runId, stepKey, StepStatus.FAILED, attemptNo)
+      await emitSystem(runId, `step ${stepKey} failed: [${failure.code}] ${errMessage}`, LogLevel.ERROR)
+      // Fail-fast: terminate the run and resolve remaining steps immediately.
+      await params.finishRun(runId, RunStatus.FAILED)
+    }
+  }
+
+  if (runnerCfg.ok) {
+    const startedAt = Date.now()
+    const abort = new AbortController()
+    const proc: Extract<RunningProc, { kind: "runner" }> = {
+      kind: "runner",
+      execId: "",
+      execErrorMessage: null,
+      abort,
+      cancel: async (mode) => {
+        const execId = proc.execId
+        if (!execId) return
+        await runnerCancelExec({ runnerUrl: runnerCfg.url, token: runnerCfg.token, execId, mode })
+      },
+      runId,
+      stepKey,
+      attemptNo,
+      timeout: null as NodeJS.Timeout | null,
+      timeoutMs: rs.timeoutMs,
+      timedOut: false as boolean,
+    }
+    running.set(key, proc)
+
+    proc.timeout = setTimeout(() => {
+      proc.timedOut = true
+      void emitSystem(runId, `step ${stepKey} timed out after ${proc.timeoutMs}ms`, LogLevel.WARN).catch(() => {})
+      void proc.cancel("kill").catch(() => {})
+      try {
+        abort.abort(new Error("step timeout"))
+      } catch {}
+    }, proc.timeoutMs)
+
+    let exitCode: number | null = null
+    let signal: string | null = null
+    try {
+      const r = await runnerExecStepNdjson({
+        runnerUrl: runnerCfg.url,
+        token: runnerCfg.token,
+        abort: abort.signal,
+        body: {
+          runId,
+          stepKey,
+          attemptNo,
+          mountMode,
+          mounts: { attemptAbs: dir, depsAbs: depsDir, runAbs: runDir(runId) },
+          limits: { timeoutMs: rs.timeoutMs },
+          env: runnerEnv,
+        },
+        onLog: async (ev) => {
+          await emitLogLine({ runId, stepKey, attemptNo, stream: ev.stream, line: ev.line }).catch(() => {})
+        },
+      })
+      proc.execId = r.execId
+      exitCode = r.exit.exitCode
+      signal = r.exit.signal
+    } catch (e) {
+      const msg = `Runner exec failed: ${e instanceof Error ? e.message : String(e)}`
+      proc.execErrorMessage = msg
+      await emitLogLineWithMeta({
+        runId,
+        stepKey,
+        attemptNo,
+        stream: "stderr",
+        line: msg,
+        level: LogLevel.ERROR,
+        source: LogSource.SYSTEM,
+        kind: "status",
+      }).catch(() => {})
+    } finally {
+      if (proc.timeout) clearTimeout(proc.timeout)
+      running.delete(key)
+    }
+
+    const durationMs = Date.now() - startedAt
+    await emitLogLineWithMeta({
+      runId,
+      stepKey,
+      attemptNo,
+      stream: "stderr",
+      line: `audit: execId=${proc.execId} mountMode=${mountMode} durationMs=${durationMs} exitCode=${exitCode ?? "null"} signal=${signal ?? "null"}`,
+      level: LogLevel.INFO,
+      source: LogSource.SYSTEM,
+      kind: "status",
+    }).catch(() => {})
+
+    await onTerminal({ exitCode, signal, proc }).catch((e) => {
+      console.error("[engine] executeAttempt runner terminal handler failed", e)
+    })
+    return
+  }
+
+  // Fallback (dev / no runner): execute locally in the App process, but still use allowlisted env.
+  const child = spawn(process.execPath, [runnerPath], {
+    // Use depsDir as cwd so `process.cwd()` reflects the frozen dependency root.
+    cwd: depsDir,
+    env: processEnv,
+    stdio: ["ignore", "pipe", "pipe"],
+  })
+
+  const proc: RunningProc = {
+    kind: "child_process",
+    child,
+    runId,
+    stepKey,
+    attemptNo,
+    timeout: null as NodeJS.Timeout | null,
+    timeoutMs: rs.timeoutMs,
+    timedOut: false as boolean,
+  }
+  running.set(key, proc)
+
+  const stdoutCarry = { buf: "" }
+  const stderrCarry = { buf: "" }
+
+  child.stdout?.on("data", (chunk: Buffer) => {
+    for (const line of linesFromChunk(chunk, stdoutCarry)) {
+      emitLogLine({ runId, stepKey, attemptNo, stream: "stdout", line }).catch(() => {})
+    }
+  })
+
+  child.stderr?.on("data", (chunk: Buffer) => {
+    for (const line of linesFromChunk(chunk, stderrCarry)) {
+      emitLogLine({ runId, stepKey, attemptNo, stream: "stderr", line }).catch(() => {})
+    }
+  })
+
+  proc.timeout = setTimeout(() => {
+    proc.timedOut = true
+    void emitSystem(runId, `step ${stepKey} timed out after ${proc.timeoutMs}ms`, LogLevel.WARN).catch(() => {})
+    child.kill("SIGKILL")
+  }, proc.timeoutMs)
+
+  child.on("close", (code, signal) => {
+    void (async () => {
+      if (proc.timeout) clearTimeout(proc.timeout)
+      running.delete(key)
+
+      // Flush leftover partial lines.
+      if (stdoutCarry.buf.trim()) {
+        await emitLogLine({ runId, stepKey, attemptNo, stream: "stdout", line: stdoutCarry.buf.trimEnd() })
+      }
+      if (stderrCarry.buf.trim()) {
+        await emitLogLine({ runId, stepKey, attemptNo, stream: "stderr", line: stderrCarry.buf.trimEnd() })
+      }
+
+      const exitCode = typeof code === "number" ? code : null
+      await onTerminal({ exitCode, signal: signal ? String(signal) : null, proc })
+    })().catch((e) => {
+      // Prevent unhandledRejection from async event handler.
+      console.error("[engine] executeAttempt close handler failed", e)
+    })
+  })
+}
