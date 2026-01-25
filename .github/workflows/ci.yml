@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-all:
+    name: pnpm check-all (lint + type-check + client-imports + build + e2e)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Keep CI fast and reduce local resource contention.
+      GLOBAL_RUN_CONCURRENCY: "2"
+      PER_RUN_STEP_CONCURRENCY: "1"
+      INPUT_DOWNLOAD_CONCURRENCY: "1"
+      INPUT_DOWNLOAD_TIMEOUT_MS: "60000"
+      INPUT_DOWNLOAD_MAX_BYTES: "52428800"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Enable Corepack (pnpm)
+        run: corepack enable
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Prisma generate
+        run: pnpm prisma:generate
+
+      - name: Check formatting (prettier)
+        run: pnpm run format:check
+
+      - name: Check i18n keys
+        run: pnpm run check:i18n
+
+      - name: Clean local data dir
+        run: rm -rf maia-data
+
+      - name: Lint (oxlint)
+        run: pnpm run lint
+
+      - name: Type check (tsc)
+        run: pnpm run type-check
+
+      - name: Check client imports (use client -> server-only)
+        run: pnpm run check:client-imports
+
+      - name: Check framework boundaries
+        run: pnpm run check:framework
+
+      - name: Build (next build)
+        run: pnpm run build
+
+      - name: E2E smoke
+        run: pnpm run test:e2e

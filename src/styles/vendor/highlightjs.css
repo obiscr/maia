@@ -1,0 +1,70 @@
+.hljs {
+  color: inherit;
+}
+.hljs-comment,
+.hljs-quote {
+  color: rgb(113 113 122);
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-subst {
+  color: rgb(2 132 199);
+}
+.hljs-string,
+.hljs-title,
+.hljs-section,
+.hljs-attribute,
+.hljs-literal,
+.hljs-template-tag,
+.hljs-template-variable,
+.hljs-type,
+.hljs-addition {
+  color: rgb(21 128 61);
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet {
+  color: rgb(180 83 9);
+}
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-meta,
+.hljs-link {
+  color: rgb(109 40 217);
+}
+
+.dark .hljs-comment,
+.dark .hljs-quote {
+  color: rgb(161 161 170);
+}
+.dark .hljs-keyword,
+.dark .hljs-selector-tag,
+.dark .hljs-subst {
+  color: rgb(125 211 252);
+}
+.dark .hljs-string,
+.dark .hljs-title,
+.dark .hljs-section,
+.dark .hljs-attribute,
+.dark .hljs-literal,
+.dark .hljs-template-tag,
+.dark .hljs-template-variable,
+.dark .hljs-type,
+.dark .hljs-addition {
+  color: rgb(110 231 183);
+}
+.dark .hljs-number,
+.dark .hljs-symbol,
+.dark .hljs-bullet {
+  color: rgb(252 211 77);
+}
+.dark .hljs-built_in,
+.dark .hljs-builtin-name,
+.dark .hljs-selector-id,
+.dark .hljs-selector-class,
+.dark .hljs-meta,
+.dark .hljs-link {
+  color: rgb(196 181 253);
+}

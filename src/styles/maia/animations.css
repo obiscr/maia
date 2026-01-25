@@ -1,0 +1,122 @@
+@layer maia.utils {
+  @keyframes maia-heartbeat {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+    12% {
+      transform: scale(1.22);
+    }
+    24% {
+      transform: scale(0.95);
+    }
+    36% {
+      transform: scale(1.18);
+    }
+    50% {
+      transform: scale(1);
+    }
+    62% {
+      transform: scale(1.15);
+    }
+    75% {
+      transform: scale(1);
+    }
+  }
+
+  @keyframes maia-rotate-once {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes maia-fly-out {
+    0% {
+      transform: translate(0, 0);
+      opacity: 1;
+    }
+
+    25% {
+      transform: translate(-8px, 8px);
+      opacity: 1;
+    }
+
+    55% {
+      transform: translate(6px, -6px);
+      opacity: 1;
+    }
+    100% {
+      transform: translate(22px, -16px);
+      opacity: 0.25;
+    }
+  }
+
+  .anim-heartbeat {
+    animation: maia-heartbeat 900ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .anim-rotate-once {
+    animation: maia-rotate-once 900ms ease-in-out;
+  }
+  .anim-fly-out {
+    animation: maia-fly-out 900ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .anim-heartbeat,
+    .anim-rotate-once,
+    .anim-fly-out {
+      animation: none;
+    }
+  }
+
+  .group:hover .hover-anim-heartbeat {
+    animation: maia-heartbeat 900ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .group:hover .hover-anim-rotate-once {
+    animation: maia-rotate-once 700ms ease-in-out;
+  }
+  .group:hover .hover-anim-fly-out {
+    animation: maia-fly-out 650ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+
+  @keyframes maia-bell-swing {
+    0% {
+      transform: rotate(0deg);
+    }
+    15% {
+      transform: rotate(18deg);
+    }
+    30% {
+      transform: rotate(-14deg);
+    }
+    45% {
+      transform: rotate(10deg);
+    }
+    60% {
+      transform: rotate(-6deg);
+    }
+    75% {
+      transform: rotate(3deg);
+    }
+    100% {
+      transform: rotate(0deg);
+    }
+  }
+  .group:hover .hover-anim-bell-swing {
+    animation: maia-bell-swing 900ms cubic-bezier(0.22, 0.61, 0.36, 1);
+    transform-origin: 50% 8%;
+    will-change: transform;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .group:hover .hover-anim-heartbeat,
+    .group:hover .hover-anim-rotate-once,
+    .group:hover .hover-anim-fly-out,
+    .group:hover .hover-anim-bell-swing {
+      animation: none;
+    }
+  }
+}

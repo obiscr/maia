@@ -1,0 +1,54 @@
+{
+  "format": "maia.workflow.export.v1",
+  "exportedAt": "2026-01-24T00:00:00.000Z",
+  "workflow": {
+    "id": "wf-example-01",
+    "name": "Hello World",
+    "description": "Minimal runnable workflow: 1 step, demonstrating basic step script structure and outputsSpec mapping."
+  },
+  "version": null,
+  "flags": {
+    "envIncluded": false
+  },
+  "data": {
+    "meta": {
+      "name": "Hello World",
+      "description": "Minimal runnable workflow: no input parameters, 1 step, fixed output Hello World."
+    },
+    "steps": [
+      {
+        "stepKey": "step_hello",
+        "name": "Output Hello World",
+        "scriptEsm": "export default {\n  async main(env, ctx) {\n    const greeting = \"Hello World\"\n    ctx.log(\"[hello] greeting=\", greeting)\n\n    return {\n      outputs: {\n        greeting,\n      },\n    }\n  },\n}\n",
+        "timeoutMs": 60000,
+        "deps": []
+      }
+    ],
+    "env": {},
+    "dependencies": {},
+    "inputSpec": {
+      "version": 1,
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "examples": [{ "name": "Default Run", "description": "No input parameters required.", "params": {} }],
+      "fileInputs": {
+        "urlFiles": { "enabled": false, "required": false },
+        "uploads": { "enabled": false, "required": false }
+      }
+    },
+    "outputsSpec": {
+      "version": 1,
+      "outputs": {
+        "greeting": {
+          "stepKey": "step_hello",
+          "field": "greeting",
+          "title": "Output",
+          "description": "Fixed output: Hello World"
+        }
+      }
+    }
+  }
+}

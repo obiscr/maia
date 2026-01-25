@@ -1,0 +1,50 @@
+name: maia
+
+services:
+  maia:
+    image: ${MAIA_IMAGE:-obiscr/maia:latest}
+    restart: unless-stopped
+    ports:
+      - "3690:3690"
+    environment:
+      # Next standalone server binds to HOSTNAME; force 0.0.0.0 in containers
+      - HOSTNAME=0.0.0.0
+      - PORT=3690
+      - MAIA_DATA_DIR=/app/maia-data
+      - GLOBAL_RUN_CONCURRENCY=2
+      - PER_RUN_STEP_CONCURRENCY=2
+      - INPUT_DOWNLOAD_CONCURRENCY=2
+      - INPUT_DOWNLOAD_TIMEOUT_MS=60000
+      - INPUT_DOWNLOAD_MAX_BYTES=52428800
+      # Runner (execution plane) - required for container isolation
+      - RUNNER_URL=http://runner:9090
+      - RUNNER_TOKEN=${RUNNER_TOKEN:-dev-runner-token}
+    volumes:
+      - type: ${MAIA_DATA_MOUNT_TYPE:-volume}
+        source: ${MAIA_HOST_DATA_DIR:-maia-data}
+        target: /app/maia-data
+
+  runner:
+    image: ${MAIA_RUNNER_IMAGE:-obiscr/maia-runner:latest}
+    restart: unless-stopped
+    environment:
+      - RUNNER_PORT=9090
+      - RUNNER_TOKEN=${RUNNER_TOKEN:-dev-runner-token}
+      - DOCKER_SOCKET=/var/run/docker.sock
+      - RUNNER_DATA_DIR=/app/maia-data
+      - RUNNER_DATA_BIND=${MAIA_HOST_DATA_DIR:-}
+      - RUNNER_DATA_VOLUME=maia-data
+      - RUNNER_ORPHAN_TTL_MS=1800000
+      # IMPORTANT: This must be a pullable image name (Docker Hub by default).
+      - RUNNER_STEP_IMAGE=${MAIA_SANDBOX_IMAGE:-obiscr/maia-sandbox:latest}
+      - RUNNER_DEPS_IMAGE=${MAIA_SANDBOX_IMAGE:-obiscr/maia-sandbox:latest}
+    volumes:
+      - type: ${MAIA_DATA_MOUNT_TYPE:-volume}
+        source: ${MAIA_HOST_DATA_DIR:-maia-data}
+        target: /app/maia-data
+      - /var/run/docker.sock:/var/run/docker.sock
+    expose:
+      - "9090"
+
+volumes:
+  maia-data:

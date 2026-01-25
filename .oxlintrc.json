@@ -1,0 +1,15 @@
+{
+  "extends": [],
+  "rules": {
+    "no-const-assign": "error",
+    "no-obj-calls": "error",
+    "no-import-assign": "error",
+    "no-new-symbol": "error",
+    "constructor-super": "error",
+    "no-this-before-super": "error",
+    "no-unused-vars": "off",
+    "prefer-const": "off",
+    "no-useless-escape": "off",
+    "no-empty-object-type": "off"
+  }
+}

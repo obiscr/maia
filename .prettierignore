@@ -1,0 +1,23 @@
+# Keep shadcn/ui components untouched (avoid noisy diffs on update)
+src/components/ui/**
+
+# Dependencies / build outputs
+node_modules/**
+.next/**
+dist/**
+out/**
+
+# Prisma / DB artifacts
+prisma/dev.sqlite
+
+# Package manager / caches
+pnpm-lock.yaml
+.turbo/**
+
+# Misc
+coverage/**
+*.min.*
+
+# Documentation
+**/*.md
+

@@ -1,0 +1,1064 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum WorkflowDepsStatus {
+  IDLE
+  INSTALLING
+  READY
+  FAILED
+}
+
+enum RunStatus {
+  PENDING_INPUTS
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
+enum StepStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELED
+  SKIPPED
+}
+
+enum AttemptStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELED
+  INTERRUPTED
+}
+
+enum LogLevel {
+  INFO
+  WARN
+  ERROR
+  DEBUG
+}
+
+enum LogSource {
+  SYSTEM
+  STDOUT
+  STDERR
+  INSTALL
+}
+
+enum ScheduleKind {
+  CRON
+  INTERVAL
+}
+
+enum ScheduleMisfirePolicy {
+  /// If a fire time is missed while the system is down, skip it and continue from nextRunAt.
+  SKIP
+  /// If one (or more) fires were missed, trigger once immediately and then continue.
+  FIRE_ONCE
+  /// Attempt to catch up missed fires up to catchUpLimit (null => default limit, currently 100).
+  CATCH_UP
+}
+
+enum ScheduleOverlapPolicy {
+  /// If a previous job for this schedule is still running (or queued), skip this fire.
+  SKIP
+  /// Allow overlap (creates another job even if prior isn't done). Use with concurrency limits.
+  ALLOW
+}
+
+enum JobRunStatus {
+  QUEUED
+  PAUSED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
+enum BatchStatus {
+  CREATED
+  PAUSED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
+enum JobRunAttemptStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELED
+  ABANDONED
+}
+
+enum OperationStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum AgentRunStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
+enum AgentRunType {
+  /// Full UI: orchestrate/generate a workflow draft (plan + draft steps + validate + (optional) input/outputs spec).
+  WORKFLOW_ORCHESTRATE
+  /// No/weak UI: generate inputSpec for an existing workflow (may auto-apply).
+  WORKFLOW_INPUTSPEC
+  /// No/weak UI: generate outputsSpec for an existing workflow (may auto-apply).
+  WORKFLOW_OUTPUTSSPEC
+  /// No/weak UI: generate a CRON expression (future use).
+  CRON_EXPRESSION
+}
+
+enum UserRole {
+  ADMIN
+  MEMBER
+}
+
+enum AuthChallengeKind {
+  /// TOTP verification required to finish signing in (password already verified).
+  SIGNIN_TOTP
+}
+
+enum InputFileSource {
+  UPLOAD
+  URL
+}
+
+enum InputFileStatus {
+  /// Waiting for URL download (or async preparation) to complete.
+  FETCHING
+  /// Content is available (blobId is set).
+  READY
+  /// Preparation failed (error is set).
+  FAILED
+}
+
+enum RegistrationMode {
+  /// Default: only admins can create users (no public sign-up).
+  DISABLED
+  /// Anyone can sign up.
+  OPEN
+  /// Future: sign-up requires an invite.
+  INVITE_ONLY
+}
+
+/// Single-row installation metadata for the whole instance.
+/// This is the authoritative "is the system initialized?" flag.
+model Installation {
+  /// Always "installation" (enforces single-row semantics in SQLite).
+  id String @id
+
+  installedAt DateTime?
+  instanceId  String   @unique
+
+  registrationMode RegistrationMode @default(DISABLED)
+
+  /// Operator-friendly fingerprint of SETTINGS_ENCRYPTION_KEY (non-secret).
+  encryptionKeyFingerprint String?
+
+  /// Optional SMTP config for email notifications (password is stored in SystemSecret).
+  smtpEnabled  Boolean @default(false)
+  smtpHost     String?
+  smtpPort     Int?
+  smtpSecure   Boolean @default(false)
+  smtpUsername String?
+  smtpFromEmail String?
+  smtpFromName  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// System-wide secrets store (sensitive). Values are encrypted at rest in the application layer.
+model SystemSecret {
+  id String @id
+
+  /// Stable key name (e.g. "smtp.password")
+  key String @unique
+
+  /// Crypto metadata for rotation / compatibility.
+  algorithm  String
+  keyVersion Int @default(1)
+
+  /// AES-GCM payload (base64 strings).
+  ivBase64         String
+  ciphertextBase64 String
+  authTagBase64    String
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  lastUsedAt DateTime?
+
+  @@index([updatedAt])
+}
+
+model User {
+  id           String   @id
+  publicId     String   @unique
+  publicNumber Int
+
+  email        String   @unique
+  name         String?
+  role         UserRole @default(MEMBER)
+  isDisabled   Boolean  @default(false)
+
+  /// Password hash (scrypt). Never store plaintext passwords.
+  passwordHash String
+
+  /// TOTP (RFC 6238) 2FA
+  totpEnabled    Boolean  @default(false)
+  totpSecret     String?
+  totpVerifiedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions Session[]
+  authChallenges AuthChallenge[]
+  passwordResetTokens PasswordResetToken[]
+  settings UserSetting[]
+  secrets  UserSecret[]
+
+  workflowsOwned     Workflow[] @relation("WorkflowOwner")
+  workflowsCreated   Workflow[] @relation("WorkflowCreatedBy")
+  workflowsUpdated   Workflow[] @relation("WorkflowUpdatedBy")
+  workflowsTriggered Workflow[] @relation("WorkflowTriggeredBy")
+
+  workflowVersionsOwned     WorkflowVersion[] @relation("WorkflowVersionOwner")
+  workflowVersionsCreated   WorkflowVersion[] @relation("WorkflowVersionCreatedBy")
+  workflowVersionsUpdated   WorkflowVersion[] @relation("WorkflowVersionUpdatedBy")
+  workflowVersionsTriggered WorkflowVersion[] @relation("WorkflowVersionTriggeredBy")
+
+  runsOwned     Run[] @relation("RunOwner")
+  runsCreated   Run[] @relation("RunCreatedBy")
+  runsUpdated   Run[] @relation("RunUpdatedBy")
+  runsTriggered Run[] @relation("RunTriggeredBy")
+
+  jobRunsOwned     JobRun[] @relation("JobRunOwner")
+  jobRunsCreated   JobRun[] @relation("JobRunCreatedBy")
+  jobRunsUpdated   JobRun[] @relation("JobRunUpdatedBy")
+  jobRunsTriggered JobRun[] @relation("JobRunTriggeredBy")
+  jobsRequested    JobRun[] @relation("JobRunRequestedBy")
+
+  schedulesOwned     Schedule[] @relation("ScheduleOwner")
+  schedulesCreated   Schedule[] @relation("ScheduleCreatedBy")
+  schedulesUpdated   Schedule[] @relation("ScheduleUpdatedBy")
+  schedulesTriggered Schedule[] @relation("ScheduleTriggeredBy")
+
+  batchesOwned     Batch[] @relation("BatchOwner")
+  batchesCreated   Batch[] @relation("BatchCreatedBy")
+  batchesUpdated   Batch[] @relation("BatchUpdatedBy")
+  batchesTriggered Batch[] @relation("BatchTriggeredBy")
+
+  agentRunsOwned     AgentRun[] @relation("AgentRunOwner")
+  agentRunsCreated   AgentRun[] @relation("AgentRunCreatedBy")
+  agentRunsUpdated   AgentRun[] @relation("AgentRunUpdatedBy")
+  agentRunsTriggered AgentRun[] @relation("AgentRunTriggeredBy")
+
+  @@index([updatedAt])
+}
+
+/// Per-user settings store (non-secret). Values are JSON-encoded strings.
+/// Keep this flexible for long-tail UI/config options; use Zod schemas in code to validate per-key shape.
+model UserSetting {
+  id        String   @id
+
+  userId    String
+  key       String
+  /// JSON-encoded value (string). Stored as string for SQLite compatibility; validate in application layer.
+  valueJson String   @default("{}")
+  /// Optional schema/version for per-key migrations.
+  version   Int      @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId, updatedAt])
+}
+
+/// Per-user secrets store (sensitive). Values are encrypted at rest in the application layer.
+model UserSecret {
+  id        String   @id
+
+  userId    String
+  /// Stable key name (e.g. "agent.apiKey", "github.token")
+  key       String
+
+  /// Crypto metadata for rotation / compatibility.
+  algorithm  String
+  keyVersion Int      @default(1)
+
+  /// AES-GCM payload (base64 strings).
+  ivBase64         String
+  ciphertextBase64 String
+  authTagBase64    String
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  lastUsedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId, updatedAt])
+}
+
+model Session {
+  id String @id
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// SHA-256 of the session token (the token itself lives only in the HttpOnly cookie).
+  tokenHash String @unique
+
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime?
+  expiresAt  DateTime
+  revokedAt  DateTime?
+
+  ip        String?
+  userAgent String?
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+}
+
+model AuthChallenge {
+  id String @id
+
+  /// SHA-256 of the challenge token (the token itself is returned to the client once).
+  tokenHash String @unique
+
+  kind AuthChallengeKind
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  ip        String?
+  userAgent String?
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id String @id
+
+  /// SHA-256 of the reset token (the token itself is sent via email once).
+  tokenHash String @unique
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  ip        String?
+  userAgent String?
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+}
+
+model Workflow {
+  id            String            @id
+  publicId      String            @unique
+  publicNumber  Int
+  name          String
+  description   String?
+  ownerUserId     String?
+  createdByUserId String?
+  updatedByUserId String?
+  triggeredByUserId String?
+  /// NPM dependencies as a JSON object string, e.g. {"pkg":"^1.2.3"}.
+  dependencies  String
+  /// Workflow-level environment variables as a JSON object string, e.g. {"KEY":"value"}.
+  envJson       String            @default("{}")
+  /// Workflow input contract (JSON Schema + file inputs + examples) as JSON string.
+  inputSpec     String?
+  /// Workflow outputs contract v1 (named run outputs) as JSON string.
+  outputsSpec   String?
+  /// Hash of `dependencies` (used to detect dependency changes).
+  depsHash      String
+  depsStatus    WorkflowDepsStatus @default(IDLE)
+  depsErrorCode     String?
+  depsErrorMessage  String?
+  /// Dependency error details as JSON string (optional).
+  depsErrorMetaJson String?
+  depsErrorAt       DateTime?
+  depsUpdatedAt DateTime          @default(now())
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  ownerUser     User? @relation("WorkflowOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  createdByUser User? @relation("WorkflowCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedByUser User? @relation("WorkflowUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  triggeredByUser User? @relation("WorkflowTriggeredBy", fields: [triggeredByUserId], references: [id], onDelete: SetNull)
+
+  steps         WorkflowStep[]
+  deps          WorkflowStepDep[]
+  versions      WorkflowVersion[]
+  runs          Run[]
+  agentRuns     AgentRun[]
+  schedules     Schedule[]
+  batches       Batch[]
+  jobRuns       JobRun[]
+
+  @@index([updatedAt])
+  @@index([ownerUserId, updatedAt])
+  @@index([triggeredByUserId, updatedAt])
+}
+
+model WorkflowVersion {
+  id          String   @id
+  workflowId  String
+  version     Int
+  /// Complete immutable snapshot of workflow definition at this version (JSON string).
+  snapshotJson String
+  /// Optional human note for this version (not part of the immutable snapshot).
+  description String?
+  createdAt   DateTime @default(now())
+
+  ownerUserId       String?
+  createdByUserId String?
+  updatedByUserId   String?
+  triggeredByUserId String?
+
+  ownerUser       User? @relation("WorkflowVersionOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  createdByUser   User? @relation("WorkflowVersionCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedByUser   User? @relation("WorkflowVersionUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  triggeredByUser User? @relation("WorkflowVersionTriggeredBy", fields: [triggeredByUserId], references: [id], onDelete: SetNull)
+
+  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  runs        Run[]
+  pinnedBySchedules Schedule[] @relation("SchedulePinnedWorkflowVersion")
+  pinnedByBatches   Batch[]    @relation("BatchPinnedWorkflowVersion")
+  pinnedByJobRuns   JobRun[]   @relation("JobRunPinnedWorkflowVersion")
+
+  @@unique([workflowId, version])
+  @@index([workflowId, createdAt])
+  @@index([ownerUserId, createdAt])
+  @@index([createdByUserId, createdAt])
+  @@index([updatedByUserId, createdAt])
+  @@index([triggeredByUserId, createdAt])
+}
+
+model WorkflowStep {
+  id          String   @id
+  workflowId  String
+  /// Stable key/name within the workflow.
+  key         String
+  name        String
+  description String?
+  /// CommonJS script source.
+  scriptEsm   String
+  timeoutMs   Int      @default(600000)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, key])
+  @@index([workflowId])
+}
+
+model WorkflowStepDep {
+  id              String   @id
+  workflowId      String
+  stepId          String
+  dependsOnStepId String
+  createdAt       DateTime @default(now())
+
+  workflow        Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, stepId, dependsOnStepId])
+  @@index([workflowId, stepId])
+}
+
+model Run {
+  id            String    @id
+  publicId      String    @unique
+  publicNumber  Int
+  workflowId    String
+  workflowVersionId String?
+  workflowVersionNumber   Int?
+  workflowName  String
+  /// Workflow snapshot (steps + deps + depsHash) as JSON string.
+  workflowSnap  String
+  status        RunStatus @default(RUNNING)
+  cancelRequestedAt DateTime?
+  cancelRequestedReason String?
+  /// Fork provenance (for UI rerun/restart). When present, this run was derived from another run.
+  forkedFromRunId String?
+  forkKind        String?
+  forkStepKey     String?
+  failureCode   String?
+  failureMessage String?
+  /// Failure details as JSON string (optional).
+  failureMetaJson String?
+  failureAt     DateTime?
+  /// Initial input payload (JSON string). Large inputs should live in files/artifacts.
+  initialInput  String
+  ownerUserId       String?
+  createdByUserId   String?
+  updatedByUserId   String?
+  triggeredByUserId String?
+  triggerKind       String?
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  ownerUser       User? @relation("RunOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  createdByUser   User? @relation("RunCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedByUser   User? @relation("RunUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  triggeredByUser User? @relation("RunTriggeredBy", fields: [triggeredByUserId], references: [id], onDelete: SetNull)
+  workflow      Workflow  @relation(fields: [workflowId], references: [id], onDelete: Restrict)
+  workflowVersion WorkflowVersion? @relation(fields: [workflowVersionId], references: [id], onDelete: SetNull)
+  jobRun        JobRun?   @relation("JobRunRun")
+  jobRunAttempts JobRunAttempt[] @relation("JobRunAttemptRun")
+  steps         RunStep[]
+  attempts      Attempt[]
+  artifacts     Artifact[]
+  logEvents     LogEvent[]
+
+  @@index([workflowId, createdAt])
+  @@index([ownerUserId, createdAt])
+  @@index([createdByUserId, createdAt])
+  @@index([updatedByUserId, updatedAt])
+  @@index([triggeredByUserId, createdAt])
+  @@index([workflowVersionId])
+  @@index([status, createdAt])
+  @@index([cancelRequestedAt])
+  @@index([forkedFromRunId])
+}
+
+model RunStep {
+  id         String     @id
+  runId      String
+  stepKey    String
+  name       String
+  status     StepStatus @default(PENDING)
+  /// Upstream step keys as JSON array string.
+  depsJson   String
+  /// Snapshot copy of the step script (CommonJS source).
+  scriptEsm  String
+  timeoutMs  Int        @default(600000)
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  run        Run        @relation(fields: [runId], references: [id], onDelete: Cascade)
+  attempts   Attempt[]
+
+  @@unique([runId, stepKey])
+  @@index([runId, status])
+}
+
+model Attempt {
+  id          String        @id
+  runId       String
+  stepKey     String
+  attemptNo   Int
+  status      AttemptStatus @default(RUNNING)
+  exitCode    Int?
+  errorCode    String?
+  errorMessage String?
+  /// Error details as JSON string (optional).
+  errorMetaJson String?
+  errorAt      DateTime?
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  run         Run           @relation(fields: [runId], references: [id], onDelete: Cascade)
+  runStep     RunStep       @relation(fields: [runId, stepKey], references: [runId, stepKey], onDelete: Cascade)
+  artifacts   Artifact[]
+
+  @@unique([runId, stepKey, attemptNo])
+  @@index([runId, status])
+  @@index([runId, stepKey, status])
+}
+
+model Artifact {
+  id          String   @id
+  runId       String
+  stepKey     String
+  attemptNo   Int
+  /// Artifact kind (e.g. "input", "output", "file").
+  kind        String
+  /// Path relative to project root or absolute.
+  path        String
+  sizeBytes   Int?
+  sha256      String?
+  summary     String?
+  createdAt   DateTime @default(now())
+
+  run         Run      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  attempt     Attempt  @relation(fields: [runId, stepKey, attemptNo], references: [runId, stepKey, attemptNo], onDelete: Cascade)
+
+  @@index([runId, stepKey])
+  @@index([runId, createdAt])
+}
+
+model LogEvent {
+  id         Int      @id @default(autoincrement())
+  runId      String?
+  stepKey    String?
+  attemptNo  Int?
+  level      LogLevel @default(INFO)
+  source     LogSource @default(SYSTEM)
+  message    String
+  createdAt  DateTime @default(now())
+
+  run        Run?     @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, id])
+  @@index([createdAt])
+}
+
+model Schedule {
+  id          String   @id
+  publicId    String   @unique
+  publicNumber Int
+  name        String?
+  enabled     Boolean  @default(true)
+
+  workflowId  String
+  /// Version selection strategy. If pinnedWorkflowVersionId is set, it must exist;
+  /// otherwise the latest version is used at fire time.
+  pinnedWorkflowVersionId String?
+
+  kind        ScheduleKind
+  cron        String?
+  timezone    String   @default("UTC")
+  intervalMs  Int?
+
+  misfirePolicy ScheduleMisfirePolicy @default(FIRE_ONCE)
+  catchUpLimit  Int?
+  overlapPolicy ScheduleOverlapPolicy @default(SKIP)
+
+  /// Template input payload for the JobRun created by this schedule (JSON string).
+  inputJson   String   @default("{}")
+
+  /// System-managed URL file list for schedule fires (JSON string; array of {id,url,name}).
+  /// Stored separately because `inputJson.files` is reserved for system use.
+  urlFilesJson String   @default("[]")
+
+  nextRunAt   DateTime?
+  lastRunAt   DateTime?
+  lastFireAt         DateTime?
+  lastFireJobRunId   String?
+  lastFireErrorCode  String?
+  /// Last fire error details as JSON string (optional).
+  lastFireErrorMetaJson String?
+
+  ownerUserId     String?
+  createdByUserId String?
+  updatedByUserId String?
+  triggeredByUserId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  ownerUser     User? @relation("ScheduleOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  createdByUser User? @relation("ScheduleCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedByUser User? @relation("ScheduleUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  triggeredByUser User? @relation("ScheduleTriggeredBy", fields: [triggeredByUserId], references: [id], onDelete: SetNull)
+  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Restrict)
+  pinnedWorkflowVersion WorkflowVersion? @relation("SchedulePinnedWorkflowVersion", fields: [pinnedWorkflowVersionId], references: [id], onDelete: Restrict)
+  jobRuns     JobRun[]
+
+  @@index([enabled, nextRunAt])
+  @@index([workflowId, createdAt])
+  @@index([ownerUserId, createdAt])
+  @@index([createdByUserId, createdAt])
+  @@index([updatedByUserId, updatedAt])
+  @@index([triggeredByUserId, createdAt])
+}
+
+model Batch {
+  id          String      @id
+  publicId    String      @unique
+  publicNumber Int
+  name        String?
+  status      BatchStatus @default(CREATED)
+
+  workflowId  String
+  pinnedWorkflowVersionId String?
+  /// Optional per-batch concurrency cap (null => use global engine concurrency only).
+  concurrencyLimit Int?
+  /// Optional automatic ramp-up for effective per-batch concurrency when concurrencyLimit is null.
+  /// - rampUpSeconds: ramp window duration from 1 -> autoMaxConcurrency
+  /// - autoMaxConcurrency: max cap when ramp completes
+  rampUpSeconds Int?
+  autoMaxConcurrency Int?
+  /// Fail-fast: when any job fails, request cancellation for remaining non-terminal jobs.
+  /// Locked after fanout.
+  failFast Boolean @default(false)
+  /// Failure threshold: if set, once failed jobs >= maxFailures, request cancellation for remaining non-terminal jobs.
+  /// Locked after fanout.
+  maxFailures Int?
+
+  /// Opaque batch provenance (e.g. seed input, imported file, query) as JSON string.
+  /// Kept generic to avoid schema churn.
+  sourceJson  String      @default("{}")
+
+  /// System-managed URL file list shared across all items in this batch (JSON string; array of {id,url,name}).
+  /// Stored separately because item `inputJson.files` is reserved for system use.
+  urlFilesJson String     @default("[]")
+
+  /// Fanout seed JSON (the exact input used to expand/enqueue jobs for this batch).
+  /// Null until the first fanout/enqueue happens.
+  fanoutSeedJson String?
+
+  failureCode     String?
+  failureMessage  String?
+  /// Failure details as JSON string (optional).
+  failureMetaJson String?
+  failureAt       DateTime?
+
+  ownerUserId     String?
+  createdByUserId String?
+  updatedByUserId String?
+  triggeredByUserId String?
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  ownerUser     User? @relation("BatchOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  createdByUser User? @relation("BatchCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedByUser User? @relation("BatchUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  triggeredByUser User? @relation("BatchTriggeredBy", fields: [triggeredByUserId], references: [id], onDelete: SetNull)
+  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Restrict)
+  pinnedWorkflowVersion WorkflowVersion? @relation("BatchPinnedWorkflowVersion", fields: [pinnedWorkflowVersionId], references: [id], onDelete: Restrict)
+  jobRuns     JobRun[]
+
+  @@index([status, createdAt])
+  @@index([workflowId, createdAt])
+  @@index([ownerUserId, createdAt])
+  @@index([createdByUserId, createdAt])
+  @@index([updatedByUserId, updatedAt])
+  @@index([triggeredByUserId, createdAt])
+}
+
+model JobRun {
+  id          String      @id
+  publicId    String      @unique
+  publicNumber Int
+  status      JobRunStatus @default(QUEUED)
+
+  /// Cancellation is request-based (request -> engine enforces).
+  cancelRequestedAt DateTime?
+  cancelRequestedReason String?
+
+  workflowId  String
+  pinnedWorkflowVersionId String?
+
+  scheduleId  String?
+  batchId     String?
+
+  /// For scheduled jobs: intended fire time (used for idempotency).
+  scheduledFor DateTime?
+
+  /// Input payload for creating the Run (JSON string). Keep it small; large inputs should live in files/artifacts.
+  inputJson   String      @default("{}")
+
+  ownerUserId       String?
+  createdByUserId   String?
+  updatedByUserId   String?
+  triggeredByUserId String?
+  requestedByUserId String?
+
+  /// Claim/lease (SQLite-friendly): worker claims a job by transitioning status to RUNNING.
+  claimedBy   String?
+  claimedAt   DateTime?
+  leaseExpiresAt DateTime?
+
+  attemptCount Int        @default(0)
+  maxAttempts  Int        @default(3)
+  nextAttemptAt DateTime?
+  lastErrorCode    String?
+  lastErrorMessage String?
+  /// Last error details as JSON string (optional).
+  lastErrorMetaJson String?
+  lastErrorAt      DateTime?
+
+  runId       String?
+  run         Run?        @relation("JobRunRun", fields: [runId], references: [id], onDelete: SetNull)
+
+  ownerUser       User? @relation("JobRunOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  createdByUser   User? @relation("JobRunCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedByUser   User? @relation("JobRunUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  triggeredByUser User? @relation("JobRunTriggeredBy", fields: [triggeredByUserId], references: [id], onDelete: SetNull)
+  requestedByUser User? @relation("JobRunRequestedBy", fields: [requestedByUserId], references: [id], onDelete: SetNull)
+  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Restrict)
+  pinnedWorkflowVersion WorkflowVersion? @relation("JobRunPinnedWorkflowVersion", fields: [pinnedWorkflowVersionId], references: [id], onDelete: Restrict)
+  schedule    Schedule? @relation(fields: [scheduleId], references: [id], onDelete: Restrict)
+  batch       Batch?    @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  attempts    JobRunAttempt[]
+  inputFiles  InputFile[]
+
+  queuedAt    DateTime   @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  /// Ensure a schedule can't create duplicate jobs for the same fire time.
+  @@unique([scheduleId, scheduledFor])
+  @@unique([runId])
+  @@index([status, nextAttemptAt])
+  @@index([workflowId, queuedAt])
+  @@index([ownerUserId, queuedAt])
+  @@index([createdByUserId, queuedAt])
+  @@index([updatedByUserId, updatedAt])
+  @@index([triggeredByUserId, queuedAt])
+  @@index([requestedByUserId, queuedAt])
+  @@index([scheduleId, queuedAt])
+  @@index([batchId, queuedAt])
+  @@index([cancelRequestedAt])
+}
+
+model JobRunAttempt {
+  id         String             @id
+  jobRunId   String
+  attemptNo  Int
+  status     JobRunAttemptStatus @default(RUNNING)
+  runId      String?
+  errorCode     String?
+  errorMessage  String?
+  /// Error details as JSON string (optional).
+  errorMetaJson String?
+  errorAt       DateTime?
+  startedAt  DateTime           @default(now())
+  finishedAt DateTime?
+
+  jobRun     JobRun             @relation(fields: [jobRunId], references: [id], onDelete: Cascade)
+  run        Run?               @relation("JobRunAttemptRun", fields: [runId], references: [id], onDelete: SetNull)
+
+  @@unique([jobRunId, attemptNo])
+  @@index([jobRunId, startedAt])
+  @@index([runId])
+}
+
+/// Content-addressed blob store for user-provided inputs (uploads + URL downloads).
+/// Backed by the instance local filesystem (self-host friendly).
+model InputBlob {
+  id          String   @id
+  /// SHA-256 hex digest of the content (unique).
+  sha256      String   @unique
+  sizeBytes   Int
+  mime        String?
+  /// Storage path relative to instance data directory (e.g. "blobs/ab/cd/<sha256>").
+  storagePath String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  inputFiles  InputFile[]
+
+  @@index([createdAt])
+}
+
+/// Input file is a first-class entity (SSOT for input status and metadata).
+/// A JobRun owns a set of input files; Runs materialize them under runDir/uploads for step scripts.
+model InputFile {
+  id        String         @id
+  jobRunId  String
+  source    InputFileSource
+  status    InputFileStatus @default(READY)
+  name      String
+  /// For URL inputs only.
+  url       String?
+  /// Error message when status=FAILED.
+  error     String?
+
+  blobId    String?
+  sha256    String?
+  sizeBytes Int?
+  mime      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  jobRun    JobRun     @relation(fields: [jobRunId], references: [id], onDelete: Cascade)
+  blob      InputBlob? @relation(fields: [blobId], references: [id], onDelete: SetNull)
+
+  @@index([jobRunId, createdAt])
+  @@index([jobRunId, status])
+  @@index([sha256])
+  @@index([source, status])
+}
+
+/// Generic topic-based event store for realtime UI updates (SSE/WebSocket).
+/// - Supports replay + cursor (Last-Event-ID) for reliable reconnects.
+/// - Uses an opaque topic string (e.g. "batch:<id>", "job:<id>") to keep it schema-stable.
+model StreamEvent {
+  id        Int      @id @default(autoincrement())
+  topic     String
+  event     String
+  dataJson  String
+  createdAt DateTime @default(now())
+
+  @@index([topic, id])
+  @@index([createdAt])
+}
+
+/// Agent runs are first-class, resumable, replayable AI tasks.
+///
+/// Design goals:
+/// - Routeable via publicId (e.g. `/agent/<publicId>`)
+/// - Streaming via StreamEvent topic `agentRun:<publicId>` (replay + cursor)
+/// - SnapshotJson provides fast reload + supports weak/no-UI "apply" flows
+/// - Operation links provide consistent error surfacing + audit/history
+model AgentRun {
+  id           String        @id
+  publicId     String        @unique
+  publicNumber Int
+
+  type         AgentRunType
+  status       AgentRunStatus @default(QUEUED)
+
+  /// Optional binding to an existing workflow (edit/augment flows).
+  workflowId   String?
+  workflow     Workflow?     @relation(fields: [workflowId], references: [publicId], onDelete: Restrict)
+
+  ownerUserId       String?
+  createdByUserId String?
+  updatedByUserId   String?
+  triggeredByUserId String?
+
+  ownerUser       User? @relation("AgentRunOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  createdByUser   User? @relation("AgentRunCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedByUser   User? @relation("AgentRunUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  triggeredByUser User? @relation("AgentRunTriggeredBy", fields: [triggeredByUserId], references: [id], onDelete: SetNull)
+
+  /// The operation that created/owns this run (used for global history + error surfacing).
+  operationId  String?
+  operation    Operation?    @relation(fields: [operationId], references: [id], onDelete: SetNull)
+
+  /// Normalized request payload (JSON string). Keep it small; large artifacts should live elsewhere.
+  inputJson    String        @default("{}")
+
+  /// Materialized UI state / result snapshot (JSON string).
+  snapshotJson String        @default("{}")
+
+  /// Best-effort pointer to the last StreamEvent id written for this run's topic.
+  lastEventId  Int?
+
+  /// Failure details (mirrors Operation error fields for local reads).
+  errorCode     String?
+  errorMessage  String?
+  errorMetaJson String?
+  errorAt       DateTime?
+
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([status, createdAt])
+  @@index([createdByUserId, createdAt])
+  @@index([ownerUserId, createdAt])
+  @@index([updatedByUserId, updatedAt])
+  @@index([triggeredByUserId, createdAt])
+  @@index([workflowId, createdAt])
+  @@index([operationId])
+}
+
+/// Platform API: operations are first-class resources for asynchronous/side-effecting commands.
+/// Pair with IdempotencyRecord so clients can safely retry POST requests.
+model Operation {
+  id                  String          @id
+  publicId            String          @unique
+  publicNumber        Int
+  status              OperationStatus @default(PENDING)
+  action              String
+  scope               String?
+  targetType          String?
+  targetId            String?
+
+  actor               String?
+  tenantId            String?
+  requestId           String?
+
+  /// Progress (best-effort; for long-running operations).
+  progressCurrent     Int             @default(0)
+  progressTotal       Int?
+  /// i18n message key for progress (localized by client).
+  progressMessageKey        String?
+  /// JSON-encoded params object for progress message interpolation (optional).
+  progressMessageParamsJson String?
+
+  /// Optional idempotency metadata (primary persistence is IdempotencyRecord).
+  idempotencyKey      String?
+  requestHash         String?
+
+  /// Optional stored HTTP response for replay / polling.
+  responseStatus      Int?
+  responseJson        String?
+  responseHeadersJson String?
+  errorCode           String?
+  errorMessage        String?
+  errorJson           String?
+  completedAt         DateTime?
+
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  agentRuns           AgentRun[]
+  idempotencyRecords  IdempotencyRecord[]
+
+  @@index([status, createdAt])
+  @@index([targetType, targetId])
+  @@index([requestId])
+  @@index([tenantId, createdAt])
+}
+
+model IdempotencyRecord {
+  id          String    @id
+  scope       String
+  key         String
+  requestHash String
+  operationId String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  operation   Operation @relation(fields: [operationId], references: [id], onDelete: Cascade)
+
+  @@unique([scope, key])
+  @@index([operationId])
+}
+
+/// Atomic counters for generating human-friendly public IDs (per resource kind).
+model PublicIdCounter {
+  key        String @id
+  nextNumber Int
+}

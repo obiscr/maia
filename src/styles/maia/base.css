@@ -1,0 +1,33 @@
+@layer maia.reset {
+  html {
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    background: var(--maia-color-background);
+    color: var(--maia-color-foreground);
+    font-family: var(--maia-font-sans);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  a {
+    @apply text-foreground no-underline;
+  }
+  a:hover {
+    text-decoration: none;
+  }
+  a:visited {
+    @apply text-foreground;
+  }
+}

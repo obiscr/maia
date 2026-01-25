@@ -1,0 +1,438 @@
+@layer maia.content {
+  .maia-mdx {
+    /* Important: this component is often rendered inside flex layouts (chat bubbles, panels).
+       Ensure long unbroken content (like code) doesn't force the flex item to expand the page. */
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+
+    --maia-text-h1: 2.1875rem;
+    --maia-text-h2: 1.8125rem;
+    --maia-text-h3: 1.5rem;
+    --maia-text-h4: 1.25rem;
+    --maia-text-h5: 1.125rem;
+    --maia-text-h6: 1rem;
+    --maia-line: 1.75;
+    --maia-line-headings: 1.2;
+
+    --maia-scroll-mt: 96px;
+
+    font-family: inherit;
+    font-size: 14px;
+    line-height: var(--maia-line);
+    color: var(--maia-color-foreground);
+
+    --maia-sl-color-gray-1: #23262f;
+    --maia-sl-color-gray-2: #353841;
+    --maia-sl-color-gray-3: #555962;
+    --maia-sl-color-gray-4: #888c96;
+    --maia-sl-color-gray-5: #c1c3c8;
+    --maia-sl-color-gray-6: #edeef3;
+    --maia-sl-color-gray-7: #f6f7f9;
+    --maia-sl-color-accent: #3d50f5;
+    --maia-sl-color-accent-low: #ebedff;
+
+    --maia-sl-hue-orange: 41;
+    --maia-sl-color-orange-high: #73520d;
+    --maia-sl-color-orange: #f5bb3d;
+    --maia-sl-color-orange-low: #fceac5;
+
+    --maia-sl-color-blue: #3369ff;
+    --maia-sl-color-blue-low: #ebf0ff;
+    --maia-sl-color-purple: #b55ae2;
+    --maia-sl-color-purple-low: #f8ebff;
+    --maia-sl-shadow-sm: 0px 1px 1px #0000000f, 0px 2px 1px #0000000f;
+  }
+
+  @media (min-width: 50em) {
+    .maia-mdx {
+      --maia-text-h1: 2.625rem;
+      --maia-text-h2: 2.1875rem;
+      --maia-text-h3: 1.8125rem;
+      --maia-text-h4: 1.5rem;
+    }
+  }
+
+  .maia-mdx > :not(a, strong, em, del, span, input, code, br) + :not(a, strong, em, del, span, input, code, br) {
+    margin-top: 1rem;
+  }
+  .maia-mdx :not(h1, h2, h3, h4, h5, h6) + :is(h1, h2, h3, h4, h5, h6) {
+    margin-top: 1.5em;
+  }
+
+  .maia-mdx p,
+  .maia-mdx li {
+    opacity: 0.92;
+  }
+
+  .maia-mdx [data-maia-active="true"] {
+    outline: 2px solid color-mix(in oklab, var(--maia-color-primary) 65%, transparent);
+    outline-offset: 3px;
+    border-radius: 6px;
+  }
+
+  .maia-mdx :is(ol, ul) {
+    list-style-position: outside;
+    padding-inline-start: 1.5rem;
+  }
+  .maia-mdx ol {
+    list-style-type: decimal;
+  }
+  .maia-mdx ul {
+    list-style-type: disc;
+  }
+
+  .maia-mdx :is(h1, h2, h3, h4, h5, h6) {
+    color: var(--maia-color-foreground);
+    line-height: var(--maia-line-headings);
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    margin-bottom: 0.65rem;
+    scroll-margin-top: var(--maia-scroll-mt);
+  }
+
+  .maia-mdx #overview {
+    scroll-margin-top: var(--maia-scroll-mt);
+  }
+
+  @media (max-width: 959px) {
+    .maia-mdx {
+      --maia-scroll-mt: 140px;
+    }
+  }
+  .maia-mdx h1 {
+    font-size: var(--maia-text-h1);
+  }
+  .maia-mdx h2 {
+    font-size: var(--maia-text-h2);
+  }
+  .maia-mdx h3 {
+    font-size: var(--maia-text-h3);
+  }
+  .maia-mdx h4 {
+    font-size: var(--maia-text-h4);
+  }
+  .maia-mdx h5 {
+    font-size: var(--maia-text-h5);
+  }
+  .maia-mdx h6 {
+    font-size: var(--maia-text-h6);
+  }
+
+  .maia-mdx a {
+    color: var(--maia-color-primary);
+    text-decoration: none;
+  }
+
+  .maia-mdx a.maia-card {
+    color: inherit;
+  }
+  .maia-mdx a.maia-card:visited {
+    color: inherit;
+  }
+
+  .maia-mdx a:not(.anchor):not(.maia-card):hover {
+    text-decoration: underline;
+  }
+
+  .maia-mdx :is(h1, h2, h3, h4, h5, h6) > a.anchor {
+    --maia-anchor-size: 0.8275em;
+    --maia-anchor-gap: 0.25em;
+    --maia-anchor-space: calc(var(--maia-anchor-size) + var(--maia-anchor-gap));
+    color: inherit;
+    text-decoration: none;
+    display: inline;
+    position: relative;
+    padding-inline-end: var(--maia-anchor-space);
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .maia-mdx :is(h1, h2, h3, h4, h5, h6) > a.anchor::after {
+    content: "";
+    position: absolute;
+    inset-inline-end: 0;
+    inset-block-start: 0;
+    width: var(--maia-anchor-size);
+    height: var(--maia-anchor-size);
+
+    background-color: var(--maia-sl-color-gray-4, color-mix(in oklab, var(--maia-color-foreground) 55%, transparent));
+    opacity: 0.8;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-position: center;
+    mask-position: center;
+    display: inline-block;
+    vertical-align: top;
+    transform: translateY(calc((var(--maia-line-headings) * 1em - var(--maia-anchor-size)) / 2));
+
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 0 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 1 0-1.42-1.42Zm8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 0 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 1 0 1.42 1.42l3.88-3.89a4.49 4.49 0 0 0 0-6.33ZM8.83 15.17a1 1 0 0 0 1.1.22 1 1 0 0 0 .32-.22l4.92-4.92a1 1 0 0 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42Z'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 0 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 1 0-1.42-1.42Zm8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 0 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 1 0 1.42 1.42l3.88-3.89a4.49 4.49 0 0 0 0-6.33ZM8.83 15.17a1 1 0 0 0 1.1.22 1 1 0 0 0 .32-.22l4.92-4.92a1 1 0 0 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42Z'/%3E%3C/svg%3E");
+  }
+
+  .dark .maia-mdx {
+    --maia-sl-color-gray-1: #edeef3;
+    --maia-sl-color-gray-2: #c1c3c8;
+    --maia-sl-color-gray-3: #888c96;
+    --maia-sl-color-gray-4: #555962;
+    --maia-sl-color-gray-5: #353841;
+    --maia-sl-color-gray-6: #23262f;
+
+    --maia-sl-color-gray-7: #272b34;
+    --maia-sl-color-accent: #3369ff;
+    --maia-sl-color-accent-low: #1d202b;
+    --maia-sl-hue-orange: 41;
+    --maia-sl-color-orange-low: #4e4022;
+    --maia-sl-color-orange: #eebd53;
+    --maia-sl-color-orange-high: #f9e8c3;
+    --maia-sl-color-blue: #668fff;
+    --maia-sl-color-blue-low: #1d202b;
+    --maia-sl-color-purple: #d291f3;
+    --maia-sl-color-purple-low: #271b2d;
+    --maia-sl-shadow-sm: 0px 1px 1px #0000001f, 0px 2px 1px #0000003d;
+  }
+
+  .sl-tokens {
+    --maia-sl-color-white: #ffffff;
+    --maia-sl-color-gray-3: #555962;
+    --maia-sl-color-accent: #3d50f5;
+  }
+  .dark .sl-tokens {
+    --maia-sl-color-white: #ffffff;
+    --maia-sl-color-gray-3: #888c96;
+    --maia-sl-color-accent: #3369ff;
+  }
+
+  .maia-mdx .dialog-line {
+    position: relative;
+    isolation: isolate;
+    /* Important: spacing is already handled by `.maia-mdx > * + * { margin-top: ... }`.
+       If we also add margins here, it can double-up and make the typography feel "off". */
+    margin-block: 0;
+    padding-top: 0.01rem;
+
+    --dialog-bg: var(
+      --dialog-bg-light,
+      var(--maia-sl-color-accent-low, color-mix(in oklab, var(--maia-color-primary) 18%, transparent))
+    );
+    --dialog-fg: var(--dialog-fg-light, var(--maia-sl-color-accent, var(--maia-color-primary)));
+  }
+
+  .dark .maia-mdx .dialog-line {
+    --dialog-bg: var(
+      --dialog-bg-dark,
+      var(--maia-sl-color-accent-low, color-mix(in oklab, var(--maia-color-primary) 18%, transparent))
+    );
+    --dialog-fg: var(--dialog-fg-dark, var(--maia-sl-color-accent, var(--maia-color-primary)));
+  }
+
+  .maia-mdx .dialog-line::before {
+    content: "";
+    position: absolute;
+    z-index: 0;
+    top: 0;
+    bottom: 0;
+    left: -0.25rem;
+    right: -0.25rem;
+    border-radius: 0.25rem;
+    background-image: linear-gradient(155deg, var(--dialog-bg), transparent 24%);
+  }
+
+  .maia-mdx .dialog-line .dialog-text {
+    position: relative;
+    z-index: 1;
+  }
+
+  .maia-mdx .dialog-line .dialog-text > strong:first-child {
+    color: var(--dialog-fg);
+    background: transparent;
+  }
+
+  .maia-mdx .maia-card [data-slot="card"] {
+    background-color: var(--maia-color-background);
+    border-color: var(--maia-color-border);
+    box-shadow: var(--maia-sl-shadow-sm);
+    transition:
+      background-color 160ms ease,
+      border-color 160ms ease,
+      box-shadow 160ms ease;
+  }
+  .maia-mdx .maia-card:hover [data-slot="card"] {
+    background: var(--maia-sl-color-gray-7, var(--maia-sl-color-gray-6));
+    border-color: var(--maia-color-border-hover);
+  }
+  @media (hover: hover) {
+    .maia-mdx :is(h1, h2, h3, h4, h5, h6) > a.anchor::after {
+      opacity: 0;
+    }
+    .maia-mdx :is(h1, h2, h3, h4, h5, h6):hover > a.anchor::after,
+    .maia-mdx :is(h1, h2, h3, h4, h5, h6) > a.anchor:focus-visible::after {
+      opacity: 0.9;
+      background-color: var(--maia-color-primary);
+    }
+  }
+
+  @media (hover: none) {
+    .maia-mdx :is(h1, h2, h3, h4, h5, h6) > a.anchor::after {
+      opacity: 0.9;
+      background-color: var(--maia-color-primary);
+    }
+  }
+
+  .maia-mdx :is(h1, h2, h3, h4, h5, h6) + a.maia-card {
+    margin-top: 0.75rem;
+    display: block;
+  }
+  .maia-mdx a.maia-card:hover {
+    text-decoration: none;
+  }
+
+  .maia-mdx :is(img, picture, video, canvas, svg) {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+
+  .maia-mdx iframe {
+    display: block;
+    max-width: 100%;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    height: auto;
+  }
+
+  @media (hover: hover) {
+    .maia-mdx :is(a, span)[data-slot="badge"]:not(.border-transparent):hover {
+      background-color: var(--maia-sl-color-gray-7) !important;
+    }
+  }
+
+  .maia-mdx code {
+    background: color-mix(in oklab, var(--maia-color-muted) 70%, transparent);
+    border: 1px solid color-mix(in oklab, var(--maia-color-border) 70%, transparent);
+    border-radius: 0.4rem;
+    padding: 0.125rem 0.375rem;
+    font-size: 0.875em;
+  }
+  .maia-mdx code:not(pre code) {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .maia-mdx pre {
+    border: 1px solid var(--maia-color-border);
+    background: color-mix(in oklab, var(--maia-color-muted) 60%, transparent);
+    padding: 0.75rem 1rem;
+    border-radius: 0.75rem;
+    overflow: auto;
+    max-width: 100%;
+    min-width: 0;
+    tab-size: 2;
+  }
+  .maia-mdx pre code {
+    background: transparent;
+    border: 0;
+    padding: 0;
+  }
+
+  .maia-mdx blockquote {
+    border-inline-start: 2px solid color-mix(in oklab, var(--maia-color-border) 80%, transparent);
+    padding-inline-start: 1rem;
+    opacity: 0.92;
+  }
+
+  .maia-mdx hr {
+    border: 0;
+    border-bottom: 1px solid color-mix(in oklab, var(--maia-color-border) 85%, transparent);
+  }
+
+  .maia-mdx dt {
+    font-weight: 650;
+  }
+  .maia-mdx dd {
+    padding-inline-start: 1rem;
+  }
+  .maia-mdx dt + dt,
+  .maia-mdx dt + dd,
+  .maia-mdx dd + dd {
+    margin-top: 0.25rem;
+  }
+
+  .maia-mdx li + li {
+    margin-top: 0.25rem;
+  }
+
+  .maia-mdx details {
+    --maia-details-border-color: color-mix(in oklab, var(--maia-color-border) 90%, transparent);
+    --maia-details-border-color-hover: color-mix(in oklab, var(--maia-color-primary) 85%, transparent);
+
+    border-inline-start: 2px solid var(--maia-details-border-color);
+    padding-inline-start: 1rem;
+  }
+  .maia-mdx details:not([open]):hover,
+  .maia-mdx details:has(> summary:hover) {
+    border-color: var(--maia-details-border-color-hover);
+  }
+  .maia-mdx summary {
+    cursor: pointer;
+    display: block;
+    font-weight: 650;
+    color: var(--maia-color-foreground);
+
+    margin-inline-start: -0.5rem;
+    padding-inline-start: 0.5rem;
+  }
+  .maia-mdx details[open] > summary {
+    margin-bottom: 1rem;
+  }
+  .maia-mdx summary::marker,
+  .maia-mdx summary::-webkit-details-marker {
+    display: none;
+  }
+  .maia-mdx summary::before {
+    --maia-details-marker-size: 1.25rem;
+
+    background-color: currentColor;
+    content: "";
+    display: inline-block;
+    height: var(--maia-details-marker-size);
+    width: var(--maia-details-marker-size);
+    margin-inline: calc((var(--maia-details-marker-size) / 4) * -1) 0.25rem;
+    vertical-align: middle;
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M14.8 11.3 10.6 7a1 1 0 1 0-1.4 1.5l3.5 3.5-3.5 3.5a1 1 0 0 0 0 1.4 1 1 0 0 0 .7.3 1 1 0 0 0 .7-.3l4.2-4.2a1 1 0 0 0 0-1.4Z'/%3E%3C/svg%3E%0A");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M14.8 11.3 10.6 7a1 1 0 1 0-1.4 1.5l3.5 3.5-3.5 3.5a1 1 0 0 0 0 1.4 1 1 0 0 0 .7.3 1 1 0 0 0 .7-.3l4.2-4.2a1 1 0 0 0 0-1.4Z'/%3E%3C/svg%3E%0A");
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-position: center;
+    mask-position: center;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .maia-mdx summary::before {
+      transition: transform 0.2s ease-in-out;
+    }
+  }
+  .maia-mdx details[open] > summary::before {
+    transform: rotateZ(90deg);
+  }
+  .maia-mdx summary p:only-child {
+    display: inline;
+  }
+
+  .maia-mdx table {
+    display: block;
+    overflow: auto;
+    border-spacing: 0;
+  }
+  .maia-mdx :is(th, td) {
+    border-bottom: 1px solid color-mix(in oklab, var(--maia-color-border) 85%, transparent);
+    padding: 0.5rem 1rem;
+    vertical-align: baseline;
+  }
+  .maia-mdx th {
+    color: var(--maia-color-foreground);
+    font-weight: 650;
+    text-align: start;
+  }
+}

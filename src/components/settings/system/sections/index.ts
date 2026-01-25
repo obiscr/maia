@@ -1,0 +1,5 @@
+export { RegistrationSection } from "./registration-section"
+export { EmailSection } from "./email-section"
+export { PerformanceSection } from "./performance-section"
+export { RetentionEnvSection } from "./retention-env-section"
+export { SecurityEnvSection } from "./security-env-section"

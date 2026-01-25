@@ -1,0 +1,101 @@
+{
+  "format": "maia.workflow.export.v1",
+  "exportedAt": "2026-01-24T00:00:00.000Z",
+  "workflow": {
+    "id": "wf-example-03",
+    "name": "Hacker News Scraper (Top 10 → Markdown)",
+    "description": "Scrape Hacker News homepage Top 10, parse using cheerio and generate a Markdown file."
+  },
+  "version": null,
+  "flags": {
+    "envIncluded": false
+  },
+  "data": {
+    "meta": {
+      "name": "Hacker News Scraper (Top 10 → Markdown)",
+      "description": "Scrape Hacker News homepage Top 10, parse using cheerio and generate a Markdown file."
+    },
+    "steps": [
+      {
+        "stepKey": "fetch_hn_html",
+        "name": "Fetch HackerNews HTML",
+        "scriptEsm": "export default {\n  async main(env, ctx) {\n    const { params } = ctx;\n\n    const url = \"https://news.ycombinator.com/news\";\n    const timeoutMs = 15000;\n\n    const meta = {\n      url,\n      timeoutMs,\n      fetchedAt: new Date().toISOString(),\n      errors: [],\n      warnings: [],\n    };\n\n    try {\n      const controller = new AbortController();\n      const t = setTimeout(() => controller.abort(), timeoutMs);\n      const res = await fetch(url, {\n        signal: controller.signal,\n        headers: {\n          \"User-Agent\": \"Mozilla/5.0 (compatible; Maia-HN-Fetcher/1.0)\",\n          Accept: \"text/html,application/xhtml+xml\",\n        },\n      });\n      clearTimeout(t);\n\n      if (!res.ok) {\n        meta.errors.push(`HTTP error: ${res.status} ${res.statusText}`);\n        return {\n          outputs: {\n            ok: false,\n            url,\n            html: \"\",\n            status: res.status,\n            meta,\n          },\n        };\n      }\n\n      const html = await res.text();\n      return {\n        outputs: {\n          ok: true,\n          url,\n          status: res.status,\n          html,\n          meta,\n        },\n      };\n    } catch (e) {\n      const msg = e instanceof Error ? e.message : String(e);\n      meta.errors.push(`Fetch failed: ${msg}`);\n      if (e && typeof e === \"object\" && \"name\" in e && String(e.name) === \"AbortError\") {\n        meta.warnings.push(\"Request timeout: suggest retrying later\");\n      }\n      return {\n        outputs: {\n          ok: false,\n          url,\n          html: \"\",\n          status: null,\n          meta,\n        },\n      };\n    }\n  },\n};\n",
+        "timeoutMs": 600000,
+        "deps": []
+      },
+      {
+        "stepKey": "parse_top10",
+        "name": "Parse Top 10",
+        "scriptEsm": "import * as cheerio from \"cheerio\";\n\nexport default {\n  async main(env, ctx) {\n    const { upstream } = ctx;\n\n    const fetchResult = upstream.fetch_hn_html?.data;\n    const html = String(fetchResult?.outputs?.html ?? \"\");\n    const baseUrl = String(fetchResult?.outputs?.url ?? \"https://news.ycombinator.com/news\");\n\n    const meta = {\n      errors: [],\n      warnings: [],\n      parsedAt: new Date().toISOString(),\n      baseUrl,\n    };\n\n    if (!html) {\n      meta.errors.push(\"No parseable HTML (upstream fetch is empty)\");\n      return {\n        outputs: {\n          items: [],\n          count: 0,\n          meta,\n        },\n      };\n    }\n\n    try {\n      const $ = cheerio.load(html);\n\n      const items = [];\n      const rows = $(\"tr.athing\").slice(0, 10);\n\n      rows.each((idx, el) => {\n        const row = $(el);\n        const a = row.find(\"span.titleline > a\").first();\n        const title = a.text().trim();\n        const href = (a.attr(\"href\") || \"\").trim();\n\n        let url = \"\";\n        try {\n          if (href) url = new URL(href, \"https://news.ycombinator.com/\").toString();\n        } catch {\n          url = href;\n        }\n\n        // HN pages usually have rank, but use idx+1 as fallback for safety\n        const rankText = row.find(\"span.rank\").first().text().trim();\n        const rank = Number((rankText || \"\").replace(\".\", \"\")) || idx + 1;\n\n        items.push({\n          rank,\n          title,\n          url,\n        });\n      });\n\n      const cleaned = items\n        .filter((x) => x && typeof x.title === \"string\" && x.title.trim())\n        .slice(0, 10)\n        .map((x, i) => ({\n          rank: Number(x.rank) || i + 1,\n          title: String(x.title || \"\").trim(),\n          url: String(x.url || \"\").trim(),\n        }));\n\n      if (cleaned.length === 0) {\n        meta.warnings.push(\"Parsed 0 results: HN DOM structure may have changed\");\n      }\n\n      return {\n        outputs: {\n          items: cleaned,\n          count: cleaned.length,\n          meta,\n        },\n      };\n    } catch (e) {\n      const msg = e instanceof Error ? e.message : String(e);\n      meta.errors.push(`Parsing failed: ${msg}`);\n      return {\n        outputs: {\n          items: [],\n          count: 0,\n          meta,\n        },\n      };\n    }\n  },\n};\n",
+        "timeoutMs": 600000,
+        "deps": ["fetch_hn_html"]
+      },
+      {
+        "stepKey": "build_txt",
+        "name": "Generate Markdown and Write File",
+        "scriptEsm": "import fs from \"node:fs/promises\";\nimport path from \"node:path\";\n\nexport default {\n  async main(env, ctx) {\n    const { upstream } = ctx;\n\n    const parsed = upstream.parse_top10?.data;\n    const items = Array.isArray(parsed?.outputs?.items) ? parsed.outputs.items : [];\n\n    const meta = {\n      errors: [],\n      warnings: [],\n      builtAt: new Date().toISOString(),\n      wroteFile: false,\n      filePath: null,\n      fileName: \"hacker-news-top10.md\",\n    };\n\n    const lines = [];\n\n    lines.push(\"# Hacker News Top 10\");\n    lines.push(\"\");\n    lines.push(`- Generated at: ${new Date().toISOString()}`);\n    lines.push(`- Source: https://news.ycombinator.com/news`);\n    lines.push(\"\");\n\n    for (let i = 0; i < Math.min(items.length, 10); i++) {\n      const it = items[i] || {};\n      const title = String(it.title || \"\").trim() || \"(No title)\";\n      const url = String(it.url || \"\").trim();\n\n      // Output each item as Markdown list:\n      // 1. [Title](URL)\n      //    URL: ...\n      if (url) {\n        const safeTitle = title.replace(/\\[/g, \"\\\\[\").replace(/\\]/g, \"\\\\]\");\n        lines.push(`${i + 1}. [${safeTitle}](${url})`);\n        lines.push(`   - URL: ${url}`);\n      } else {\n        lines.push(`${i + 1}. ${title}`);\n        lines.push(`   - URL: `);\n      }\n\n      if (i < Math.min(items.length, 10) - 1) lines.push(\"\");\n    }\n\n    const text = lines.join(\"\\n\");\n\n    // Write to actual artifact (explicit artifact registration)\n    try {\n      const r = await ctx.artifacts.writeText(meta.fileName, text, { kind: \"file\", summary: \"HN Top 10 Markdown\" });\n      meta.wroteFile = true;\n      meta.filePath = r?.absPath || null;\n    } catch (e) {\n      meta.errors.push(`Failed to write/register artifact: ${e instanceof Error ? e.message : String(e)}`);\n    }\n\n    return {\n      outputs: {\n        text,\n        count: Math.min(items.length, 10),\n        file_name: meta.fileName,\n        file_path: meta.filePath,\n        wrote_file: meta.wroteFile,\n        meta,\n      },\n    };\n  },\n};\n",
+        "timeoutMs": 600000,
+        "deps": ["parse_top10"]
+      }
+    ],
+    "env": {},
+    "dependencies": {
+      "cheerio": "^1.0.0"
+    },
+    "inputSpec": {
+      "version": 1,
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {},
+        "required": []
+      },
+      "examples": [
+        {
+          "name": "Default Run",
+          "description": "No parameters required, directly scrape HN Top 10.",
+          "params": {}
+        }
+      ],
+      "fileInputs": {
+        "urlFiles": { "enabled": false, "required": false },
+        "uploads": { "enabled": false, "required": false }
+      }
+    },
+    "outputsSpec": {
+      "version": 1,
+      "outputs": {
+        "items": {
+          "stepKey": "parse_top10",
+          "field": "items",
+          "title": "Item List",
+          "description": "Parsed Top 10 (title/url)."
+        },
+        "text": {
+          "stepKey": "build_txt",
+          "field": "text",
+          "title": "Markdown Content",
+          "description": "Markdown text content generated in the specified format."
+        },
+        "file_name": {
+          "stepKey": "build_txt",
+          "field": "file_name",
+          "title": "File Name",
+          "description": "Markdown file name written to attemptDir."
+        },
+        "wrote_file": {
+          "stepKey": "build_txt",
+          "field": "wrote_file",
+          "title": "File Written",
+          "description": "Whether the file was successfully written to the run directory."
+        },
+        "meta": {
+          "stepKey": "build_txt",
+          "field": "meta",
+          "title": "Execution Meta",
+          "description": "Contains errors/warnings and file write information."
+        }
+      }
+    }
+  }
+}

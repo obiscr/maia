@@ -1,0 +1,51 @@
+name: DCO
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: dco-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dco:
+    name: Check Signed-off-by lines
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Check DCO sign-offs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner
+            const repo = context.repo.repo
+            const pull_number = context.payload.pull_request.number
+
+            const commits = await github.paginate(github.rest.pulls.listCommits, {
+              owner,
+              repo,
+              pull_number,
+              per_page: 100,
+            })
+
+            const re = /^Signed-off-by:\s.+<.+>$/mi
+            const missing = commits.filter((c) => !re.test(c.commit.message))
+
+            if (missing.length > 0) {
+              const lines = missing.map((c) => {
+                const sha = c.sha.slice(0, 7)
+                const msg = (c.commit.message || "").split("\n")[0]
+                const author = c.commit.author?.name || c.author?.login || "unknown"
+                return `- ${sha} (${author}): ${msg}`
+              })
+              core.setFailed(
+                `DCO check failed: ${missing.length} commit(s) are missing a Signed-off-by line.\n` +
+                `Fix by rewriting commits and using 'git commit -s'.\n\nMissing:\n${lines.join("\n")}\n`
+              )
+            } else {
+              core.info(`DCO check passed: all ${commits.length} commit(s) include Signed-off-by.`)
+            }
