@@ -46,6 +46,9 @@ curl -fsSL -o .env.production https://raw.githubusercontent.com/obiscr/maia/main
 docker compose -f docker-compose.release.yml --env-file .env.production up -d
 ```
 
+4) 初始化设置
+打开 [http://localhost:3690](http://localhost:3690) 即可进行初始化设置。
+
 ### 从源码构建（可选）
 
 ```bash

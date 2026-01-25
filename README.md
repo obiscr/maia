@@ -46,6 +46,9 @@ Recommended for production:
 docker compose -f docker-compose.release.yml --env-file .env.production up -d
 ```
 
+4) Setup
+Open [http://localhost:3690](http://localhost:3690) to start setup.
+
 ### Build from source (optional)
 
 ```bash
