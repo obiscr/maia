@@ -463,6 +463,8 @@ export function useNewJobForm(params: {
     workflows,
     workflowId,
     setWorkflowId,
+    pinnedWorkflowVersionNumber,
+    setPinnedWorkflowVersionNumber,
     inputJson,
     setInputJson: (v: string) => {
       setInputTouched(true)
@@ -484,7 +486,6 @@ export function useNewJobForm(params: {
     inputSpecForWorkflowId,
     inputSpecErr,
     inputSpecLoading,
-    pinnedWorkflowVersionNumber,
     hasValidInputSpec,
     workflowHasInputSchema,
     schemaProps,

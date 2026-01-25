@@ -14,7 +14,7 @@ import { isRecord } from "@/lib/shared/lang/is-record"
 import { findReservedKeysInRecord, parseWorkflowInputSpecWithOpts } from "@/lib/shared/maia/input-spec"
 import { validateWithJsonSchema } from "@/lib/server/maia/jsonschema"
 import { workflowSnapshotSchema } from "@/lib/server/maia/snapshot"
-import { createWorkflowVersionSnapshot, getLatestWorkflowVersion } from "@/lib/server/maia/workflow-versioning"
+import { getLatestWorkflowVersion } from "@/lib/server/maia/workflow-versioning"
 import { normalizeUrlFilesForStorage } from "@/lib/server/maia/url-files"
 import type { ApiIssue } from "@/lib/shared/http/types"
 import { requireRequestAuth } from "@/lib/server/authz"
@@ -234,7 +234,7 @@ export const POST = withApiObservability(async (req: Request) => {
 
       // Validate schedule inputs against the workflow version snapshot (best-effort; aligns with /api/jobs).
       // - If pinned, validate against pinned version.
-      // - Else validate against latest version (synthesize legacy v1 if needed).
+      // - Else validate against latest version.
       let version = pinnedWorkflowVersionId
         ? await prisma.workflowVersion.findUnique({
             where: { id: pinnedWorkflowVersionId },
@@ -242,50 +242,9 @@ export const POST = withApiObservability(async (req: Request) => {
           })
         : await getLatestWorkflowVersion(workflow.id)
       if (!version) {
-        // Back-compat: synthesize v1 from current workflow tables.
-        const wf = await prisma.workflow.findUnique({
-          where: { id: workflow.id },
-          select: {
-            id: true,
-            name: true,
-            dependencies: true,
-            envJson: true,
-            inputSpec: true,
-            outputsSpec: true,
-            depsHash: true,
-          },
-        })
-        if (wf) {
-          const steps = await prisma.workflowStep.findMany({
-            where: { workflowId: wf.id },
-            orderBy: [{ key: "asc" }],
-          })
-          const deps = await prisma.workflowStepDep.findMany({ where: { workflowId: wf.id } })
-          const depMap = new Map<string, string[]>()
-          for (const d of deps) {
-            const arr = depMap.get(d.stepId) ?? []
-            arr.push(d.dependsOnStepId)
-            depMap.set(d.stepId, arr)
-          }
-          await createWorkflowVersionSnapshot({
-            workflowId: wf.id,
-            workflowName: wf.name,
-            description: null,
-            createdByUserId: auth.userId,
-            dependencies: wf.dependencies,
-            envJson: wf.envJson ?? "{}",
-            inputSpec: wf.inputSpec ?? null,
-            outputsSpec: wf.outputsSpec ?? null,
-            depsHash: wf.depsHash,
-            steps: steps.map((s) => ({
-              stepKey: s.key,
-              name: s.name,
-              scriptEsm: s.scriptEsm,
-              timeoutMs: s.timeoutMs,
-              deps: depMap.get(s.key) ?? [],
-            })),
-          })
-          version = await getLatestWorkflowVersion(wf.id)
+        return {
+          status: 409,
+          body: { code: "WORKFLOW_VERSION_REQUIRED", meta: { workflowId: workflow.publicId } },
         }
       }
       const snapshot = workflowSnapshotSchema.parse(JSON.parse(version?.snapshotJson || "{}"))

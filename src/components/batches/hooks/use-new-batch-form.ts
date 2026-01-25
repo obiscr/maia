@@ -14,9 +14,8 @@ export function useNewBatchForm(params: { t: (key: string, vars?: Record<string,
   const router = useRouter()
 
   const [workflows, setWorkflows] = useState<Workflow[]>([])
-  const [workflowId, setWorkflowId] = useState<string>("")
+  const [workflowId, setWorkflowIdRaw] = useState<string>("")
   const [name, setName] = useState<string>("")
-  const [pinnedMode, setPinnedMode] = useState<"LATEST" | "PINNED">("LATEST")
   const [pinnedWorkflowVersionNumber, setPinnedWorkflowVersionNumber] = useState<number | null>(null)
   const [concurrencyLimit, setConcurrencyLimit] = useState<number | null>(null)
   const [rampUpSeconds, setRampUpSeconds] = useState<number | null>(null)
@@ -31,12 +30,20 @@ export function useNewBatchForm(params: { t: (key: string, vars?: Record<string,
 
   const canSubmit = !!workflowId && !submitting
 
+  function setWorkflowId(next: string) {
+    const nextId = String(next ?? "")
+    setWorkflowIdRaw((prev) => {
+      if (prev !== nextId) setPinnedWorkflowVersionNumber(null)
+      return nextId
+    })
+  }
+
   async function refreshWorkflows() {
     setLoading(true)
     try {
       const j = await apiFetchJson<{ workflows: Workflow[] }>("/api/workflows", { cache: "no-store" })
       setWorkflows(j.workflows ?? [])
-      setWorkflowId((prev) => prev || j.workflows?.[0]?.id || "")
+      setWorkflowIdRaw((prev) => prev || j.workflows?.[0]?.id || "")
     } catch (e) {
       toast.error(tApiError({ t, err: e, fallbackKey: "common.loadFailed" }))
     } finally {
@@ -61,7 +68,7 @@ export function useNewBatchForm(params: { t: (key: string, vars?: Record<string,
           workflowId,
           name,
           sourceJson,
-          ...(pinnedMode === "PINNED" && typeof pinnedWorkflowVersionNumber === "number"
+          ...(typeof pinnedWorkflowVersionNumber === "number"
             ? { pinnedWorkflowVersionNumber: Math.floor(pinnedWorkflowVersionNumber) }
             : {}),
           ...(typeof concurrencyLimit === "number" ? { concurrencyLimit: Math.floor(concurrencyLimit) } : {}),
@@ -89,8 +96,6 @@ export function useNewBatchForm(params: { t: (key: string, vars?: Record<string,
     workflowHasInputSpec,
     name,
     setName,
-    pinnedMode,
-    setPinnedMode,
     pinnedWorkflowVersionNumber,
     setPinnedWorkflowVersionNumber,
     concurrencyLimit,

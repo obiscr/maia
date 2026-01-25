@@ -37,7 +37,6 @@ export function useNewScheduleForm(params: { t: (key: string, vars?: Record<stri
   const [catchUpLimit, setCatchUpLimit] = useState<number>(DEFAULT_CATCH_UP_LIMIT)
   const [overlapPolicy, setOverlapPolicy] = useState<"SKIP" | "ALLOW">("SKIP")
   // Lock workflow version by number (server resolves -> internal ID).
-  const [pinnedMode, setPinnedMode] = useState<"LATEST" | "PINNED">("LATEST")
   const [pinnedWorkflowVersionNumber, setPinnedWorkflowVersionNumber] = useState<number | null>(null)
   const [inputJsonRaw, _setInputJsonRaw] = useState<string>("{}")
   const [inputTouched, setInputTouched] = useState(false)
@@ -212,7 +211,6 @@ export function useNewScheduleForm(params: { t: (key: string, vars?: Record<stri
     _setWorkflowId((prev) => {
       // UX: switching workflows should always reset pinned selection to avoid fetching/validating against a stale version number.
       if (prev !== nextId) {
-        setPinnedMode("LATEST")
         setPinnedWorkflowVersionNumber(null)
       }
       return nextId
@@ -224,10 +222,9 @@ export function useNewScheduleForm(params: { t: (key: string, vars?: Record<stri
   }, [])
 
   const desiredPinnedWorkflowVersion = useMemo(() => {
-    if (pinnedMode !== "PINNED") return null
     if (typeof pinnedWorkflowVersionNumber !== "number" || !Number.isFinite(pinnedWorkflowVersionNumber)) return null
     return Math.floor(pinnedWorkflowVersionNumber)
-  }, [pinnedMode, pinnedWorkflowVersionNumber])
+  }, [pinnedWorkflowVersionNumber])
 
   const autoPrefillKey = useMemo(() => {
     if (!workflowId) return ""
@@ -401,9 +398,7 @@ export function useNewScheduleForm(params: { t: (key: string, vars?: Record<stri
 
       const shouldSendCatchUpLimit = misfirePolicy === "CATCH_UP"
       const pinnedVer =
-        pinnedMode === "PINNED" &&
-        typeof pinnedWorkflowVersionNumber === "number" &&
-        Number.isFinite(pinnedWorkflowVersionNumber)
+        typeof pinnedWorkflowVersionNumber === "number" && Number.isFinite(pinnedWorkflowVersionNumber)
           ? Math.floor(pinnedWorkflowVersionNumber)
           : null
 
@@ -464,8 +459,6 @@ export function useNewScheduleForm(params: { t: (key: string, vars?: Record<stri
     setCatchUpLimit,
     overlapPolicy,
     setOverlapPolicy,
-    pinnedMode,
-    setPinnedMode,
     pinnedWorkflowVersionNumber,
     setPinnedWorkflowVersionNumber,
     inputJsonRaw,

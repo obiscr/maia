@@ -16,9 +16,7 @@ import { TimezoneCombobox } from "@/components/common/timezone-combobox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { useNewScheduleForm } from "@/components/schedules/hooks/use-new-schedule-form"
-import { apiFetchJson } from "@/lib/shared/http/api"
-import { toast } from "@/lib/client/toast"
-import { tApiError, tError } from "@/lib/shared/i18n/error"
+import { tError } from "@/lib/shared/i18n/error"
 import { FieldLabelWithHelp } from "@/components/common/field-label-with-help"
 import { CollapsibleSectionCard } from "@/components/common/collapsible-section-card"
 import { Badge } from "@/components/ui/badge"
@@ -35,6 +33,7 @@ import { UrlFilesEditor } from "@/components/common/url-files-editor"
 import { JsonMonacoEditor } from "@/components/common/json-monaco-editor"
 import { workflowInputSpecHasParams } from "@/lib/shared/maia/input-spec"
 import { workflowFileInputUi } from "@/lib/shared/maia/file-inputs-ui"
+import { WorkflowVersionSelect } from "@/components/common/workflow-version-select"
 
 function toScheduleKind(v: string): "CRON" | "INTERVAL" {
   return v === "INTERVAL" ? "INTERVAL" : "CRON"
@@ -78,8 +77,6 @@ export function NewScheduleSheet(props: { open: boolean; onOpenChange: (open: bo
     setCatchUpLimit,
     overlapPolicy,
     setOverlapPolicy,
-    pinnedMode,
-    setPinnedMode,
     pinnedWorkflowVersionNumber,
     setPinnedWorkflowVersionNumber,
     inputJsonRaw,
@@ -176,136 +173,6 @@ export function NewScheduleSheet(props: { open: boolean; onOpenChange: (open: bo
     void form.createSchedule({ enabled })
   }
 
-  const [versionsLoading, setVersionsLoading] = useState(false)
-  const [versions, setVersions] = useState<Array<{ version: number; createdAt: string; description: string | null }>>(
-    [],
-  )
-  // We fetch versions as soon as a workflow is selected (and sheet is open),
-  // so LATEST mode can still display the real latest version number.
-  const versionsEnabled = props.open && !!workflowId
-  const latestVersion = versions.length ? versions[0]!.version : null
-
-  useEffect(() => {
-    if (!versionsEnabled) return
-    let cancelled = false
-    setVersionsLoading(true)
-    void (async () => {
-      try {
-        const params = new URLSearchParams()
-        params.set("page", "1")
-        params.set("pageSize", "20")
-        params.set("sort", "CREATED_DESC")
-        const j = await apiFetchJson<{
-          versions?: Array<{ version: number; createdAt: string; description: string | null }>
-        }>(`/api/workflows/${encodeURIComponent(workflowId)}/versions?${params.toString()}`, { cache: "no-store" })
-        if (cancelled) return
-        const rows = Array.isArray(j?.versions) ? j.versions : []
-        setVersions(
-          rows
-            .filter(
-              (v): v is { version: number; createdAt: string; description: string | null } =>
-                typeof v?.version === "number",
-            )
-            .map((v) => ({
-              version: v.version,
-              createdAt: String(v.createdAt ?? ""),
-              description: v.description ?? null,
-            })),
-        )
-      } catch (e) {
-        if (cancelled) return
-        toast.error(tApiError({ t, err: e, fallbackKey: "common.loadFailed" }))
-        setVersions([])
-      } finally {
-        if (!cancelled) setVersionsLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [t, workflowId, versionsEnabled])
-
-  // UX: when switching to PINNED, default to the latest version once loaded.
-  useEffect(() => {
-    if (!versionsEnabled) return
-    if (pinnedMode !== "PINNED") return
-    if (typeof pinnedWorkflowVersionNumber === "number") return
-    if (versionsLoading) return
-    if (!versions.length) return
-    setPinnedWorkflowVersionNumber(versions[0]!.version)
-  }, [
-    pinnedMode,
-    pinnedWorkflowVersionNumber,
-    setPinnedWorkflowVersionNumber,
-    versions,
-    versionsEnabled,
-    versionsLoading,
-  ])
-
-  const versionSelectValue = useMemo(() => {
-    return typeof pinnedWorkflowVersionNumber === "number" ? String(pinnedWorkflowVersionNumber) : ""
-  }, [pinnedWorkflowVersionNumber])
-
-  function PinnedWorkflowVersionControls() {
-    return (
-      <div className="grid gap-2">
-        <FieldLabelWithHelp
-          label={t("common.pinnedWorkflowVersion")}
-          tooltip={t("schedules.policies.pinnedHint")}
-          htmlFor="schedule-new-pinned-mode"
-        />
-        <div className="grid gap-2 sm:grid-cols-2">
-          <Select
-            value={pinnedMode}
-            onValueChange={(v) => setPinnedMode(v as "LATEST" | "PINNED")}
-            disabled={uiPending}
-          >
-            <SelectTrigger id="schedule-new-pinned-mode" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="LATEST">{t("schedules.policies.pinnedMode.latest")}</SelectItem>
-              <SelectItem value="PINNED">{t("schedules.policies.pinnedMode.pinned")}</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select
-            value={
-              pinnedMode === "PINNED"
-                ? versionSelectValue || "__none"
-                : latestVersion != null
-                  ? String(latestVersion)
-                  : "__none"
-            }
-            onValueChange={(v) => {
-              if (v === "__none") setPinnedWorkflowVersionNumber(null)
-              else setPinnedWorkflowVersionNumber(Number(v))
-            }}
-            disabled={uiPending || pinnedMode !== "PINNED" || versionsLoading || versions.length === 0}
-          >
-            <SelectTrigger id="schedule-new-pinned-version" className="w-full">
-              <SelectValue placeholder={t("schedules.policies.pinnedSelectPlaceholder")} />
-            </SelectTrigger>
-            <SelectContent>
-              {versions.length === 0 ? (
-                <SelectItem value="__none" disabled>
-                  {t("schedules.policies.pinnedNoVersions")}
-                </SelectItem>
-              ) : (
-                versions.map((v) => (
-                  <SelectItem key={v.version} value={String(v.version)}>
-                    {`v${String(v.version)}`}
-                    {v.description ? ` — ${v.description}` : ""}
-                  </SelectItem>
-                ))
-              )}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <Sheet
       open={props.open}
@@ -373,6 +240,19 @@ export function NewScheduleSheet(props: { open: boolean; onOpenChange: (open: bo
                         searchPlaceholder={t("common.workflowCombobox.searchPlaceholder")}
                         emptyText={t("common.workflowCombobox.empty")}
                         className="w-full"
+                      />
+                    </Field>
+
+                    <Field className="gap-2">
+                      <WorkflowVersionSelect
+                        t={t}
+                        workflowId={workflowId}
+                        value={pinnedWorkflowVersionNumber}
+                        onChange={setPinnedWorkflowVersionNumber}
+                        disabled={uiPending || !workflowId}
+                        // Schedules should be reproducible; selecting draft here will create a version and pin to it.
+                        allowDraft={true}
+                        labelTooltip={t("common.workflowVersion.scheduleAffectsFutureOnlyTooltip")}
                       />
                     </Field>
 
@@ -544,8 +424,6 @@ export function NewScheduleSheet(props: { open: boolean; onOpenChange: (open: bo
                         />
                       </div>
                     ) : null}
-
-                    <PinnedWorkflowVersionControls />
                   </div>
                 </CollapsibleSectionCard>
 

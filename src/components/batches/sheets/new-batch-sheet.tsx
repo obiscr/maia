@@ -16,15 +16,13 @@ import { TextareaWithChrome } from "@/components/common/textarea-with-chrome"
 import { useNewBatchForm } from "@/components/batches/hooks/use-new-batch-form"
 import { FieldLabelWithHelp } from "@/components/common/field-label-with-help"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { apiFetchJson } from "@/lib/shared/http/api"
-import { toast } from "@/lib/client/toast"
-import { tApiError } from "@/lib/shared/i18n/error"
 import { CollapsibleSectionCard } from "@/components/common/collapsible-section-card"
 import { Badge } from "@/components/ui/badge"
 import { SheetSkeleton } from "./new-batch-sheet-skeleton"
 import { cn } from "@/lib/utils"
 import { InlineItemRow } from "@/components/common/inline-item-row"
 import { batchJsonStatusUiSpec, type BatchJsonUiStatus } from "@/lib/shared/batch-status"
+import { WorkflowVersionSelect } from "@/components/common/workflow-version-select"
 
 export function NewBatchSheet(props: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { t } = useI18n()
@@ -41,8 +39,6 @@ export function NewBatchSheet(props: { open: boolean; onOpenChange: (open: boole
     workflowHasInputSpec,
     name,
     setName,
-    pinnedMode,
-    setPinnedMode,
     pinnedWorkflowVersionNumber,
     setPinnedWorkflowVersionNumber,
     concurrencyLimit,
@@ -194,51 +190,6 @@ export function NewBatchSheet(props: { open: boolean; onOpenChange: (open: boole
     return false
   }, [provDataset, provMetaText, provNote, provSource, provTicket])
 
-  type WorkflowVersionRow = { id: string; version: number; description: string | null }
-  const [versions, setVersions] = useState<WorkflowVersionRow[]>([])
-  const [versionsLoading, setVersionsLoading] = useState(false)
-  useEffect(() => {
-    if (!workflowId) {
-      setVersions([])
-      return
-    }
-    let cancelled = false
-    setVersionsLoading(true)
-    apiFetchJson<{ versions?: WorkflowVersionRow[] }>(
-      `/api/workflows/${workflowId}/versions?pageSize=50&sort=CREATED_DESC`,
-      {
-        cache: "no-store",
-      },
-    )
-      .then((j) => {
-        if (cancelled) return
-        setVersions(Array.isArray(j?.versions) ? (j.versions as WorkflowVersionRow[]) : [])
-      })
-      .catch((e) => {
-        if (cancelled) return
-        toast.error(tApiError({ t, err: e, fallbackKey: "common.loadFailed" }))
-        setVersions([])
-      })
-      .finally(() => {
-        if (cancelled) return
-        setVersionsLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [t, workflowId])
-
-  const latestVersion = useMemo(() => {
-    const vs = versions
-      .map((v) => (typeof v.version === "number" ? v.version : null))
-      .filter((x): x is number => x != null)
-    return vs.length ? Math.max(...vs) : null
-  }, [versions])
-
-  const versionSelectValue = useMemo(() => {
-    return typeof pinnedWorkflowVersionNumber === "number" ? String(pinnedWorkflowVersionNumber) : ""
-  }, [pinnedWorkflowVersionNumber])
-
   function submit() {
     setSubmitAction("create")
     void form.createBatch({ sourceJson: provenance }).then((r) => {
@@ -314,6 +265,17 @@ export function NewBatchSheet(props: { open: boolean; onOpenChange: (open: boole
                     </Field>
 
                     <Field className="gap-2">
+                      <WorkflowVersionSelect
+                        t={t}
+                        workflowId={workflowId}
+                        value={pinnedWorkflowVersionNumber}
+                        onChange={setPinnedWorkflowVersionNumber}
+                        disabled={uiPending}
+                        allowDraft={true}
+                      />
+                    </Field>
+
+                    <Field className="gap-2">
                       <FieldLabel htmlFor="batch-new-name">
                         {t("workflows.name")} <span className="font-normal">({t("common.optional")})</span>
                       </FieldLabel>
@@ -323,62 +285,6 @@ export function NewBatchSheet(props: { open: boolean; onOpenChange: (open: boole
                         onChange={(e) => setName(e.target.value)}
                         disabled={uiPending}
                       />
-                    </Field>
-
-                    <Field className="gap-2">
-                      <FieldLabelWithHelp
-                        label={t("common.pinnedWorkflowVersion")}
-                        tooltip={t("batches.pinnedHint")}
-                        htmlFor="batch-new-pinned-mode"
-                      />
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <Select
-                          value={pinnedMode}
-                          onValueChange={(v) => setPinnedMode(v as "LATEST" | "PINNED")}
-                          disabled={uiPending}
-                        >
-                          <SelectTrigger id="batch-new-pinned-mode" className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="LATEST">{t("batches.pinnedModeLatest")}</SelectItem>
-                            <SelectItem value="PINNED">{t("batches.pinnedModePinned")}</SelectItem>
-                          </SelectContent>
-                        </Select>
-
-                        <Select
-                          value={
-                            pinnedMode === "PINNED"
-                              ? versionSelectValue || "__none"
-                              : latestVersion != null
-                                ? String(latestVersion)
-                                : "__none"
-                          }
-                          onValueChange={(v) => {
-                            if (v === "__none") setPinnedWorkflowVersionNumber(null)
-                            else setPinnedWorkflowVersionNumber(Number(v))
-                          }}
-                          disabled={uiPending || pinnedMode !== "PINNED" || versionsLoading || versions.length === 0}
-                        >
-                          <SelectTrigger id="batch-new-pinned-version" className="w-full">
-                            <SelectValue placeholder={t("batches.pinnedSelectPlaceholder")} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {versions.length === 0 ? (
-                              <SelectItem value="__none" disabled>
-                                {t("batches.pinnedNoVersions")}
-                              </SelectItem>
-                            ) : (
-                              versions.map((v) => (
-                                <SelectItem key={v.version} value={String(v.version)}>
-                                  {`v${String(v.version)}`}
-                                  {v.description ? ` — ${v.description}` : ""}
-                                </SelectItem>
-                              ))
-                            )}
-                          </SelectContent>
-                        </Select>
-                      </div>
                     </Field>
                   </FieldGroup>
                 </CollapsibleSectionCard>

@@ -13,7 +13,7 @@ import { ensureBlobFromBuffer } from "@/lib/server/maia/input-blobs"
 import { findReservedKeysInRecord, parseWorkflowInputSpecWithOpts } from "@/lib/shared/maia/input-spec"
 import { validateWithJsonSchema } from "@/lib/server/maia/jsonschema"
 import { workflowSnapshotSchema } from "@/lib/server/maia/snapshot"
-import { createWorkflowVersionSnapshot, getLatestWorkflowVersion } from "@/lib/server/maia/workflow-versioning"
+import { getLatestWorkflowVersion } from "@/lib/server/maia/workflow-versioning"
 import { runIdempotentOperation } from "@/lib/server/operations/run-operation"
 import { allocatePublicId } from "@/lib/server/public-ids"
 import { isRecord } from "@/lib/shared/lang/is-record"
@@ -267,39 +267,12 @@ export const POST = withApiObservability(async (req: Request) => {
         })) ?? (await prisma.workflow.findFirst({ where: getWorkflowFindFirstWhereById(viewerAuth, workflowId) }))
       if (!workflow) return { status: 404, body: { code: "WORKFLOW_NOT_FOUND" } }
 
-      // Back-compat: if no versions exist (legacy data), synthesize v1 from current workflow tables.
-      let latest = await getLatestWorkflowVersion(workflow.id)
-      if (!latest) {
-        const steps = await prisma.workflowStep.findMany({
-          where: { workflowId: workflow.id },
-          orderBy: [{ key: "asc" }],
-        })
-        const deps = await prisma.workflowStepDep.findMany({ where: { workflowId: workflow.id } })
-        const depMap = new Map<string, string[]>()
-        for (const d of deps) {
-          const arr = depMap.get(d.stepId) ?? []
-          arr.push(d.dependsOnStepId)
-          depMap.set(d.stepId, arr)
+      const latest = await getLatestWorkflowVersion(workflow.id)
+      if (!latest && pinnedWorkflowVersionNumber == null) {
+        return {
+          status: 409,
+          body: { code: "WORKFLOW_VERSION_REQUIRED", meta: { workflowId: workflow.publicId } },
         }
-        await createWorkflowVersionSnapshot({
-          workflowId: workflow.id,
-          workflowName: workflow.name,
-          description: null,
-          createdByUserId: auth.userId,
-          dependencies: workflow.dependencies,
-          envJson: workflow.envJson ?? "{}",
-          inputSpec: workflow.inputSpec ?? null,
-          outputsSpec: workflow.outputsSpec ?? null,
-          depsHash: workflow.depsHash,
-          steps: steps.map((s) => ({
-            stepKey: s.key,
-            name: s.name,
-            scriptEsm: s.scriptEsm,
-            timeoutMs: s.timeoutMs,
-            deps: depMap.get(s.key) ?? [],
-          })),
-        })
-        latest = await getLatestWorkflowVersion(workflow.id)
       }
 
       const selectedVersion = pinnedWorkflowVersionNumber

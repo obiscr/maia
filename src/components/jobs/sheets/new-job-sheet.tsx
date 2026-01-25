@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useRef, useState } from "react"
-import { Braces, Info, PauseCircle, Play, Tag } from "lucide-react"
+import { Braces, Info, PauseCircle, Play } from "lucide-react"
 import type { editor as MonacoEditor } from "monaco-editor"
 
 import { useI18n } from "@/components/i18n-provider"
@@ -29,6 +29,7 @@ import { JobInputsSkeleton, NewJobSheetSkeleton } from "@/components/jobs/sheets
 import { JsonMonacoEditor } from "@/components/common/json-monaco-editor"
 import { workflowInputSpecHasParams } from "@/lib/shared/maia/input-spec"
 import { joinHintParts, workflowFileInputUi } from "@/lib/shared/maia/file-inputs-ui"
+import { WorkflowVersionSelect } from "@/components/common/workflow-version-select"
 
 export function NewJobSheet(props: {
   open: boolean
@@ -47,6 +48,7 @@ export function NewJobSheet(props: {
     workflowId,
     setWorkflowId,
     pinnedWorkflowVersionNumber,
+    setPinnedWorkflowVersionNumber,
     inputSpec,
     inputSpecErr,
     inputSpecLoading,
@@ -186,20 +188,6 @@ export function NewJobSheet(props: {
                   <Field>
                     <div className="flex items-center justify-between gap-2">
                       <FieldLabel>{t("common.entities.workflow")}</FieldLabel>
-                      {typeof pinnedWorkflowVersionNumber === "number" ? (
-                        <Badge
-                          variant="outline"
-                          className="text-[10px]"
-                          title={t("jobs.pinnedWorkflowVersionTooltip", { version: pinnedWorkflowVersionNumber })}
-                        >
-                          <span className="inline-flex items-center gap-1">
-                            <Tag className="size-3" aria-hidden={true} />
-                            <span>
-                              {t("jobs.pinnedWorkflowVersionBadge", { version: pinnedWorkflowVersionNumber })}
-                            </span>
-                          </span>
-                        </Badge>
-                      ) : null}
                     </div>
                     <WorkflowCombobox
                       items={workflows.map((w) => ({ id: w.id, name: w.name }))}
@@ -211,6 +199,18 @@ export function NewJobSheet(props: {
                       emptyText={t("common.workflowCombobox.empty")}
                     />
                   </Field>
+
+                  {workflowId ? (
+                    <Field>
+                      <WorkflowVersionSelect
+                        t={t}
+                        workflowId={workflowId}
+                        value={pinnedWorkflowVersionNumber}
+                        onChange={setPinnedWorkflowVersionNumber}
+                        disabled={uiPending}
+                      />
+                    </Field>
+                  ) : null}
                 </FieldGroup>
               </CollapsibleSectionCard>
 

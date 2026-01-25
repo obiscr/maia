@@ -13,7 +13,6 @@ import { workflowSnapshotSchema } from "@/lib/server/maia/snapshot"
 import { allocatePublicId } from "@/lib/server/public-ids"
 import { isPlainObject } from "@/lib/shared/lang/is-plain-object"
 import { sanitizeFilename } from "@/lib/server/maia/job-files"
-import { listReservedInitialInputKeys } from "@/lib/shared/maia/input-spec"
 
 function normalizeInitialInput(raw: unknown): Record<string, unknown> {
   if (isPlainObject(raw)) return raw
@@ -69,76 +68,12 @@ async function materializeBlobToRunUpload(params: {
   return rel
 }
 
-async function ensureLatestWorkflowVersion(tx: Prisma.TransactionClient, workflowId: string) {
-  const latest = await tx.workflowVersion.findFirst({
+async function getLatestWorkflowVersion(tx: Prisma.TransactionClient, workflowId: string) {
+  return await tx.workflowVersion.findFirst({
     where: { workflowId },
     orderBy: [{ version: "desc" }],
     select: { id: true, version: true, snapshotJson: true, createdAt: true },
   })
-  if (latest) return latest
-
-  const workflow = await tx.workflow.findUnique({ where: { id: workflowId } })
-  if (!workflow) throw new Error("Workflow not found")
-
-  const steps = await tx.workflowStep.findMany({ where: { workflowId }, orderBy: [{ key: "asc" }] })
-  const deps = await tx.workflowStepDep.findMany({ where: { workflowId } })
-  const depMap = new Map<string, string[]>()
-  for (const d of deps) {
-    const arr = depMap.get(d.stepId) ?? []
-    arr.push(d.dependsOnStepId)
-    depMap.set(d.stepId, arr)
-  }
-
-  const existing = await tx.workflowVersion.findMany({
-    where: { workflowId },
-    select: { version: true },
-    orderBy: [{ version: "desc" }],
-    take: 1,
-  })
-  const nextVersion = (existing[0]?.version ?? 0) + 1
-
-  const snapshot = workflowSnapshotSchema.parse({
-    workflowId,
-    workflowName: workflow.name,
-    dependencies: workflow.dependencies,
-    envJson: typeof workflow.envJson === "string" ? workflow.envJson : "{}",
-    inputSpec:
-      typeof workflow.inputSpec === "string"
-        ? workflow.inputSpec
-        : workflow.inputSpec == null
-          ? null
-          : String(workflow.inputSpec),
-    outputsSpec:
-      typeof workflow.outputsSpec === "string"
-        ? workflow.outputsSpec
-        : workflow.outputsSpec == null
-          ? null
-          : String(workflow.outputsSpec),
-    reservedInitialInputKeys: listReservedInitialInputKeys(),
-    depsHash: workflow.depsHash,
-    steps: steps.map((s) => ({
-      stepKey: s.key,
-      name: s.name,
-      scriptEsm: s.scriptEsm,
-      timeoutMs: s.timeoutMs,
-      deps: depMap.get(s.key) ?? [],
-    })),
-  })
-
-  const created = await tx.workflowVersion.create({
-    data: {
-      id: crypto.randomUUID(),
-      workflowId,
-      version: nextVersion,
-      snapshotJson: JSON.stringify(snapshot),
-      ownerUserId: workflow.ownerUserId ?? null,
-      createdByUserId: workflow.updatedByUserId ?? workflow.createdByUserId ?? workflow.ownerUserId ?? null,
-      updatedByUserId: workflow.updatedByUserId ?? workflow.createdByUserId ?? workflow.ownerUserId ?? null,
-      triggeredByUserId: workflow.updatedByUserId ?? workflow.createdByUserId ?? workflow.ownerUserId ?? null,
-    },
-    select: { id: true, version: true, snapshotJson: true, createdAt: true },
-  })
-  return created
 }
 
 export async function createRunFromJobRun(tx: Prisma.TransactionClient, params: { jobRunId: string; now: Date }) {
@@ -153,7 +88,7 @@ export async function createRunFromJobRun(tx: Prisma.TransactionClient, params: 
         where: { id: job.pinnedWorkflowVersionId },
         select: { id: true, version: true, snapshotJson: true, createdAt: true },
       })
-    : await ensureLatestWorkflowVersion(tx, workflow.id)
+    : await getLatestWorkflowVersion(tx, workflow.id)
   if (!version) throw new Error("WorkflowVersion not found")
 
   const snapshot = workflowSnapshotSchema.parse(JSON.parse(version.snapshotJson || "{}"))
