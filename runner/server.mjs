@@ -2,6 +2,7 @@ import http from "node:http"
 import crypto from "node:crypto"
 import { URL } from "node:url"
 import path from "node:path"
+import { StringDecoder } from "node:string_decoder"
 
 const PORT = Number(process.env.RUNNER_PORT ?? 9090) || 9090
 const TOKEN = String(process.env.RUNNER_TOKEN ?? "").trim()
@@ -156,6 +157,115 @@ async function readDockerJson(res) {
   const raw = Buffer.concat(chunks).toString("utf8")
   const parsed = raw ? JSON.parse(raw) : null
   return { status: res.statusCode ?? 0, parsed, raw }
+}
+
+async function readDockerText(res) {
+  const chunks = []
+  for await (const c of res) chunks.push(c)
+  return { status: res.statusCode ?? 0, raw: Buffer.concat(chunks).toString("utf8") }
+}
+
+async function readDockerNdjson(res, { captureLimitBytes = 64 * 1024 } = {}) {
+  const status = res.statusCode ?? 0
+
+  // Docker streaming endpoints (e.g. /images/create) return NDJSON: one JSON object per line.
+  // We parse line-by-line to detect "error"/"errorDetail" even when HTTP status is 200.
+  let captured = ""
+  let capturedBytes = 0
+  let buffer = ""
+  let errorMessage = ""
+  const decoder = new StringDecoder("utf8")
+
+  const captureChunk = (chunk) => {
+    if (capturedBytes >= captureLimitBytes) return
+    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    const take = Math.min(captureLimitBytes - capturedBytes, buf.length)
+    if (take <= 0) return
+    captured += buf.subarray(0, take).toString("utf8")
+    capturedBytes += take
+  }
+
+  const onObject = (obj) => {
+    const msg = obj?.errorDetail?.message ?? obj?.error
+    if (msg && !errorMessage) errorMessage = String(msg)
+  }
+
+  const parseLine = (line) => {
+    const s = String(line ?? "").trim()
+    if (!s) return
+    const obj = JSON.parse(s)
+    onObject(obj)
+  }
+
+  try {
+    for await (const chunk of res) {
+      captureChunk(chunk)
+      if (Buffer.isBuffer(chunk)) buffer += decoder.write(chunk)
+      else buffer += String(chunk)
+
+      while (true) {
+        const nl = buffer.indexOf("\n")
+        if (nl === -1) break
+        const line = buffer.slice(0, nl)
+        buffer = buffer.slice(nl + 1)
+        parseLine(line)
+      }
+    }
+
+    buffer += decoder.end()
+    // Flush tail (some implementations may not end with \n).
+    if (buffer.trim()) parseLine(buffer)
+  } catch (e) {
+    const msg = e?.message ? String(e.message) : String(e)
+    if (!errorMessage) errorMessage = `invalid docker ndjson stream: ${msg}`
+  }
+
+  return { status, raw: captured, errorMessage }
+}
+
+function splitDockerImageRef(ref) {
+  const s = String(ref ?? "").trim()
+  if (!s) return { fromImage: "", tag: "" }
+
+  // Digest references (repo@sha256:...) can't be split into fromImage+tag.
+  if (s.includes("@")) return { fromImage: s, tag: "" }
+
+  // Split tag on the last ":" only if it appears after the last "/".
+  // This avoids mis-parsing registry ports (e.g. localhost:5000/repo:tag).
+  const lastSlash = s.lastIndexOf("/")
+  const lastColon = s.lastIndexOf(":")
+  if (lastColon > lastSlash) {
+    return { fromImage: s.slice(0, lastColon), tag: s.slice(lastColon + 1) }
+  }
+
+  return { fromImage: s, tag: "" }
+}
+
+function isNoSuchImageError(detail) {
+  return /no such image/i.test(String(detail ?? ""))
+}
+
+async function dockerPullImage(image) {
+  const { fromImage, tag } = splitDockerImageRef(image)
+  if (!fromImage) return { ok: false, detail: "invalid image ref" }
+
+  const qs = new URLSearchParams()
+  qs.set("fromImage", fromImage)
+  if (tag) qs.set("tag", tag)
+
+  // /images/create streams NDJSON lines; HTTP status may still be 200 even when the body contains an error.
+  const pullRes = await dockerRequest("POST", `/v1.43/images/create?${qs.toString()}`, null)
+  if ((pullRes.statusCode ?? 0) < 200 || (pullRes.statusCode ?? 0) >= 300) {
+    const pulled = await readDockerText(pullRes)
+    return { ok: false, detail: pulled.raw || String(pulled.status) }
+  }
+
+  const pulled = await readDockerNdjson(pullRes)
+  if (pulled.errorMessage) {
+    const tail = pulled.raw ? `\n${pulled.raw}` : ""
+    return { ok: false, detail: `${pulled.errorMessage}${tail}` }
+  }
+  return { ok: true, detail: pulled.raw || "" }
 }
 
 function writeNdjson(res, obj) {
@@ -398,8 +508,18 @@ async function handleExecStep(req, res) {
   }
 
   // Create container
-  const createRes = await dockerRequest("POST", "/v1.43/containers/create", createBody)
-  const created = await readDockerJson(createRes)
+  let createRes = await dockerRequest("POST", "/v1.43/containers/create", createBody)
+  let created = await readDockerJson(createRes)
+  if ((created.status < 200 || created.status >= 300) && isNoSuchImageError(created.raw)) {
+    writeNdjson(res, { type: "log", stream: "stderr", line: `[runner] pulling missing image: ${image}` })
+    const pulled = await dockerPullImage(image)
+    if (pulled.ok) {
+      createRes = await dockerRequest("POST", "/v1.43/containers/create", createBody)
+      created = await readDockerJson(createRes)
+    } else {
+      writeNdjson(res, { type: "log", stream: "stderr", line: `[runner] image pull failed: ${pulled.detail}` })
+    }
+  }
   if (created.status < 200 || created.status >= 300) {
     const detail = created.raw || String(created.status)
     const msg = `docker create failed: ${detail}`
@@ -622,8 +742,18 @@ async function handleExecDeps(req, res) {
     User: "65532:65532",
   }
 
-  const createRes = await dockerRequest("POST", "/v1.43/containers/create", createBody)
-  const created = await readDockerJson(createRes)
+  let createRes = await dockerRequest("POST", "/v1.43/containers/create", createBody)
+  let created = await readDockerJson(createRes)
+  if ((created.status < 200 || created.status >= 300) && isNoSuchImageError(created.raw)) {
+    writeNdjson(res, { type: "log", stream: "stderr", line: `[runner] pulling missing image: ${image}` })
+    const pulled = await dockerPullImage(image)
+    if (pulled.ok) {
+      createRes = await dockerRequest("POST", "/v1.43/containers/create", createBody)
+      created = await readDockerJson(createRes)
+    } else {
+      writeNdjson(res, { type: "log", stream: "stderr", line: `[runner] image pull failed: ${pulled.detail}` })
+    }
+  }
   if (created.status < 200 || created.status >= 300) {
     const detail = created.raw || String(created.status)
     const msg = `docker create failed: ${detail}`
