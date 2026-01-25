@@ -700,7 +700,7 @@ export default function RunDetailClient({ runId }: { runId: string }) {
         ) : (
           <>
             {/* Top: graph (fixed height) */}
-            <SectionCard className="h-[700px] min-w-0 overflow-hidden bg-card text-card-foreground">
+            <SectionCard className="h-[600px] min-w-0 overflow-hidden bg-card text-card-foreground">
               <RunDetailGraphPanel
                 className="h-full"
                 steps={detail.graphSteps}
