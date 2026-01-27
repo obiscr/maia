@@ -22,6 +22,7 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useI18n } from "@/components/i18n-provider"
@@ -108,15 +109,18 @@ export function WorkflowGraphCanvasControls(props: {
                   <DropdownMenuRadioItem value="LR">
                     <ArrowLeftRight className="size-4" />
                     {t("workflows.layoutLeftRight")}
+                    <DropdownMenuShortcut>Q</DropdownMenuShortcut>
                   </DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="TB">
                     <ArrowUpDown className="size-4" />
                     {t("workflows.layoutTopBottom")}
+                    <DropdownMenuShortcut>W</DropdownMenuShortcut>
                   </DropdownMenuRadioItem>
                   {props.ui?.allowCustom ? (
                     <DropdownMenuRadioItem value="CUSTOM">
                       <Pencil className="size-4" />
                       {t("workflows.layoutCustom")}
+                      <DropdownMenuShortcut>E</DropdownMenuShortcut>
                     </DropdownMenuRadioItem>
                   ) : null}
                 </DropdownMenuRadioGroup>

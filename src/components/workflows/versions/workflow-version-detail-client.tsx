@@ -212,7 +212,7 @@ export default function WorkflowVersionDetailClient(props: { workflowId: string;
         >
           <div className="min-h-0 h-full overflow-hidden">
             {detail.loading ? (
-              <WorkflowVersionSnapshotTabsPanelSkeleton className="flex h-full min-h-0 flex-col bg-card text-card-foreground" />
+              <WorkflowVersionSnapshotTabsPanelSkeleton className="flex h-full min-h-0 flex-col text-card-foreground" />
             ) : !data ? (
               <div className="p-3 text-sm text-muted-foreground">
                 {t("common.notFound")}{" "}
@@ -222,7 +222,7 @@ export default function WorkflowVersionDetailClient(props: { workflowId: string;
               </div>
             ) : (
               <WorkflowVersionSnapshotTabsPanel
-                className="flex h-full min-h-0 flex-col bg-card text-card-foreground"
+                className="flex h-full min-h-0 flex-col text-card-foreground"
                 versionTitle={titleVersion}
                 createdAt={data.version.createdAt ?? null}
                 depsHash={detail.depsHash}

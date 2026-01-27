@@ -4,6 +4,7 @@ import { prisma } from "@/lib/server/db"
 import { fail, notFound, ok } from "@/lib/server/http/response"
 import { mark, withApiObservability } from "@/lib/server/observability"
 import { createWorkflowVersionSnapshot } from "@/lib/server/maia/workflow-versioning"
+import { validateWorkflowGraph, workflowGraphValidationErrorToApiError } from "@/lib/shared/maia/workflow-graph-validation"
 import { zodIssues } from "@/lib/shared/http/zod"
 import { safeJsonObjectKeyCountOr0 } from "@/lib/shared/lang/safe-json"
 
@@ -199,6 +200,19 @@ export const POST = withApiObservability(async (_: Request, ctx: { params: Promi
   }
   mark("db.steps")
 
+  const snapSteps = steps.map((s) => ({
+    stepKey: s.key,
+    name: s.name,
+    scriptEsm: s.scriptEsm ?? "",
+    timeoutMs: s.timeoutMs,
+    deps: depMap.get(s.key) ?? [],
+  }))
+  const graphOk = validateWorkflowGraph(snapSteps)
+  if (!graphOk.ok) {
+    const mapped = workflowGraphValidationErrorToApiError(graphOk.error)
+    return fail({ status: 400, code: mapped.code, meta: mapped.meta })
+  }
+
   const created = await createWorkflowVersionSnapshot({
     workflowId: wf.id,
     workflowName: wf.name,
@@ -208,13 +222,7 @@ export const POST = withApiObservability(async (_: Request, ctx: { params: Promi
     inputSpec: wf.inputSpec ?? null,
     outputsSpec: wf.outputsSpec ?? null,
     depsHash: wf.depsHash,
-    steps: steps.map((s) => ({
-      stepKey: s.key,
-      name: s.name,
-      scriptEsm: s.scriptEsm ?? "",
-      timeoutMs: s.timeoutMs,
-      deps: depMap.get(s.key) ?? [],
-    })),
+    steps: snapSteps,
   })
   mark("db.version.create")
 

@@ -10,6 +10,10 @@ import { depsHash as hashDeps } from "@/lib/server/maia/deps"
 import { ensureEngineRunning } from "@/lib/server/maia/server"
 import { workflowSnapshotSchema } from "@/lib/server/maia/snapshot"
 import { createWorkflowVersionSnapshot } from "@/lib/server/maia/workflow-versioning"
+import {
+  validateWorkflowGraph,
+  workflowGraphValidationErrorToInvalidSnapshotMeta,
+} from "@/lib/shared/maia/workflow-graph-validation"
 
 export const runtime = "nodejs"
 
@@ -39,6 +43,15 @@ export const POST = withApiObservability(
       snap = workflowSnapshotSchema.parse(JSON.parse(row.snapshotJson || "{}"))
     } catch (e) {
       return fail({ status: 500, code: "INVALID_SNAPSHOT" })
+    }
+
+    const graphOk = validateWorkflowGraph(snap.steps ?? [])
+    if (!graphOk.ok) {
+      return fail({
+        status: 500,
+        code: "INVALID_SNAPSHOT",
+        meta: workflowGraphValidationErrorToInvalidSnapshotMeta(graphOk.error),
+      })
     }
 
     // Validate deps JSON string (should already be valid).

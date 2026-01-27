@@ -673,12 +673,13 @@
     "layoutTopBottom": "Top → Bottom",
     "layoutResetAction": "Reset custom layout",
     "layoutResetActionDescription": "This will clear your custom layout and rebuild node positions automatically",
-    "layoutCustomOutdatedTitle": "Custom layout may be outdated",
-    "layoutCustomOutdatedDescription": "We detected that the workflow structure has changed. Continuing with the old custom layout may result in messy node positions. What would you like to do?",
-    "layoutCustomOutdatedRebuildAction": "Rebuild custom layout for current structure",
-    "layoutCustomOutdatedResetAction": "Clear custom layout",
-    "layoutCustomClearedToast": "Custom layout cleared",
-    "layoutCustomRebuiltToast": "Custom layout rebuilt",
+    "graph": {
+      "disconnectEdgeAction": "Disconnect",
+      "dependenciesMenu": "Dependencies",
+      "selectAllAction": "Select all",
+      "deleteSelectedAction": "Delete selected",
+      "clearCanvasAction": "Clear canvas"
+    },
     "stepBasics": "Basics",
     "stepKey": "Unique key",
     "timeoutMs": "Timeout (ms)",
@@ -688,6 +689,9 @@
     "stepDeletedToast": "Step deleted",
     "deleteSelectedStepsTitle": "Delete {n} steps?",
     "deleteSelectedStepsDescription": "This will delete the selected steps and remove them from other steps' dependencies",
+    "clearCanvasTitle": "Clear canvas?",
+    "clearCanvasDescription": "This will delete all steps and remove them from other steps' dependencies. This cannot be undone.",
+    "canvasClearedToast": "Canvas cleared",
     "createJobAction": "Create job",
     "saveWorkflowAction": "Save workflow",
     "createVersionAction": "Create version",
@@ -1125,7 +1129,7 @@
     }
   },
   "schedules": {
-    "recentSchedulesDescription": "Browse schedules and manage recurring jobs",
+    "recentSchedulesDescription": "Create schedules to trigger workflows periodically",
     "searchPlaceholder": "Search: name / schedule ID / workflow…",
     "emptyState": "No schedules yet",
     "noResultsTitle": "No schedules found",
@@ -1432,6 +1436,10 @@
     "INPUT_SPEC_GENERATION_FAILED": "Input spec generation failed",
     "WORKFLOW_VALIDATION_FAILED": "Workflow draft validation failed",
     "INVALID_WORKFLOW_SNAPSHOT": "Workflow snapshot is invalid",
+    "WORKFLOW_GRAPH_DUP_STEP_KEY": "Workflow duplicate step key",
+    "WORKFLOW_GRAPH_UNKNOWN_DEP": "Workflow unknown dependency",
+    "WORKFLOW_GRAPH_SELF_DEP": "Workflow step depends on itself",
+    "WORKFLOW_GRAPH_HAS_CYCLE": "Workflow cycle detected",
     "REQUEST_ABORTED": "Request aborted"
   }
 }

@@ -9,6 +9,7 @@ import { mark, withApiObservability } from "@/lib/server/observability"
 import { depsHash, parseDependenciesJson } from "@/lib/server/maia/deps"
 import { parseWorkflowInputSpec } from "@/lib/shared/maia/input-spec"
 import { parseWorkflowOutputsSpec } from "@/lib/shared/maia/outputs-spec"
+import { validateWorkflowGraph, workflowGraphValidationErrorToApiError } from "@/lib/shared/maia/workflow-graph-validation"
 import { compileJsonSchema } from "@/lib/server/maia/jsonschema"
 import { ensureEngineRunning } from "@/lib/server/maia/server"
 import { requireRequestAuth } from "@/lib/server/authz"
@@ -287,7 +288,13 @@ export const PUT = withApiObservability(async (req: Request, ctx: { params: Prom
     }
   }
 
+  // Industry-standard graph validation: no unknown deps / duplicates / cycles.
   const steps = body.steps ?? []
+  const graphOk = validateWorkflowGraph(steps)
+  if (!graphOk.ok) {
+    const mapped = workflowGraphValidationErrorToApiError(graphOk.error)
+    return fail({ status: 400, code: mapped.code, meta: mapped.meta })
+  }
 
   const updated = await prisma.$transaction(async (tx) => {
     const shouldResetDepsState = depsChanged || depsCount === 0

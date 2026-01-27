@@ -57,6 +57,7 @@ export default function WorkflowEditClient({ workflowId }: { workflowId: string 
   const deleteWorkflowDialog = useStandardDialog()
   const deleteStepDialog = useStandardDialog()
   const bulkDeleteDialog = useStandardDialog()
+  const clearCanvasDialog = useStandardDialog()
   const data = useWorkflowEditorData({
     workflowId,
     locale,
@@ -75,6 +76,7 @@ export default function WorkflowEditClient({ workflowId }: { workflowId: string 
     deleteWorkflowDialog.closeDialog()
     deleteStepDialog.closeDialog()
     bulkDeleteDialog.closeDialog()
+    clearCanvasDialog.closeDialog()
     inputSpecUnsavedDialog.closeDialog()
     setDeleteStepKey(null)
     setCreateVersionOpen(false)
@@ -82,6 +84,7 @@ export default function WorkflowEditClient({ workflowId }: { workflowId: string 
   }, [
     workflowId,
     bulkDeleteDialog.closeDialog,
+    clearCanvasDialog.closeDialog,
     deleteStepDialog.closeDialog,
     deleteWorkflowDialog.closeDialog,
     inputSpecUnsavedDialog.closeDialog,
@@ -251,6 +254,19 @@ export default function WorkflowEditClient({ workflowId }: { workflowId: string 
           await bulkDeleteDialog.confirm(graph.confirmDeleteSelectedSteps)
         }}
         pending={bulkDeleteDialog.pending}
+      />
+      <StandardDeleteDialog
+        open={clearCanvasDialog.open}
+        onOpenChange={(o) => {
+          if (!o && clearCanvasDialog.pending) return
+          clearCanvasDialog.onOpenChange(o)
+        }}
+        title={t("workflows.clearCanvasTitle")}
+        description={t("workflows.clearCanvasDescription")}
+        onConfirm={async () => {
+          await clearCanvasDialog.confirm(graph.confirmClearCanvas)
+        }}
+        pending={clearCanvasDialog.pending}
       />
       <StandardActionDialog
         open={inputSpecUnsavedDialog.open}
@@ -513,6 +529,9 @@ export default function WorkflowEditClient({ workflowId }: { workflowId: string 
                 workflowId={workflowId}
                 steps={wf.steps}
                 className="h-full"
+                enableNodeContextMenu
+                enableEditCanvasContextMenu
+                onRequestClearCanvas={() => clearCanvasDialog.openDialog()}
                 headerRight={canvasAutoSaveIndicator}
                 headerLeft={
                   <div className="flex flex-wrap items-center gap-2">
@@ -527,18 +546,6 @@ export default function WorkflowEditClient({ workflowId }: { workflowId: string 
                       <Plus className="size-4" />
                       {t("workflows.addStepAction")}
                     </Button>
-
-                    {graph.selectedGraphStepKeys.length ? (
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={graph.handleDeleteSelectedSteps}
-                        className="shadow-sm"
-                      >
-                        <Trash2Icon className="size-4" />
-                        {`${t("common.deleteAction")} (${graph.selectedGraphStepKeys.length})`}
-                      </Button>
-                    ) : null}
                   </div>
                 }
                 onEditStep={graph.handleEditStep}
@@ -784,6 +791,9 @@ export default function WorkflowEditClient({ workflowId }: { workflowId: string 
                 workflowId={workflowId}
                 steps={wf.steps}
                 className="h-full"
+                enableNodeContextMenu
+                enableEditCanvasContextMenu
+                onRequestClearCanvas={() => clearCanvasDialog.openDialog()}
                 headerRight={canvasAutoSaveIndicator}
                 headerLeft={
                   <div className="flex flex-wrap items-center gap-2">
@@ -798,18 +808,6 @@ export default function WorkflowEditClient({ workflowId }: { workflowId: string 
                       <Plus className="size-4" />
                       {t("workflows.addStepAction")}
                     </Button>
-
-                    {graph.selectedGraphStepKeys.length ? (
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={graph.handleDeleteSelectedSteps}
-                        className="shadow-sm"
-                      >
-                        <Trash2Icon className="size-4" />
-                        {`${t("common.deleteAction")} (${graph.selectedGraphStepKeys.length})`}
-                      </Button>
-                    ) : null}
                   </div>
                 }
                 onEditStep={graph.handleEditStep}

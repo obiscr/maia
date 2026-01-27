@@ -484,7 +484,7 @@ export default function WorkflowAgentClient(props: { agentRunId?: string | null;
                         <InputGroupButton
                           variant="outline"
                           size="icon-xs"
-                          className="size-8 rounded-full p-0 dark:bg-input/30 dark:border-input dark:hover:bg-input/50"
+                          className="size-8 rounded-full p-0"
                           aria-label={t("workflows.orchestrator.newChat")}
                           onClick={onNewChatClick}
                           disabled={session.pending || session.saving}
@@ -511,7 +511,7 @@ export default function WorkflowAgentClient(props: { agentRunId?: string | null;
             </TabsContent>
 
             <TabsContent value="canvas" className="min-h-0 flex-1">
-              <SectionCard className="h-full min-h-0 overflow-hidden bg-card text-card-foreground">
+              <SectionCard className="h-full min-h-0 overflow-hidden text-card-foreground">
                 <div className="relative h-full">
                   <WorkflowGraphCanvasWrapper
                     mode="view"
@@ -543,7 +543,7 @@ export default function WorkflowAgentClient(props: { agentRunId?: string | null;
         ) : (
           <div className="grid h-full min-h-0 grid-rows-10 gap-3 lg:grid-cols-12 xl:grid-cols-10 lg:grid-rows-1">
             {/* Canvas */}
-            <SectionCard className="min-h-0 row-span-3 bg-card text-card-foreground lg:col-span-7 xl:col-span-7 lg:row-span-1">
+            <SectionCard className="min-h-0 row-span-3 text-card-foreground lg:col-span-7 xl:col-span-7 lg:row-span-1">
               <div className="relative h-full">
                 <WorkflowGraphCanvasWrapper
                   mode="view"
@@ -796,7 +796,7 @@ export default function WorkflowAgentClient(props: { agentRunId?: string | null;
                       <InputGroupButton
                         variant="outline"
                         size="icon-xs"
-                        className="size-7 rounded-full p-0 dark:bg-input/30 dark:border-input dark:hover:bg-input/50"
+                        className="size-7 rounded-full p-0"
                         aria-label={t("workflows.orchestrator.newChat")}
                         onClick={onNewChatClick}
                         disabled={session.pending || session.saving}

@@ -15,28 +15,28 @@
     --maia-font-mono:
       ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
-    --maia-color-background: #ffffff;
-    --maia-color-foreground: #171717;
-    --maia-color-card: #ffffff;
-    --maia-color-card-foreground: #0a0a0a;
-    --maia-color-popover: #ffffff;
-    --maia-color-popover-foreground: #0a0a0a;
-    --maia-color-primary: #404fec;
-    --maia-color-primary-foreground: #fafafa;
-    --maia-color-secondary: #f6f7f9;
+    --maia-color-background: var(--maia-sl-color-black);
+    --maia-color-foreground: var(--maia-sl-color-gray-2);
+    --maia-color-card: var(--maia-sl-color-black);
+    --maia-color-card-foreground: var(--maia-sl-color-gray-2);
+    --maia-color-popover: var(--maia-sl-color-black);
+    --maia-color-popover-foreground: var(--maia-sl-color-gray-2);
+    --maia-color-primary: var(--maia-sl-color-text-accent);
+    --maia-color-primary-foreground: var(--maia-sl-color-black);
+    --maia-color-secondary: var(--maia-sl-color-gray-7);
     --maia-color-overlay: #f6f7f9cc;
-    --maia-color-secondary-foreground: #171717;
-    --maia-color-muted: #f6f8fa;
-    --maia-color-muted-foreground: #59636e;
-    --maia-color-accent: #f5f5f5;
-    --maia-color-accent-foreground: #171717;
-    --maia-color-destructive: #e7000b;
-    --maia-color-destructive-foreground: #fafafa;
+    --maia-color-secondary-foreground: var(--maia-sl-color-gray-2);
+    --maia-color-muted: var(--maia-sl-color-gray-6);
+    --maia-color-muted-foreground: var(--maia-sl-color-gray-3);
+    --maia-color-accent: var(--maia-sl-color-gray-6);
+    --maia-color-accent-foreground: var(--maia-sl-color-gray-1);
+    --maia-color-destructive: var(--maia-sl-color-red);
+    --maia-color-destructive-foreground: var(--maia-sl-color-black);
 
-    --maia-color-border: #d7dae3;
-    --maia-color-border-hover: #8f95a6;
-    --maia-color-input: #e5e5e5;
-    --maia-color-ring: #a1a1a1;
+    --maia-color-border: var(--maia-sl-color-gray-5);
+    --maia-color-border-hover: var(--maia-sl-color-gray-4);
+    --maia-color-input: var(--maia-sl-color-gray-5);
+    --maia-color-ring: var(--maia-sl-color-gray-4);
 
     --maia-color-chart-1: #f54900;
     --maia-color-chart-2: #009689;
@@ -44,14 +44,14 @@
     --maia-color-chart-4: #ffb900;
     --maia-color-chart-5: #fe9a00;
 
-    --maia-color-sidebar: #fafafa;
-    --maia-color-sidebar-foreground: #0a0a0a;
-    --maia-color-sidebar-primary: #171717;
-    --maia-color-sidebar-primary-foreground: #fafafa;
-    --maia-color-sidebar-accent: #f5f5f5;
-    --maia-color-sidebar-accent-foreground: #171717;
-    --maia-color-sidebar-border: #e5e5e5;
-    --maia-color-sidebar-ring: #a1a1a1;
+    --maia-color-sidebar: var(--maia-sl-color-gray-7);
+    --maia-color-sidebar-foreground: var(--maia-sl-color-gray-2);
+    --maia-color-sidebar-primary: var(--maia-sl-color-accent);
+    --maia-color-sidebar-primary-foreground: var(--maia-sl-color-black);
+    --maia-color-sidebar-accent: var(--maia-sl-color-gray-6);
+    --maia-color-sidebar-accent-foreground: var(--maia-sl-color-gray-1);
+    --maia-color-sidebar-border: #d7dae3;
+    --maia-color-sidebar-ring: var(--maia-sl-color-gray-4);
 
     --maia-indicator-active: var(--maia-color-background);
     --maia-indicator-muted: var(--maia-color-primary);
@@ -67,15 +67,16 @@
     --maia-mobile-tabbar-h: calc(var(--maia-tab-bar-h) + var(--maia-safe-bottom));
     --maia-viewport-chrome-offset-y: var(--maia-header-h);
 
-    --maia-scrollbar-thumb: #c1c3c8;
+    --maia-scrollbar-thumb: var(--maia-sl-color-gray-5);
     --maia-scrollbar-track: transparent;
+    --maia-scrollbar-thumb-hover: var(--maia-sl-color-gray-4);
 
     --maia-sl-color-white: #17181c;
     --maia-sl-color-gray-1: #23262f;
     --maia-sl-color-gray-2: #353841;
     --maia-sl-color-gray-3: #555962;
     --maia-sl-color-gray-4: #888c96;
-    --maia-sl-color-gray-5: #c1c3c8;
+    --maia-sl-color-gray-5: #d1d9e0;
     --maia-sl-color-gray-6: #edeef3;
     --maia-sl-color-gray-7: #f6f7f9;
     --maia-sl-color-black: #ffffff;
@@ -99,7 +100,7 @@
     --maia-sl-color-purple: #bb3df5;
     --maia-sl-color-purple-low: #edd1fa;
     --maia-sl-color-red-high: #8a0f3a;
-    --maia-sl-color-red: #f53d7d;
+    --maia-sl-color-red: #d1242f;
     --maia-sl-color-red-low: #fad1df;
 
     --maia-sl-color-accent-high: #0f1c8a;
@@ -135,28 +136,28 @@
   }
 
   .dark {
-    --maia-color-background: #17181c;
-    --maia-color-foreground: #fafafa;
-    --maia-color-card: #171717;
-    --maia-color-card-foreground: #fafafa;
-    --maia-color-popover: #171717;
-    --maia-color-popover-foreground: #fafafa;
-    --maia-color-primary: #b7c6fb;
-    --maia-color-primary-foreground: #171717;
-    --maia-color-secondary: #24262e;
-    --maia-color-overlay: #24262eb3;
-    --maia-color-secondary-foreground: #fafafa;
-    --maia-color-muted: #262c36;
-    --maia-color-muted-foreground: #9198a1;
-    --maia-color-accent: #262626;
-    --maia-color-accent-foreground: #fafafa;
-    --maia-color-destructive: #ff6467;
-    --maia-color-destructive-foreground: #fafafa;
+    --maia-color-background: var(--maia-sl-color-black);
+    --maia-color-foreground: var(--maia-sl-color-gray-2);
+    --maia-color-card: var(--maia-sl-color-gray-6);
+    --maia-color-card-foreground: var(--maia-sl-color-gray-2);
+    --maia-color-popover: var(--maia-sl-color-gray-6);
+    --maia-color-popover-foreground: var(--maia-sl-color-gray-2);
+    --maia-color-primary: var(--maia-sl-color-text-accent);
+    --maia-color-primary-foreground: var(--maia-sl-color-black);
+    --maia-color-secondary: var(--maia-sl-color-gray-5);
+    --maia-color-overlay: #353841e6;
+    --maia-color-secondary-foreground: var(--maia-sl-color-gray-2);
+    --maia-color-muted: var(--maia-sl-color-gray-5);
+    --maia-color-muted-foreground: var(--maia-sl-color-gray-3);
+    --maia-color-accent: var(--maia-sl-color-gray-5);
+    --maia-color-accent-foreground: var(--maia-sl-color-gray-2);
+    --maia-color-destructive: var(--maia-sl-color-red);
+    --maia-color-destructive-foreground: var(--maia-sl-color-white);
 
-    --maia-color-border: #2f323b;
-    --maia-color-border-hover: #6b7283;
-    --maia-color-input: #ffffff26;
-    --maia-color-ring: #737373;
+    --maia-color-border: var(--maia-sl-color-gray-5);
+    --maia-color-border-hover: var(--maia-sl-color-gray-4);
+    --maia-color-input: var(--maia-sl-color-gray-5);
+    --maia-color-ring: var(--maia-sl-color-gray-4);
 
     --maia-color-chart-1: #1447e6;
     --maia-color-chart-2: #00bc7d;
@@ -164,14 +165,14 @@
     --maia-color-chart-4: #ad46ff;
     --maia-color-chart-5: #ff2056;
 
-    --maia-color-sidebar: #171717;
-    --maia-color-sidebar-foreground: #fafafa;
-    --maia-color-sidebar-primary: #1447e6;
-    --maia-color-sidebar-primary-foreground: #fafafa;
-    --maia-color-sidebar-accent: #262626;
-    --maia-color-sidebar-accent-foreground: #fafafa;
-    --maia-color-sidebar-border: #ffffff1a;
-    --maia-color-sidebar-ring: #737373;
+    --maia-color-sidebar: var(--maia-sl-color-gray-6);
+    --maia-color-sidebar-foreground: var(--maia-sl-color-gray-2);
+    --maia-color-sidebar-primary: var(--maia-sl-color-accent);
+    --maia-color-sidebar-primary-foreground: var(--maia-sl-color-white);
+    --maia-color-sidebar-accent: var(--maia-sl-color-gray-5);
+    --maia-color-sidebar-accent-foreground: var(--maia-sl-color-gray-2);
+    --maia-color-sidebar-border: var(--maia-sl-color-gray-5);
+    --maia-color-sidebar-ring: var(--maia-sl-color-gray-4);
 
     --maia-indicator-active: var(--maia-color-background);
     --maia-indicator-muted: var(--maia-color-primary);
@@ -181,15 +182,16 @@
     --maia-indicator-shell-bg-hover: #ffffff0f;
     --maia-indicator-shell-border: #ffffff1f;
 
-    --maia-scrollbar-thumb: #3a3d45;
+    --maia-scrollbar-thumb: var(--maia-sl-color-gray-4);
     --maia-scrollbar-track: transparent;
+    --maia-scrollbar-thumb-hover: var(--maia-sl-color-gray-3);
 
     --maia-sl-color-white: #ffffff;
     --maia-sl-color-gray-1: #edeef3;
     --maia-sl-color-gray-2: #c1c3c8;
     --maia-sl-color-gray-3: #888c96;
     --maia-sl-color-gray-4: #555962;
-    --maia-sl-color-gray-5: #353841;
+    --maia-sl-color-gray-5: #3d444d;
     --maia-sl-color-gray-6: #23262f;
 
     --maia-sl-color-gray-7: #272b34;
@@ -208,7 +210,7 @@
     --maia-sl-color-purple: #bd53ee;
     --maia-sl-color-purple-high: #ebccfa;
     --maia-sl-color-red-low: #4e2232;
-    --maia-sl-color-red: #ee5389;
+    --maia-sl-color-red: #e5534b;
     --maia-sl-color-red-high: #f9c3d6;
 
     --maia-sl-color-accent-low: #17264f;

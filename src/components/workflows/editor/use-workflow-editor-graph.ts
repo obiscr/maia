@@ -5,6 +5,10 @@ import * as React from "react"
 import { useI18n } from "@/components/i18n-provider"
 import { toast } from "@/lib/client/toast"
 import type { Step, Workflow } from "@/components/workflows/editor/workflow-editor-types"
+import {
+  validateWorkflowGraph,
+  workflowGraphValidationErrorToI18nKey,
+} from "@/lib/shared/maia/workflow-graph-validation"
 
 function fingerprintSteps(steps: Step[]) {
   const normalized = (steps ?? [])
@@ -48,6 +52,12 @@ export function useWorkflowEditorGraph(params: {
   const timerRef = React.useRef<number | null>(null)
   const savingRef = React.useRef(false)
   const queuedRef = React.useRef(false)
+  const persistRef = React.useRef(persistStepsDraft)
+  const lastGraphToastRef = React.useRef<{ sig: string; at: number } | null>(null)
+
+  React.useEffect(() => {
+    persistRef.current = persistStepsDraft
+  }, [persistStepsDraft])
 
   React.useEffect(() => {
     lastPersistedFingerprintRef.current = null
@@ -85,7 +95,7 @@ export function useWorkflowEditorGraph(params: {
       setAutoSaveError(null)
       try {
         const steps = latestStepsRef.current ?? []
-        const res = await persistStepsDraft(steps, { silentToast: true })
+        const res = await persistRef.current(steps, { silentToast: true })
         if (res.ok && res.didSave) {
           lastPersistedFingerprintRef.current = fingerprintSteps(steps)
           setAutoSaveState("idle")
@@ -101,7 +111,7 @@ export function useWorkflowEditorGraph(params: {
       }
       if (queuedRef.current) queuedRef.current = false
     }, 1200)
-  }, [wf?.steps, persistStepsDraft])
+  }, [wf?.steps, t])
 
   React.useEffect(() => {
     setSelectedStepKey(null)
@@ -246,27 +256,71 @@ export function useWorkflowEditorGraph(params: {
     [wf, setWf, selectedStepKey],
   )
 
+  const emitGraphToast = React.useCallback(
+    (
+      err: Parameters<typeof workflowGraphValidationErrorToI18nKey>[0],
+      sourceStepKey: string,
+      targetStepKey: string,
+    ) => {
+      const sig =
+        err.code === "CYCLE" ? `CYCLE:${err.cycle.join(">")}` : `${err.code}:${targetStepKey}:${sourceStepKey}`
+      const now = Date.now()
+      const last = lastGraphToastRef.current
+      // De-dupe: avoid repeat toasts due to dev strict-mode or rapid successive events.
+      if (last && last.sig === sig && now - last.at <= 1500) return
+      lastGraphToastRef.current = { sig, at: now }
+
+      const errorKey = workflowGraphValidationErrorToI18nKey(err)
+      toast.error(err.code === "CYCLE" ? `${t(errorKey)} ${err.cycle.join(" → ")}` : t(errorKey))
+    },
+    [t],
+  )
+
   const connectSteps = React.useCallback(
     (sourceStepKey: string, targetStepKey: string) => {
-      if (!wf) return
       if (!sourceStepKey || !targetStepKey) return
       if (sourceStepKey === targetStepKey) return
+
+      // Validate using the latest known steps first so we can show user feedback without
+      // putting side-effects (toast) inside React state updaters (which may be re-invoked in dev).
+      const baseline = latestStepsRef.current ?? []
+      const byKey = new Set(baseline.map((s) => s.stepKey))
+      if (!byKey.has(sourceStepKey) || !byKey.has(targetStepKey)) return
+
+      const nextStepsBaseline = baseline.map((s) => {
+        if (s.stepKey !== targetStepKey) return s
+        const deps = s.deps ?? []
+        if (deps.includes(sourceStepKey)) return s
+        return { ...s, deps: [...deps, sourceStepKey] }
+      })
+
+      const graphOkBaseline = validateWorkflowGraph(nextStepsBaseline)
+      if (!graphOkBaseline.ok) {
+        emitGraphToast(graphOkBaseline.error, sourceStepKey, targetStepKey)
+        return
+      }
+
+      // Apply via functional update to avoid flicker/races; keep updater pure (no toasts).
       setWf((prev) => {
         if (!prev) return prev
-        const byKey = new Set(prev.steps.map((s) => s.stepKey))
-        if (!byKey.has(sourceStepKey) || !byKey.has(targetStepKey)) return prev
-        return {
-          ...prev,
-          steps: prev.steps.map((s) => {
-            if (s.stepKey !== targetStepKey) return s
-            const deps = s.deps ?? []
-            if (deps.includes(sourceStepKey)) return s
-            return { ...s, deps: [...deps, sourceStepKey] }
-          }),
-        }
+        const byKeyPrev = new Set(prev.steps.map((s) => s.stepKey))
+        if (!byKeyPrev.has(sourceStepKey) || !byKeyPrev.has(targetStepKey)) return prev
+
+        const nextSteps = prev.steps.map((s) => {
+          if (s.stepKey !== targetStepKey) return s
+          const deps = s.deps ?? []
+          if (deps.includes(sourceStepKey)) return s
+          return { ...s, deps: [...deps, sourceStepKey] }
+        })
+
+        // Re-check for safety (no side-effects here).
+        const graphOk = validateWorkflowGraph(nextSteps)
+        if (!graphOk.ok) return prev
+
+        return { ...prev, steps: nextSteps }
       })
     },
-    [wf, setWf],
+    [emitGraphToast, setWf],
   )
 
   const disconnectSteps = React.useCallback(
@@ -342,6 +396,19 @@ export function useWorkflowEditorGraph(params: {
     return true
   }, [persistStepsDraft, selectedGraphStepKeys, selectedStepKey, setWf, t, wf])
 
+  const confirmClearCanvas = React.useCallback(async (): Promise<boolean> => {
+    if (!wf) return false
+    if (!wf.steps.length) return false
+    const ok = await persistStepsDraft([])
+    if (!ok) return false
+    setWf({ ...wf, steps: [] })
+    setSelectedGraphStepKeys([])
+    setStepSheetOpen(false)
+    setSelectedStepKey(null)
+    toast.success(t("workflows.canvasClearedToast"))
+    return true
+  }, [persistStepsDraft, setWf, t, wf])
+
   return {
     autoSaveState,
     autoSaveError,
@@ -364,5 +431,6 @@ export function useWorkflowEditorGraph(params: {
     disconnectSteps,
     confirmDeleteStep,
     confirmDeleteSelectedSteps,
+    confirmClearCanvas,
   }
 }

@@ -5,13 +5,25 @@ import ReactFlow, { Background, ReactFlowProvider } from "reactflow"
 
 import { WorkflowGraphCanvasOverlay } from "@/components/graph/workflow-graph-canvas-overlay"
 import { SectionCard } from "@/components/common/section-card"
+import { useI18n } from "@/components/i18n-provider"
+import { getCmdOrCtrlLabel } from "@/lib/client/platform"
 import { cn } from "@/lib/utils"
 import type { WorkflowLayoutPresetKey } from "@/lib/client/workflow-layout-store"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuGroup,
+  ContextMenuItem,
+  ContextMenuShortcut,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu"
 import {
   useWorkflowGraphCanvas,
   type WorkflowGraphCanvasUiState,
   type WorkflowGraphStep,
 } from "@/components/graph/hooks/use-workflow-graph-canvas"
+import { ArrowLeftRight, ArrowUpDown, Check, Hand, MousePointer2, Pencil, Trash2Icon, X } from "lucide-react"
 
 const BACKGROUND_GAP_PX = 20
 
@@ -29,15 +41,10 @@ export type WorkflowGraphCanvasHandle = {
    * Returns:
    * - "ok": applied
    * - "blocked": CUSTOM not allowed
-   * - "outdated": CUSTOM exists but was created for a different graph structure (wrapper should show confirm dialog)
    */
-  selectLayoutPreset: (preset: WorkflowLayoutPresetKey) => "ok" | "blocked" | "outdated"
+  selectLayoutPreset: (preset: WorkflowLayoutPresetKey) => "ok" | "blocked"
   /** Reset/Clear the stored CUSTOM layout and switch back to default preset. */
   resetCustomLayout: () => void
-  /** Clear outdated custom (same as reset), close outdated dialog is handled by wrapper. */
-  clearOutdatedCustom: () => void
-  /** Overwrite CUSTOM with current auto-layout positions, then switch to CUSTOM. */
-  rebuildCustomLayout: () => void
 }
 
 export function WorkflowGraphCanvasCore(
@@ -47,6 +54,10 @@ export function WorkflowGraphCanvasCore(
     className?: string
     frame?: boolean
     workflowId?: string
+    enableNodeContextMenu?: boolean
+    enableEditCanvasContextMenu?: boolean
+    onRequestClearCanvas?: () => void
+    onRequestLayoutPreset?: (preset: WorkflowLayoutPresetKey) => void
     /**
      * When true, the canvas will keep auto-fitting the viewport on step/deps changes even if the user
      * has previously moved the viewport. Useful for streaming drafts (agent) where nodes appear over time.
@@ -97,6 +108,8 @@ export function WorkflowGraphCanvasCore(
   },
   ref: React.ForwardedRef<WorkflowGraphCanvasHandle>,
 ) {
+  const { t } = useI18n()
+  const cmdOrCtrl = React.useMemo(() => getCmdOrCtrlLabel(), [])
   const mode = props.mode ?? "view"
   const frame = props.frame ?? true
   const workflowId = props.workflowId ?? null
@@ -111,6 +124,8 @@ export function WorkflowGraphCanvasCore(
     forceAutoFit,
     showLayoutMenu,
     allowCustomLayout,
+    enableNodeContextMenu: props.enableNodeContextMenu,
+    enableEditCanvasContextMenu: props.enableEditCanvasContextMenu,
     highlightStepKeys: props.highlightStepKeys,
     focusStepKey: props.focusStepKey,
     stepStatusByKey: props.stepStatusByKey,
@@ -138,8 +153,6 @@ export function WorkflowGraphCanvasCore(
       zoomOut: g.actions.zoomOut,
       selectLayoutPreset: g.actions.selectLayoutPreset,
       resetCustomLayout: g.actions.resetCustomLayout,
-      clearOutdatedCustom: g.actions.clearOutdatedCustom,
-      rebuildCustomLayout: g.actions.rebuildCustomLayout,
     }),
     [g.actions, g.getUiState],
   )
@@ -150,10 +163,24 @@ export function WorkflowGraphCanvasCore(
   }, [g.getUiState])
 
   const ui = g.getUiState()
+  const menu = g.contextMenu
 
-  const canvas = (
+  const canEdit = !ui.readonly
+  const selectedCount = props.selectedStepKeys?.length ?? 0
+  const showDeleteSelectedAction = Boolean(props.onDeleteSelectedSteps) && selectedCount > 0
+  const showClearCanvasAction = Boolean(props.onRequestClearCanvas)
+  const showDestructiveSection = showDeleteSelectedAction || showClearCanvasAction
+
+  const canvasInner = (
     // React Flow needs an explicit height on a parent container.
-    <div ref={g.containerRef} className="relative h-full w-full overflow-hidden">
+    <div
+      ref={g.containerRef}
+      className="relative h-full w-full overflow-hidden"
+      onContextMenuCapture={() => {
+        if (!enableContextMenu) return
+        if (!menu) g.setContextMenu({ kind: "pane" })
+      }}
+    >
       {!props.disableOverlay ? (
         <WorkflowGraphCanvasOverlay
           showToolbar={ui.showToolbar}
@@ -164,7 +191,6 @@ export function WorkflowGraphCanvasCore(
           layoutPreset={ui.layoutPreset}
           showLayoutDropdown={ui.showLayoutDropdown}
           allowCustom={ui.allowCustom}
-          hasOutdatedCustom={ui.hasOutdatedCustom}
           selectedCount={props.selectedStepKeys?.length ?? 0}
           onAddStep={props.onAddStep}
           onDeleteSelectedSteps={props.onDeleteSelectedSteps}
@@ -202,6 +228,8 @@ export function WorkflowGraphCanvasCore(
         onMoveStart={g.onMoveStart}
         onConnect={g.onConnect}
         onEdgesDelete={g.onEdgesDelete}
+        onEdgeContextMenu={g.onEdgeContextMenu}
+        onPaneContextMenu={g.onPaneContextMenu}
         onSelectionChange={g.onSelectionChange}
         onNodeClick={g.onNodeClick}
         onNodeDragStart={g.onNodeDragStart}
@@ -213,8 +241,135 @@ export function WorkflowGraphCanvasCore(
     </div>
   )
 
+  const enableContextMenu = canEdit && props.enableEditCanvasContextMenu === true
+
+  const canvas = enableContextMenu ? (
+    <ContextMenu
+      onOpenChange={(open) => {
+        if (!open) g.setContextMenu(null)
+      }}
+    >
+      <ContextMenuTrigger asChild>{canvasInner}</ContextMenuTrigger>
+      <ContextMenuContent className={menu?.kind === "edge" ? undefined : "min-w-[220px]"}>
+        {menu?.kind === "edge" ? (
+          <ContextMenuGroup>
+            <ContextMenuItem
+              onSelect={() => {
+                props.onDisconnectSteps?.(menu.source, menu.target)
+              }}
+            >
+              <X className="size-4" />
+              {t("workflows.graph.disconnectEdgeAction")}
+            </ContextMenuItem>
+          </ContextMenuGroup>
+        ) : (
+          <>
+            <ContextMenuGroup>
+              <ContextMenuItem
+                onSelect={() => {
+                  ;(props.onRequestLayoutPreset ?? g.actions.selectLayoutPreset)("LR")
+                }}
+              >
+                <ArrowLeftRight className="size-4" />
+                {t("workflows.layoutLeftRight")}
+                <ContextMenuShortcut>Q</ContextMenuShortcut>
+              </ContextMenuItem>
+              <ContextMenuItem
+                onSelect={() => {
+                  ;(props.onRequestLayoutPreset ?? g.actions.selectLayoutPreset)("TB")
+                }}
+              >
+                <ArrowUpDown className="size-4" />
+                {t("workflows.layoutTopBottom")}
+                <ContextMenuShortcut>W</ContextMenuShortcut>
+              </ContextMenuItem>
+              {ui.allowCustom ? (
+                <ContextMenuItem
+                  onSelect={() => {
+                    ;(props.onRequestLayoutPreset ?? g.actions.selectLayoutPreset)("CUSTOM")
+                  }}
+                >
+                  <Pencil className="size-4" />
+                  {t("workflows.layoutCustom")}
+                  <ContextMenuShortcut>E</ContextMenuShortcut>
+                </ContextMenuItem>
+              ) : null}
+            </ContextMenuGroup>
+
+            <ContextMenuSeparator />
+
+            <ContextMenuGroup>
+              <ContextMenuItem
+                onSelect={() => {
+                  g.actions.setInteractionMode("pan")
+                }}
+              >
+                <Hand className="size-4" />
+                {t("common.graphControls.panModeAriaLabel")}
+                <ContextMenuShortcut>V</ContextMenuShortcut>
+              </ContextMenuItem>
+              <ContextMenuItem
+                onSelect={() => {
+                  g.actions.setInteractionMode("select")
+                }}
+              >
+                <MousePointer2 className="size-4" />
+                {t("common.graphControls.selectModeAriaLabel")}
+                <ContextMenuShortcut>S</ContextMenuShortcut>
+              </ContextMenuItem>
+            </ContextMenuGroup>
+
+            <ContextMenuSeparator />
+
+            <ContextMenuItem
+              onSelect={() => {
+                g.actions.selectAllSteps()
+              }}
+            >
+              <Check className="size-4" />
+              {t("workflows.graph.selectAllAction")}
+              <ContextMenuShortcut>{cmdOrCtrl}A</ContextMenuShortcut>
+            </ContextMenuItem>
+
+            {showDestructiveSection ? (
+              <>
+                <ContextMenuSeparator />
+
+                {showDeleteSelectedAction ? (
+                  <ContextMenuItem
+                    variant="destructive"
+                    onSelect={() => {
+                      props.onDeleteSelectedSteps?.()
+                    }}
+                  >
+                    <Trash2Icon className="size-4" />
+                    {t("workflows.graph.deleteSelectedAction")} ({selectedCount})
+                  </ContextMenuItem>
+                ) : null}
+
+                {showClearCanvasAction ? (
+                  <ContextMenuItem
+                    variant="destructive"
+                    onSelect={() => {
+                      props.onRequestClearCanvas?.()
+                    }}
+                  >
+                    <Trash2Icon className="size-4" />
+                    {t("workflows.graph.clearCanvasAction")}
+                  </ContextMenuItem>
+                ) : null}
+              </>
+            ) : null}
+          </>
+        )}
+      </ContextMenuContent>
+    </ContextMenu>
+  ) : (
+    canvasInner
+  )
+
   return frame ? (
-    <SectionCard className={cn("h-full w-full min-h-[520px] bg-card text-card-foreground", props.className)}>
+    <SectionCard className={cn("h-full w-full min-h-[520px] text-card-foreground", props.className)}>
       {canvas}
     </SectionCard>
   ) : (

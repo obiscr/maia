@@ -3,6 +3,7 @@
 import * as React from "react"
 import type {
   Edge,
+  EdgeMouseHandler,
   Node,
   NodeDragHandler,
   NodeMouseHandler,
@@ -33,8 +34,8 @@ import {
 export const REACTFLOW_PRO_OPTIONS = { hideAttribution: true } as const
 export const REACTFLOW_CONNECTION_LINE_STYLE = { strokeWidth: 2 } as const
 export const REACTFLOW_EDGE_STYLE = { strokeWidth: 2 } as const
-export const PAN_MODE_SELECTION_KEYS: string[] = ["Control", "Meta"]
 export const PAN_ON_DRAG_MOUSE_BUTTONS: number[] = [1, 2]
+export const PAN_ON_DRAG_MOUSE_BUTTONS_SELECT_MODE: number[] = [1]
 
 export const MIN_READABLE_ZOOM = 0.7
 export const MIN_ZOOM = 0.35
@@ -55,11 +56,12 @@ export type WorkflowGraphCanvasUiState = {
   layoutPreset: WorkflowLayoutPresetKey
   showLayoutDropdown: boolean
   allowCustom: boolean
-  hasOutdatedCustom: boolean
   showToolbar: boolean
   readonly: boolean
   workflowId: string | null
 }
+
+type CanvasContextMenuState = null | { kind: "edge"; source: string; target: string } | { kind: "pane" }
 
 function buildEdges(steps: WorkflowGraphStep[]): Edge[] {
   const byKey = new Set(steps.map((s) => s.stepKey))
@@ -74,10 +76,72 @@ function buildEdges(steps: WorkflowGraphStep[]): Edge[] {
         type: "smoothstep",
         style: REACTFLOW_EDGE_STYLE,
         pathOptions: { borderRadius: 18, offset: 14 },
+        // Make edges easier to click/right-click (UX parity with design tools).
+        interactionWidth: 16,
       })
     }
   }
   return edges
+}
+
+function uniqSorted(values: string[]): string[] {
+  return Array.from(new Set(values.filter(Boolean))).sort()
+}
+
+/**
+ * Build a canonical "structure signature" from steps.
+ * Important: we only include deps that point to an existing stepKey (same behavior as rendered edges),
+ * so dangling deps don't incorrectly mark a custom layout as "outdated".
+ */
+function buildLayoutStruct(steps: WorkflowGraphStep[]): Map<string, string[]> {
+  const stepKeys = new Set(steps.map((s) => String(s.stepKey)))
+  const out = new Map<string, string[]>()
+  for (const s of steps) {
+    const key = String(s.stepKey)
+    const deps = (s.deps ?? []).map(String).filter((d) => d !== key && stepKeys.has(d))
+    out.set(key, uniqSorted(deps))
+  }
+  return out
+}
+
+/**
+ * Parses old/new layoutSig strings into a structure map.
+ * This is intentionally forgiving so we can compare signatures across app versions:
+ * - step order differences
+ * - dep order differences
+ * - duplicated deps
+ */
+function parseLayoutSig(sig: string, allowedStepKeys: Set<string>): Map<string, string[]> | null {
+  if (!sig) return null
+  const out = new Map<string, string[]>()
+  for (const part of sig.split("|")) {
+    if (!part) continue
+    const idx = part.indexOf("->")
+    if (idx < 0) continue
+    const key = part.slice(0, idx)
+    const depsRaw = part.slice(idx + 2)
+    if (!key) continue
+    const deps = depsRaw
+      ? depsRaw
+          .split(",")
+          .map(String)
+          .filter((d) => d && d !== key && allowedStepKeys.has(d))
+      : []
+    const prev = out.get(key) ?? []
+    out.set(key, uniqSorted(prev.concat(deps)))
+  }
+  return out.size ? out : null
+}
+
+function isSameLayoutStruct(a: Map<string, string[]>, b: Map<string, string[]>): boolean {
+  if (a.size !== b.size) return false
+  for (const [k, depsA] of a) {
+    const depsB = b.get(k)
+    if (!depsB) return false
+    if (depsA.length !== depsB.length) return false
+    for (let i = 0; i < depsA.length; i++) if (depsA[i] !== depsB[i]) return false
+  }
+  return true
 }
 
 export function useWorkflowGraphCanvas(args: {
@@ -87,6 +151,16 @@ export function useWorkflowGraphCanvas(args: {
   forceAutoFit: boolean
   showLayoutMenu: boolean
   allowCustomLayout: boolean
+  /**
+   * Optional: enable node right-click context menu.
+   * Defaults to false so other canvases remain unchanged unless explicitly enabled.
+   */
+  enableNodeContextMenu?: boolean
+  /**
+   * Optional: enable the canvas background context menu (edit mode only).
+   * Defaults to false so view-only canvases (including agent/run) remain unchanged.
+   */
+  enableEditCanvasContextMenu?: boolean
   highlightStepKeys?: string[]
   focusStepKey?: string | null
   stepStatusByKey?: Record<string, string | undefined>
@@ -124,6 +198,8 @@ export function useWorkflowGraphCanvas(args: {
 
   const pendingEmptyRafRef = React.useRef<number | null>(null)
   const lastEmittedSelectionRef = React.useRef<string[]>([])
+
+  const [contextMenu, setContextMenu] = React.useState<CanvasContextMenuState>(null)
 
   React.useEffect(() => {
     return () => {
@@ -227,16 +303,17 @@ export function useWorkflowGraphCanvas(args: {
     [args.onEditStep, showToolbar],
   )
 
+  const layoutStruct = React.useMemo(() => buildLayoutStruct(args.steps), [args.steps])
+
   const layoutSig = React.useMemo(() => {
     // Only include structural fields that impact layout; ignore cosmetic status/duration/highlight.
-    return args.steps
-      .map((s) => {
-        const deps = (s.deps ?? []).slice().sort().join(",")
-        return `${s.stepKey}->${deps}`
-      })
-      .sort()
-      .join("|")
-  }, [args.steps])
+    // Canonicalize to be stable across step/dep ordering.
+    const parts: string[] = []
+    for (const [key, deps] of layoutStruct.entries()) {
+      parts.push(`${key}->${deps.join(",")}`)
+    }
+    return parts.sort().join("|")
+  }, [layoutStruct])
 
   const liveStoredCustom = React.useMemo(() => {
     if (!args.workflowId) return null
@@ -246,8 +323,13 @@ export function useWorkflowGraphCanvas(args: {
   const hasOutdatedCustom = React.useMemo(() => {
     const sig = liveStoredCustom?.layoutSig
     if (!sig) return false
-    return sig !== layoutSig
-  }, [liveStoredCustom?.layoutSig, layoutSig])
+    // Compare structurally (not raw string) to avoid false positives across app versions
+    // and to ignore dangling deps that aren't part of the rendered graph.
+    const allowedKeys = new Set(layoutStruct.keys())
+    const storedStruct = parseLayoutSig(sig, allowedKeys)
+    if (!storedStruct) return false
+    return !isSameLayoutStruct(storedStruct, layoutStruct)
+  }, [layoutStruct, liveStoredCustom?.layoutSig])
 
   const persistPreset = React.useCallback(
     (
@@ -301,13 +383,17 @@ export function useWorkflowGraphCanvas(args: {
         const nextNodes: Node<WorkflowGraphStepNodeData>[] = args.steps.map((s) => ({
           id: s.stepKey,
           type: "stepNode",
-          position: prevMap.get(s.stepKey)?.position ?? { x: 0, y: 0 },
+          // Prefer ReactFlow's internal live node positions to avoid "snap back" during drag
+          // when a graph sync (e.g. deps change) races with node move events.
+          position: rf.getNode(s.stepKey)?.position ?? prevMap.get(s.stepKey)?.position ?? { x: 0, y: 0 },
           selected: prevMap.get(s.stepKey)?.selected,
           data: {
             stepKey: s.stepKey,
             name: s.name,
             depsCount: s.deps?.length ?? 0,
+            deps: s.deps ?? [],
             mode: args.mode,
+            enableContextMenu: args.enableNodeContextMenu === true,
             status: args.stepStatusByKey?.[s.stepKey],
             durationMs: args.stepDurationMsByKey?.[s.stepKey],
             highlight: highlight.has(s.stepKey),
@@ -320,17 +406,18 @@ export function useWorkflowGraphCanvas(args: {
             onViewStepLogs: args.onViewStepLogs,
             onViewStepOutput: args.onViewStepOutput,
             onViewStepDefinition: args.onViewStepDefinition,
+            onDisconnectDep: args.onDisconnectSteps,
           },
         }))
 
         // IMPORTANT: LR/TB are always deterministic auto-layouts (dagre).
-        // Only CUSTOM uses stored positions. Also, read from localStorage as a source of truth to avoid
-        // state timing issues when the user switches presets and we write storage in the same tick.
+        // For CUSTOM, we only apply stored positions during an explicit layout pass.
+        // In edit mode, repeatedly re-applying stored positions during "sync" can cause flicker/snap-back
+        // because storage can lag behind live drag positions.
         const liveEntry = args.workflowId ? getWorkflowLayoutEntry(args.workflowId) : layoutEntry
         const storedCustom = liveEntry?.presets?.CUSTOM?.positions ?? null
-        const withStored = preset === "CUSTOM" ? applyStoredPositions(nextNodes, storedCustom) : nextNodes
 
-        if (!layout) return withStored
+        if (!layout) return nextNodes
 
         // Layout requested:
         // - LR/TB: always run dagre (never apply cached positions).
@@ -478,7 +565,6 @@ export function useWorkflowGraphCanvas(args: {
       layoutPreset,
       showLayoutDropdown,
       allowCustom: args.allowCustomLayout,
-      hasOutdatedCustom,
       showToolbar,
       readonly,
       workflowId: args.workflowId,
@@ -486,7 +572,6 @@ export function useWorkflowGraphCanvas(args: {
   }, [
     args.allowCustomLayout,
     args.workflowId,
-    hasOutdatedCustom,
     interactionMode,
     layoutDirection,
     layoutPreset,
@@ -519,6 +604,48 @@ export function useWorkflowGraphCanvas(args: {
     },
     [args.onDisconnectSteps, readonly],
   )
+
+  const handleEdgeContextMenu: EdgeMouseHandler = React.useCallback(
+    (evt, e) => {
+      if (readonly) return
+      const source = String(e.source ?? "")
+      const target = String(e.target ?? "")
+      if (!source || !target) return
+      setContextMenu({ kind: "edge", source, target })
+    },
+    [readonly],
+  )
+
+  const enableCanvasContextMenu = args.mode === "edit" && args.enableEditCanvasContextMenu === true && !readonly
+
+  const handlePaneContextMenu = React.useMemo<((evt: React.MouseEvent) => void) | undefined>(() => {
+    if (!enableCanvasContextMenu) return undefined
+    return (evt) => {
+      setContextMenu({ kind: "pane" })
+    }
+  }, [enableCanvasContextMenu])
+
+  // Since we disable ReactFlow's built-in deleteKeyCode (to avoid deleting nodes),
+  // implement "Delete selected edges" ourselves.
+  React.useEffect(() => {
+    if (readonly) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Delete" && e.key !== "Backspace") return
+      const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase()
+      const isTyping =
+        tag === "input" ||
+        tag === "textarea" ||
+        (e.target as HTMLElement | null)?.getAttribute?.("contenteditable") === "true"
+      if (isTyping) return
+
+      const selected = rf.getEdges().filter((ed) => Boolean((ed as { selected?: boolean }).selected))
+      if (!selected.length) return
+      e.preventDefault()
+      handleEdgesDelete(selected)
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [handleEdgesDelete, readonly, rf])
 
   const handleNodeDragStart: NodeDragHandler = React.useCallback(() => {
     nodeDragInProgressRef.current = true
@@ -563,10 +690,30 @@ export function useWorkflowGraphCanvas(args: {
     persistCustomNow()
   }, [args.mode, args.workflowId, layoutPreset, persistCustomNow])
 
+  const selectAllSteps = React.useCallback(() => {
+    if (readonly) return
+    const all = args.steps.map((s) => String(s.stepKey)).filter(Boolean)
+    if (!all.length) return
+    setNodes((prev) => prev.map((n) => ({ ...n, selected: true })))
+    // Emit selection immediately so upstream UI updates without waiting for ReactFlow internals.
+    args.onSelectedStepKeysChange?.(all)
+  }, [args.onSelectedStepKeysChange, args.steps, readonly, setNodes])
+
+  const rebuildCustomLayout = React.useCallback(() => {
+    persistPreset("CUSTOM", nodesToPositions(rf.getNodes()), { selected: "CUSTOM" })
+    persistSelected("CUSTOM")
+    setLayoutPreset("CUSTOM")
+    relayoutAndFocus("CUSTOM")
+  }, [persistPreset, persistSelected, relayoutAndFocus, rf])
+
   const selectLayoutPreset = React.useCallback(
-    (v: WorkflowLayoutPresetKey): "ok" | "blocked" | "outdated" => {
+    (v: WorkflowLayoutPresetKey): "ok" | "blocked" => {
       if (v === "CUSTOM" && !args.allowCustomLayout) return "blocked"
-      if (v === "CUSTOM" && hasOutdatedCustom) return "outdated"
+      if (v === "CUSTOM" && hasOutdatedCustom) {
+        // Product rule: do not prompt. Auto-rebuild to match the current structure.
+        rebuildCustomLayout()
+        return "ok"
+      }
 
       // Persist selection immediately (default selection is omitted from storage, presets are kept).
       persistSelected(v)
@@ -585,12 +732,67 @@ export function useWorkflowGraphCanvas(args: {
       args.allowCustomLayout,
       hasOutdatedCustom,
       layoutEntry?.presets?.CUSTOM?.positions,
+      rebuildCustomLayout,
       persistPreset,
       persistSelected,
       relayoutAndFocus,
       rf,
     ],
   )
+
+  // Keyboard shortcuts:
+  // - S: select mode
+  // - V: pan mode
+  // - Q: layout left-to-right
+  // - W: layout top-to-bottom
+  // - E: custom layout
+  // - Cmd/Ctrl + A: select all
+  // Do not steal input focus (ignore when typing in inputs/editors).
+  React.useEffect(() => {
+    if (readonly) return
+    if (!showToolbar) return
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return
+
+      const target = e.target as HTMLElement | null
+      const tag = target?.tagName?.toLowerCase()
+      const isTyping =
+        tag === "input" ||
+        tag === "textarea" ||
+        tag === "select" ||
+        target?.isContentEditable === true ||
+        target?.getAttribute?.("contenteditable") === "true"
+      if (isTyping) return
+
+      const key = e.key.toLowerCase()
+
+      // Select all (Cmd/Ctrl+A)
+      if (key === "a" && (e.metaKey || e.ctrlKey) && !e.altKey) {
+        e.preventDefault()
+        selectAllSteps()
+        return
+      }
+
+      // Mode toggles (no modifiers)
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      if (key === "s") setInteractionMode("select")
+      else if (key === "v") setInteractionMode("pan")
+      else if (key === "q") {
+        e.preventDefault()
+        selectLayoutPreset("LR")
+      } else if (key === "w") {
+        e.preventDefault()
+        selectLayoutPreset("TB")
+      } else if (key === "e") {
+        e.preventDefault()
+        selectLayoutPreset("CUSTOM")
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [readonly, selectAllSteps, selectLayoutPreset, setInteractionMode, showToolbar])
 
   const resetCustomLayout = React.useCallback(() => {
     if (!args.workflowId) return
@@ -602,14 +804,6 @@ export function useWorkflowGraphCanvas(args: {
     setLayoutDirection("LR")
     relayoutAndFocus(DEFAULT_LAYOUT_PRESET)
   }, [args.workflowId, persistSelected, relayoutAndFocus])
-
-  const rebuildCustomLayout = React.useCallback(() => {
-    // Overwrite CUSTOM with the current auto-layout positions, then switch to CUSTOM.
-    persistPreset("CUSTOM", nodesToPositions(rf.getNodes()), { selected: "CUSTOM" })
-    persistSelected("CUSTOM")
-    setLayoutPreset("CUSTOM")
-    relayoutAndFocus("CUSTOM")
-  }, [persistPreset, persistSelected, relayoutAndFocus, rf])
 
   return {
     // Render-time
@@ -627,11 +821,13 @@ export function useWorkflowGraphCanvas(args: {
     nodesDraggable: !readonly,
     nodesConnectable: !readonly,
     selectionOnDrag: showToolbar && interactionMode === "select",
-    selectionKeyCode: showToolbar && interactionMode === "pan" ? PAN_MODE_SELECTION_KEYS : undefined,
-    panOnDrag: showToolbar ? (interactionMode === "pan" ? true : PAN_ON_DRAG_MOUSE_BUTTONS) : true,
+    selectionKeyCode: undefined,
+    panOnDrag: showToolbar ? (interactionMode === "pan" ? true : PAN_ON_DRAG_MOUSE_BUTTONS_SELECT_MODE) : true,
     onMoveStart: handleMoveStart,
     onConnect: handleConnect,
     onEdgesDelete: handleEdgesDelete,
+    onEdgeContextMenu: handleEdgeContextMenu,
+    onPaneContextMenu: handlePaneContextMenu,
     onSelectionChange: handleSelectionChange,
     onNodeClick: handleNodeClick,
     onNodeDragStart: handleNodeDragStart,
@@ -643,17 +839,19 @@ export function useWorkflowGraphCanvas(args: {
     layoutDirection,
     layoutPreset,
 
+    contextMenu,
+    setContextMenu,
+
     // Wrapper + overlay integration
     getUiState,
     actions: {
       setInteractionMode,
+      selectAllSteps,
       fitReadable,
       zoomIn: () => rf.zoomIn(),
       zoomOut: () => rf.zoomOut(),
       selectLayoutPreset,
       resetCustomLayout,
-      clearOutdatedCustom: resetCustomLayout,
-      rebuildCustomLayout,
     },
   }
 }

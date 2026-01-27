@@ -33,7 +33,7 @@ export function WorkflowVersionSnapshotTabsPanelSkeleton(props: { className?: st
             <div className="min-h-0 flex-1 overflow-hidden border-b md:w-[300px] md:flex-none md:border-b-0 md:border-r">
               <div className="h-full space-y-2 p-3">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={`wfver:steps:sk:${i}`} className="rounded-md border bg-card p-3">
+                  <div key={`wfver:steps:sk:${i}`} className="rounded-md border p-3">
                     <Skeleton className="h-4 w-48" />
                     <div className="mt-2 flex gap-2">
                       <Skeleton className="h-3 w-24" />

@@ -1,11 +1,10 @@
 "use client"
 
 import * as React from "react"
-import { RefreshCcw, Trash2Icon } from "lucide-react"
+import { Trash2Icon } from "lucide-react"
 
 import { useI18n } from "@/components/i18n-provider"
 import { StandardConfirmDialog } from "@/components/common/standard-confirm-dialog"
-import { StandardActionDialog } from "@/components/common/standard-action-dialog"
 import { SectionCard, SectionCardBody, SectionCardHeader } from "@/components/common/section-card"
 import { cn } from "@/lib/utils"
 import type { WorkflowLayoutPresetKey } from "@/lib/client/workflow-layout-store"
@@ -59,6 +58,9 @@ export function WorkflowGraphCanvasWrapper(props: {
    * Useful for edit pages; should typically be false for read-only pages.
    */
   showLayoutReset?: boolean
+  enableNodeContextMenu?: boolean
+  enableEditCanvasContextMenu?: boolean
+  onRequestClearCanvas?: () => void
 
   // Run-specific decorations (pass-through)
   stepStatusByKey?: Record<string, string | undefined>
@@ -90,7 +92,6 @@ export function WorkflowGraphCanvasWrapper(props: {
   const [ui, setUi] = React.useState<ReturnType<WorkflowGraphCanvasHandle["getUiState"]> | null>(null)
 
   const [resetConfirmOpen, setResetConfirmOpen] = React.useState(false)
-  const [outdatedOpen, setOutdatedOpen] = React.useState(false)
 
   const mode = props.mode ?? "view"
 
@@ -110,27 +111,13 @@ export function WorkflowGraphCanvasWrapper(props: {
   const setSelect = React.useCallback(() => canvasRef.current?.setInteractionMode("select"), [])
 
   const onLayoutChange = React.useCallback((v: WorkflowLayoutPresetKey) => {
-    const res = canvasRef.current?.selectLayoutPreset(v)
-    if (res === "outdated") {
-      setOutdatedOpen(true)
-      return
-    }
+    canvasRef.current?.selectLayoutPreset(v)
   }, [])
 
   const openReset = React.useCallback(() => setResetConfirmOpen(true), [])
   const confirmReset = React.useCallback(() => {
     canvasRef.current?.resetCustomLayout()
     setResetConfirmOpen(false)
-  }, [])
-
-  const clearOutdated = React.useCallback(() => {
-    canvasRef.current?.clearOutdatedCustom()
-    setOutdatedOpen(false)
-  }, [])
-
-  const rebuildOutdated = React.useCallback(() => {
-    canvasRef.current?.rebuildCustomLayout()
-    setOutdatedOpen(false)
   }, [])
 
   const headerControls = React.useMemo(() => {
@@ -213,6 +200,10 @@ export function WorkflowGraphCanvasWrapper(props: {
             mode={props.mode}
             frame={false}
             workflowId={props.workflowId}
+            enableNodeContextMenu={props.enableNodeContextMenu}
+            enableEditCanvasContextMenu={props.enableEditCanvasContextMenu}
+            onRequestClearCanvas={props.onRequestClearCanvas}
+            onRequestLayoutPreset={onLayoutChange}
             forceAutoFit={props.forceAutoFit}
             showLayoutMenu={props.showLayoutMenu}
             allowCustomLayout={props.allowCustomLayout}
@@ -256,38 +247,12 @@ export function WorkflowGraphCanvasWrapper(props: {
           confirmReset()
         }}
       />
-
-      <StandardActionDialog
-        open={outdatedOpen}
-        onOpenChange={setOutdatedOpen}
-        title={t("workflows.layoutCustomOutdatedTitle")}
-        description={t("workflows.layoutCustomOutdatedDescription")}
-        actions={[
-          { key: "cancel", kind: "cancel", label: t("common.cancelAction") },
-          {
-            key: "reset",
-            label: t("workflows.layoutCustomOutdatedResetAction"),
-            icon: <Trash2Icon className="h-4 w-4" />,
-            variant: "destructive",
-            onClick: clearOutdated,
-          },
-          {
-            key: "rebuild",
-            label: t("workflows.layoutCustomOutdatedRebuildAction"),
-            icon: <RefreshCcw className="h-4 w-4" />,
-            onClick: rebuildOutdated,
-          },
-        ]}
-      />
     </>
   )
 
   return frame ? (
     <SectionCard
-      className={cn(
-        "flex min-h-0 flex-col overflow-hidden h-full min-h-[520px] bg-card text-card-foreground",
-        props.className,
-      )}
+      className={cn("flex min-h-0 flex-col overflow-hidden h-full min-h-[520px] text-card-foreground", props.className)}
     >
       {frameContents}
     </SectionCard>

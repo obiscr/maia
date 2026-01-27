@@ -11,16 +11,32 @@ import {
   ScrollText,
   Upload,
   Trash2Icon,
+  ListTree,
+  X,
 } from "lucide-react"
 import { Handle, Position, type NodeProps } from "reactflow"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuGroup,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu"
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -33,13 +49,17 @@ export type WorkflowGraphStepNodeData = {
   stepKey: string
   name: string
   depsCount: number
+  deps?: string[]
   mode: "view" | "edit"
   status?: string
   durationMs?: number | null
   highlight?: boolean
   otherFailedStepsCount?: number
+  /** Optional: enable node right-click context menu. Default false. */
+  enableContextMenu?: boolean
   onEdit?: (stepKey: string) => void
   onDelete?: (stepKey: string) => void
+  onDisconnectDep?: (sourceStepKey: string, targetStepKey: string) => void
   onRetry?: (stepKey: string) => void
   onRerunStep?: (stepKey: string) => void
   onRestartFrom?: (stepKey: string) => void
@@ -55,6 +75,7 @@ export const WorkflowGraphStepNode = React.memo(function WorkflowGraphStepNode(
   const { stepKey, name, depsCount, mode, status, durationMs, highlight } = props.data
   const isSelected = props.selected === true
   const canEdit = mode === "edit" && !!props.data.onEdit && !!props.data.onDelete
+  const deps = Array.isArray(props.data.deps) ? props.data.deps.map(String).filter(Boolean) : []
   const canRunActions = mode === "view" && (!!props.data.onRetry || !!props.data.onRestartFrom)
   const canRetry = !!props.data.onRetry && toCanonicalRunStatus(status || "") === "FAILED"
   // Product rule: "Rerun this step" should only appear for SUCCEEDED steps.
@@ -106,7 +127,329 @@ export const WorkflowGraphStepNode = React.memo(function WorkflowGraphStepNode(
     ...(borderColor ? { borderColor } : null),
   }
 
-  return (
+  const enableContextMenu = props.data.enableContextMenu === true && (canEdit || canRunActions)
+
+  const stopRfPropagation = React.useCallback((e: React.SyntheticEvent) => {
+    // Prevent ReactFlow's node click handlers from firing when interacting with menu triggers.
+    e.stopPropagation()
+  }, [])
+
+  const renderEditMenuContent = React.useCallback(() => {
+    return (
+      <DropdownMenuContent
+        align="end"
+        className="min-w-[180px]"
+        onPointerDown={stopRfPropagation}
+        onMouseDown={stopRfPropagation}
+        onClick={stopRfPropagation}
+      >
+        <DropdownMenuItem
+          onSelect={() => {
+            props.data.onEdit?.(stepKey)
+          }}
+        >
+          <Pencil className="size-4" />
+          {t("common.editAction")}
+        </DropdownMenuItem>
+
+        {deps.length && props.data.onDisconnectDep ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <ListTree className="size-4" />
+                {t("workflows.graph.dependenciesMenu")}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                {deps.map((d) => (
+                  <DropdownMenuItem
+                    key={d}
+                    className="cursor-pointer"
+                    onSelect={() => {
+                      props.data.onDisconnectDep?.(d, stepKey)
+                    }}
+                  >
+                    <X className="size-4" />
+                    <span>
+                      {t("workflows.graph.disconnectEdgeAction")} {d}
+                    </span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          </>
+        ) : null}
+
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          variant="destructive"
+          className="cursor-pointer"
+          onSelect={() => {
+            props.data.onDelete?.(stepKey)
+          }}
+        >
+          <Trash2Icon className="size-4" />
+          {t("common.deleteAction")}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    )
+  }, [deps, props.data, stepKey, stopRfPropagation, t])
+
+  const renderRunMenuContent = React.useCallback(() => {
+    return (
+      <DropdownMenuContent
+        align="end"
+        className="min-w-[200px]"
+        onPointerDown={stopRfPropagation}
+        onMouseDown={stopRfPropagation}
+        onClick={stopRfPropagation}
+      >
+        {canViewStepPanels ? (
+          <>
+            {props.data.onViewStepLogs ? (
+              <DropdownMenuItem
+                onSelect={() => {
+                  props.data.onViewStepLogs?.(stepKey)
+                }}
+              >
+                <ScrollText className="size-4" />
+                {t("runs.viewDetailsAction")}
+              </DropdownMenuItem>
+            ) : null}
+            {props.data.onViewStepOutput ? (
+              <DropdownMenuItem
+                onSelect={() => {
+                  props.data.onViewStepOutput?.(stepKey)
+                }}
+              >
+                <Upload className="size-4" />
+                {t("runs.viewStepOutputAction")}
+              </DropdownMenuItem>
+            ) : null}
+            {props.data.onViewStepDefinition ? (
+              <DropdownMenuItem
+                onSelect={() => {
+                  props.data.onViewStepDefinition?.(stepKey)
+                }}
+              >
+                <Braces className="size-4" />
+                {t("runs.viewStepDefinitionAction")}
+              </DropdownMenuItem>
+            ) : null}
+            {canRetry || canRerunStep || props.data.onRestartFrom ? <DropdownMenuSeparator /> : null}
+          </>
+        ) : null}
+        {canRetry
+          ? (() => {
+              const item = (
+                <DropdownMenuItem
+                  onSelect={() => {
+                    props.data.onRetry?.(stepKey)
+                  }}
+                >
+                  <RefreshCcw className="size-4" />
+                  {t("common.retryAction")}
+                </DropdownMenuItem>
+              )
+              if (!hasOtherFailedSteps) return item
+              return (
+                <Tooltip>
+                  <TooltipTrigger asChild>{item}</TooltipTrigger>
+                  <TooltipContent side="right" align="center" className="max-w-[320px] whitespace-pre-line">
+                    {t("runs.retryHintOtherFailed")}
+                  </TooltipContent>
+                </Tooltip>
+              )
+            })()
+          : null}
+        {canRerunStep ? (
+          <>
+            {canRetry ? <DropdownMenuSeparator /> : null}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    props.data.onRerunStep?.(stepKey)
+                  }}
+                >
+                  <RefreshCcw className="size-4" />
+                  {t("runs.rerunActionStepAction")}
+                </DropdownMenuItem>
+              </TooltipTrigger>
+              <TooltipContent side="right" align="center" className="max-w-[340px] whitespace-pre-line">
+                <div className="space-y-1">
+                  <div>{t("runs.rerunActionStepActionHint")}</div>
+                  {hasOtherFailedSteps ? <div>{t("runs.rerunActionStepActionHintOtherFailed")}</div> : null}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </>
+        ) : null}
+        {props.data.onRestartFrom ? (
+          <>
+            <DropdownMenuItem
+              onSelect={() => {
+                props.data.onRestartFrom?.(stepKey)
+              }}
+            >
+              <RotateCcw className="size-4" />
+              {t("runs.restartFromHereAction")}
+            </DropdownMenuItem>
+          </>
+        ) : null}
+      </DropdownMenuContent>
+    )
+  }, [canRerunStep, canRetry, canViewStepPanels, hasOtherFailedSteps, props.data, stepKey, stopRfPropagation, t])
+
+  const renderEditContextMenu = React.useCallback(() => {
+    return (
+      <ContextMenuContent
+        className="min-w-[200px]"
+        onPointerDown={stopRfPropagation}
+        onMouseDown={stopRfPropagation}
+        onClick={stopRfPropagation}
+      >
+        <ContextMenuGroup>
+          <ContextMenuItem
+            onSelect={() => {
+              props.data.onEdit?.(stepKey)
+            }}
+          >
+            <Pencil className="size-4" />
+            {t("common.editAction")}
+          </ContextMenuItem>
+        </ContextMenuGroup>
+
+        {deps.length && props.data.onDisconnectDep ? (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuSub>
+              <ContextMenuSubTrigger className="gap-2">
+                <ListTree className="size-4" />
+                {t("workflows.graph.dependenciesMenu")}
+              </ContextMenuSubTrigger>
+              <ContextMenuSubContent
+                onPointerDown={stopRfPropagation}
+                onMouseDown={stopRfPropagation}
+                onClick={stopRfPropagation}
+              >
+                <ContextMenuGroup>
+                  {deps.map((d) => (
+                    <ContextMenuItem
+                      key={d}
+                      onSelect={() => {
+                        props.data.onDisconnectDep?.(d, stepKey)
+                      }}
+                    >
+                      <X className="size-4" />
+                      <span>
+                        {t("workflows.graph.disconnectEdgeAction")} {d}
+                      </span>
+                    </ContextMenuItem>
+                  ))}
+                </ContextMenuGroup>
+              </ContextMenuSubContent>
+            </ContextMenuSub>
+          </>
+        ) : null}
+
+        <ContextMenuSeparator />
+        <ContextMenuGroup>
+          <ContextMenuItem
+            variant="destructive"
+            onSelect={() => {
+              props.data.onDelete?.(stepKey)
+            }}
+          >
+            <Trash2Icon className="size-4" />
+            {t("common.deleteAction")}
+          </ContextMenuItem>
+        </ContextMenuGroup>
+      </ContextMenuContent>
+    )
+  }, [deps, props.data, stepKey, t])
+
+  const renderRunContextMenu = React.useCallback(() => {
+    return (
+      <ContextMenuContent onPointerDown={stopRfPropagation} onMouseDown={stopRfPropagation} onClick={stopRfPropagation}>
+        {canViewStepPanels ? (
+          <>
+            <ContextMenuGroup>
+              {props.data.onViewStepLogs ? (
+                <ContextMenuItem
+                  onSelect={() => {
+                    props.data.onViewStepLogs?.(stepKey)
+                  }}
+                >
+                  <ScrollText className="size-4" />
+                  {t("runs.viewDetailsAction")}
+                </ContextMenuItem>
+              ) : null}
+              {props.data.onViewStepOutput ? (
+                <ContextMenuItem
+                  onSelect={() => {
+                    props.data.onViewStepOutput?.(stepKey)
+                  }}
+                >
+                  <Upload className="size-4" />
+                  {t("runs.viewStepOutputAction")}
+                </ContextMenuItem>
+              ) : null}
+              {props.data.onViewStepDefinition ? (
+                <ContextMenuItem
+                  onSelect={() => {
+                    props.data.onViewStepDefinition?.(stepKey)
+                  }}
+                >
+                  <Braces className="size-4" />
+                  {t("runs.viewStepDefinitionAction")}
+                </ContextMenuItem>
+              ) : null}
+            </ContextMenuGroup>
+            {canRetry || canRerunStep || props.data.onRestartFrom ? <ContextMenuSeparator /> : null}
+          </>
+        ) : null}
+
+        <ContextMenuGroup>
+          {canRetry ? (
+            <ContextMenuItem
+              onSelect={() => {
+                props.data.onRetry?.(stepKey)
+              }}
+            >
+              <RefreshCcw className="size-4" />
+              {t("common.retryAction")}
+            </ContextMenuItem>
+          ) : null}
+          {canRerunStep ? (
+            <ContextMenuItem
+              onSelect={() => {
+                props.data.onRerunStep?.(stepKey)
+              }}
+            >
+              <RefreshCcw className="size-4" />
+              {t("runs.rerunActionStepAction")}
+            </ContextMenuItem>
+          ) : null}
+          {props.data.onRestartFrom ? (
+            <ContextMenuItem
+              onSelect={() => {
+                props.data.onRestartFrom?.(stepKey)
+              }}
+            >
+              <RotateCcw className="size-4" />
+              {t("runs.restartFromHereAction")}
+            </ContextMenuItem>
+          ) : null}
+        </ContextMenuGroup>
+      </ContextMenuContent>
+    )
+  }, [canRerunStep, canRetry, canViewStepPanels, props.data, stepKey, t])
+
+  // If we re-enable tooltips for the context menu in the future, keep this to avoid unused warnings.
+  void hasOtherFailedSteps
+
+  const nodeInner = (
     <div
       className={cn("box-border w-[250px] rounded-lg bg-background p-2 shadow-none border", statusCls)}
       style={style}
@@ -157,181 +500,67 @@ export const WorkflowGraphStepNode = React.memo(function WorkflowGraphStepNode(
         </div>
 
         {canEdit ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 w-6"
-                onPointerDown={(e) => {
-                  // Prevent ReactFlow's node click from firing when opening the menu.
-                  e.stopPropagation()
-                }}
-                onMouseDown={(e) => {
-                  // Some ReactFlow handlers listen to mouse events; stop those too.
-                  e.stopPropagation()
-                }}
-                onClick={(e) => {
-                  e.stopPropagation()
-                }}
-              >
-                <span className="sr-only">{t("common.actions")}</span>
-                <MoreVertical className="h-4 w-4" aria-hidden="true" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="min-w-[180px]"
-              onPointerDown={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <DropdownMenuItem
-                onSelect={() => {
-                  props.data.onEdit?.(stepKey)
-                }}
-              >
-                <Pencil className="size-4" />
-                {t("common.editAction")}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                variant="destructive"
-                className="cursor-pointer"
-                onSelect={() => {
-                  props.data.onDelete?.(stepKey)
-                }}
-              >
-                <Trash2Icon className="size-4" />
-                {t("common.deleteAction")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="flex items-center gap-1">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6"
+                  onPointerDown={stopRfPropagation}
+                  onMouseDown={stopRfPropagation}
+                  onClick={stopRfPropagation}
+                >
+                  <span className="sr-only">{t("common.actions")}</span>
+                  <MoreVertical className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              {renderEditMenuContent()}
+            </DropdownMenu>
+          </div>
         ) : canRunActions ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 w-6"
-                onPointerDown={(e) => {
-                  e.stopPropagation()
-                }}
-                onMouseDown={(e) => {
-                  e.stopPropagation()
-                }}
-                onClick={(e) => {
-                  e.stopPropagation()
-                }}
-              >
-                <span className="sr-only">{t("common.actions")}</span>
-                <MoreVertical className="h-4 w-4" aria-hidden="true" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="min-w-[200px]"
-              onPointerDown={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {canViewStepPanels ? (
-                <>
-                  {props.data.onViewStepLogs ? (
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        props.data.onViewStepLogs?.(stepKey)
-                      }}
-                    >
-                      <ScrollText className="size-4" />
-                      {t("runs.viewDetailsAction")}
-                    </DropdownMenuItem>
-                  ) : null}
-                  {props.data.onViewStepOutput ? (
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        props.data.onViewStepOutput?.(stepKey)
-                      }}
-                    >
-                      <Upload className="size-4" />
-                      {t("runs.viewStepOutputAction")}
-                    </DropdownMenuItem>
-                  ) : null}
-                  {props.data.onViewStepDefinition ? (
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        props.data.onViewStepDefinition?.(stepKey)
-                      }}
-                    >
-                      <Braces className="size-4" />
-                      {t("runs.viewStepDefinitionAction")}
-                    </DropdownMenuItem>
-                  ) : null}
-                  {canRetry || canRerunStep || props.data.onRestartFrom ? <DropdownMenuSeparator /> : null}
-                </>
-              ) : null}
-              {canRetry
-                ? (() => {
-                    const item = (
-                      <DropdownMenuItem
-                        onSelect={() => {
-                          props.data.onRetry?.(stepKey)
-                        }}
-                      >
-                        <RefreshCcw className="size-4" />
-                        {t("common.retryAction")}
-                      </DropdownMenuItem>
-                    )
-                    if (!hasOtherFailedSteps) return item
-                    return (
-                      <Tooltip>
-                        <TooltipTrigger asChild>{item}</TooltipTrigger>
-                        <TooltipContent side="right" align="center" className="max-w-[320px] whitespace-pre-line">
-                          {t("runs.retryHintOtherFailed")}
-                        </TooltipContent>
-                      </Tooltip>
-                    )
-                  })()
-                : null}
-              {canRerunStep ? (
-                <>
-                  {canRetry ? <DropdownMenuSeparator /> : null}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <DropdownMenuItem
-                        onSelect={() => {
-                          props.data.onRerunStep?.(stepKey)
-                        }}
-                      >
-                        <RefreshCcw className="size-4" />
-                        {t("runs.rerunActionStepAction")}
-                      </DropdownMenuItem>
-                    </TooltipTrigger>
-                    <TooltipContent side="right" align="center" className="max-w-[340px] whitespace-pre-line">
-                      <div className="space-y-1">
-                        <div>{t("runs.rerunActionStepActionHint")}</div>
-                        {hasOtherFailedSteps ? <div>{t("runs.rerunActionStepActionHintOtherFailed")}</div> : null}
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
-                </>
-              ) : null}
-              {props.data.onRestartFrom ? (
-                <>
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      props.data.onRestartFrom?.(stepKey)
-                    }}
-                  >
-                    <RotateCcw className="size-4" />
-                    {t("runs.restartFromHereAction")}
-                  </DropdownMenuItem>
-                </>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="flex items-center gap-1">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6"
+                  onPointerDown={stopRfPropagation}
+                  onMouseDown={stopRfPropagation}
+                  onClick={stopRfPropagation}
+                >
+                  <span className="sr-only">{t("common.actions")}</span>
+                  <MoreVertical className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              {renderRunMenuContent()}
+            </DropdownMenu>
+          </div>
         ) : null}
       </div>
+    </div>
+  )
+
+  return enableContextMenu ? (
+    <ContextMenu>
+      <ContextMenuTrigger
+        asChild
+        onContextMenu={(e) => {
+          e.stopPropagation()
+        }}
+      >
+        {nodeInner}
+      </ContextMenuTrigger>
+      {canEdit ? renderEditContextMenu() : renderRunContextMenu()}
+    </ContextMenu>
+  ) : (
+    <div
+      onContextMenu={(e) => {
+        e.stopPropagation()
+      }}
+    >
+      {nodeInner}
     </div>
   )
 })
