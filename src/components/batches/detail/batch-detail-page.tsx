@@ -58,6 +58,8 @@ import { ApiIssuesAlert } from "@/components/common/api-issues-alert"
 import { JsonMonacoEditor } from "@/components/common/json-monaco-editor"
 import { RichTextI18n } from "@/components/common/rich-text-i18n"
 import { ajvErrorsToApiIssues, compileAjvValidator } from "@/lib/client/jsonschema"
+import { UrlFilesEditor } from "@/components/common/url-files-editor"
+import { Badge } from "@/components/ui/badge"
 import { FanoutSectionInlineSkeleton } from "@/components/batches/detail/batch-detail-skeletons"
 import { Spinner } from "@/components/ui/spinner"
 import {
@@ -240,8 +242,8 @@ export default function BatchDetailPage() {
     return workflowInputSpecHasParams(inputSpec)
   }, [batch?.workflowId, inputSpec])
 
-  const urlFilesEnabled = inputSpec?.fileInputs?.urlFiles?.enabled === true
-  const urlMaxItems = inputSpec?.fileInputs?.urlFiles?.maxItems
+  const urlFilesEnabled = inputSpec?.filesInput?.urlFiles?.enabled === true
+  const urlMaxItems = inputSpec?.filesInput?.urlFiles?.maxItems
   const urlFilesUi = React.useMemo(() => workflowFileInputUi(inputSpec, "urlFiles", t("jobs.urlFiles")), [inputSpec, t])
 
   const seedJsonState = React.useMemo(() => {
@@ -1039,6 +1041,15 @@ export default function BatchDetailPage() {
     return String(lines.length)
   }, [fanoutUrlList])
 
+  const fanoutUrlLines = React.useMemo(
+    () =>
+      fanoutUrlList
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    [fanoutUrlList],
+  )
+
   const sourceConfiguredSummary = React.useMemo(() => {
     const raw = String(sourceJsonDraft ?? "").trim()
     if (!raw || raw === "{}") return t("common.notConfigured")
@@ -1151,7 +1162,7 @@ export default function BatchDetailPage() {
   return (
     <DetailPageLayout header={<StandardPageHeader {...headerProps} />}>
       {/* Summary */}
-      <SectionCard className="flex-none bg-card text-card-foreground">
+      <SectionCard className="flex-none text-card-foreground">
         <SectionCardHeader>
           <div className="text-sm font-medium">{t("common.summary")}</div>
         </SectionCardHeader>
@@ -1211,7 +1222,7 @@ export default function BatchDetailPage() {
 
       {/* Fan-out */}
       <div className="grid gap-3 xl:grid-cols-2">
-        <SectionCard className="flex-none bg-card text-card-foreground">
+        <SectionCard className="flex-none text-card-foreground">
           <SectionCardHeader>
             <div className="text-sm font-medium">{t("common.settings")}</div>
           </SectionCardHeader>
@@ -1494,7 +1505,7 @@ export default function BatchDetailPage() {
           </SectionCardBody>
         </SectionCard>
 
-        <SectionCard className="flex-none bg-card text-card-foreground">
+        <SectionCard className="flex-none text-card-foreground">
           <SectionCardHeader>
             <div className="text-sm font-medium">{t("batches.fanoutTitle")}</div>
           </SectionCardHeader>
@@ -1566,19 +1577,25 @@ export default function BatchDetailPage() {
 
                 {urlFilesEnabled ? (
                   <div className="grid gap-2">
-                    <FieldLabelWithHelp
-                      label={urlFilesUi.title}
-                      tooltip={urlFilesUi.description || t("batches.urlFilesHint")}
-                      htmlFor="batch-fanout-url-files"
-                    />
-                    <TextareaWithChrome
-                      id="batch-fanout-url-files"
+                    <UrlFilesEditor
+                      title={urlFilesUi.title}
+                      required={inputSpec?.filesInput?.urlFiles?.required === true}
+                      codeLabel="urlFiles"
+                      hintText={urlFilesUi.description}
+                      rightSlot={
+                        typeof urlMaxItems === "number" ? (
+                          <Badge variant="outline" className="text-[10px]">
+                            {t("jobs.limitCount", { count: fanoutUrlLines.length, max: urlMaxItems })}
+                          </Badge>
+                        ) : null
+                      }
                       value={fanoutUrlList}
-                      onChange={(e) => setFanoutUrlList(e.target.value ?? "")}
+                      onChange={(raw) => setFanoutUrlList(raw)}
                       rows={4}
-                      className="font-mono text-xs max-h-40"
                       placeholder={"https://example.com/data.csv\nhttps://example.com/image.png"}
                       disabled={fanoutSubmitting || loading || !batch || locked}
+                      headerClassName="flex items-start justify-between gap-3"
+                      textareaClassName="font-mono text-xs"
                     />
                   </div>
                 ) : null}

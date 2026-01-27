@@ -36,6 +36,35 @@ export function useWorkflowEditorData(params: {
   const { workflowId, locale, t, api, onRequestInputSpecCloseConfirm } = params
   const router = useRouter()
 
+  // Structural sharing: keep the same `steps` array reference when the server payload's steps
+  // are semantically identical. This prevents unnecessary graph rebuilds/flicker.
+  const fingerprintSteps = React.useCallback((steps: Step[]) => {
+    const normalized = (steps ?? [])
+      .map((s) => ({
+        stepKey: String(s.stepKey ?? ""),
+        name: String(s.name ?? ""),
+        description: s.description ?? null,
+        scriptEsm: String(s.scriptEsm ?? ""),
+        timeoutMs: typeof s.timeoutMs === "number" ? s.timeoutMs : null,
+        deps: [...(s.deps ?? [])].map(String).sort(),
+      }))
+      .sort((a, b) => a.stepKey.localeCompare(b.stepKey))
+    return JSON.stringify(normalized)
+  }, [])
+
+  const mergeWorkflowWithStableSteps = React.useCallback(
+    (prev: Workflow | null, next: Workflow): Workflow => {
+      if (!prev) return next
+      try {
+        const same = fingerprintSteps(prev.steps ?? []) === fingerprintSteps(next.steps ?? [])
+        return same ? { ...next, steps: prev.steps } : next
+      } catch {
+        return next
+      }
+    },
+    [fingerprintSteps],
+  )
+
   const [wf, setWf] = React.useState<Workflow | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [loadErr, setLoadErr] = React.useState<unknown>(null)
@@ -112,7 +141,7 @@ export function useWorkflowEditorData(params: {
       }>(`/api/workflows/${workflowId}`, {
         cache: "no-store",
       })
-      setWf(json.workflow)
+      setWf((prev) => mergeWorkflowWithStableSteps(prev, json.workflow))
       setLoadErr(null)
       setMetaNameDraft(json.workflow.name ?? "")
       setMetaDescriptionDraft(json.workflow.description ?? "")
@@ -160,7 +189,7 @@ export function useWorkflowEditorData(params: {
     } catch {
       return
     }
-    setWf(json.workflow)
+    setWf((prev) => mergeWorkflowWithStableSteps(prev, json.workflow))
     setMetaNameDraft((prev) => (metaSheetOpen && metaDirty ? prev : (json.workflow.name ?? "")))
     setMetaDescriptionDraft((prev) => (metaSheetOpen && metaDirty ? prev : (json.workflow.description ?? "")))
     setDepsJson(json.workflow.dependencies || "{}")
@@ -703,7 +732,6 @@ export function useWorkflowEditorData(params: {
           deps: s.deps,
         })),
       })
-      await refreshWorkflowSilently({ keepDraftIfDirty: true })
       return { ok: true, didSave: true }
     } catch (e) {
       if (!opts?.silentToast) toast.error(tApiError({ t, err: e, fallbackKey: "errors.SAVE_FAILED" }))

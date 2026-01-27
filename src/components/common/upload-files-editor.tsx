@@ -8,7 +8,6 @@ import { X } from "lucide-react"
 import { FieldHeader } from "@/components/common/field-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 
 export function UploadFilesEditor(props: {
@@ -17,6 +16,7 @@ export function UploadFilesEditor(props: {
   icon?: React.ReactNode
   codeLabel?: string | null
   hintText?: string | null
+  belowInputHintText?: string | null
   rightSlot?: React.ReactNode
 
   files: File[]
@@ -32,7 +32,6 @@ export function UploadFilesEditor(props: {
   chipsWrapClassName?: string
   chipClassName?: string
   removeButtonClassName?: string
-  scrollAreaClassName?: string
 }) {
   const files = Array.isArray(props.files) ? props.files : []
   const inputId = useId()
@@ -58,6 +57,7 @@ export function UploadFilesEditor(props: {
           multiple
           accept={props.accept}
           disabled={props.disabled || props.disablePick}
+          className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap"
           onChange={(e) => {
             const picked = Array.from(e.target.files ?? [])
             // allow picking same file again later
@@ -66,8 +66,12 @@ export function UploadFilesEditor(props: {
           }}
         />
 
+        {typeof props.belowInputHintText === "string" && props.belowInputHintText.trim() ? (
+          <div className="text-xs text-muted-foreground">{props.belowInputHintText.trim()}</div>
+        ) : null}
+
         {files.length > 0 ? (
-          <ScrollArea className={cn("h-24", props.scrollAreaClassName)}>
+          <div className="max-h-24 overflow-y-auto pr-1">
             <div className={cn("flex flex-wrap gap-2", props.chipsWrapClassName)}>
               {files.map((f, idx) => (
                 <div
@@ -77,7 +81,7 @@ export function UploadFilesEditor(props: {
                     props.chipClassName,
                   )}
                 >
-                  <span className="max-w-[240px] truncate">{f.name}</span>
+                  <span className="max-w-[140px] truncate">{f.name}</span>
                   <Button
                     type="button"
                     variant="ghost"
@@ -95,7 +99,7 @@ export function UploadFilesEditor(props: {
                 </div>
               ))}
             </div>
-          </ScrollArea>
+          </div>
         ) : null}
       </div>
     </div>

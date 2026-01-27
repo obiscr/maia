@@ -287,34 +287,34 @@ export const POST = withApiObservability(async (req: Request) => {
         if (!v.ok) return { status: 422, body: { code: "INVALID_INPUT_JSON", issues: v.issues } }
       }
 
-      // Validate urlFiles against fileInputs.urlFiles if configured; otherwise reject non-empty urlFiles.
+      // Validate urlFiles against filesInput.urlFiles if configured; otherwise reject non-empty urlFiles.
       const urlFiles = normalizeUrlFilesForStorage(body.urlFiles)
-      if (inputSpec?.fileInputs?.urlFiles) {
-        const enabled = inputSpec.fileInputs.urlFiles.enabled !== false
+      if (inputSpec?.filesInput?.urlFiles) {
+        const enabled = inputSpec.filesInput.urlFiles.enabled !== false
         if (!enabled && urlFiles.length) {
           const issues: ApiIssue[] = [{ path: "/urlFiles", keyword: "disabled", params: { field: "urlFiles" } }]
           return { status: 422, body: { code: "INVALID_INPUT_FILES", issues } }
         }
-        if (inputSpec.fileInputs.urlFiles.required && urlFiles.length === 0) {
+        if (inputSpec.filesInput.urlFiles.required && urlFiles.length === 0) {
           const issues: ApiIssue[] = [
             { path: "/urlFiles", keyword: "required", params: { missingProperty: "urlFiles" } },
           ]
           return { status: 422, body: { code: "INVALID_INPUT_FILES", issues } }
         }
         if (
-          typeof inputSpec.fileInputs.urlFiles.maxItems === "number" &&
-          urlFiles.length > inputSpec.fileInputs.urlFiles.maxItems
+          typeof inputSpec.filesInput.urlFiles.maxItems === "number" &&
+          urlFiles.length > inputSpec.filesInput.urlFiles.maxItems
         ) {
           const issues: ApiIssue[] = [
             {
               path: "/urlFiles",
               keyword: "maxItems",
-              params: { limit: inputSpec.fileInputs.urlFiles.maxItems },
+              params: { limit: inputSpec.filesInput.urlFiles.maxItems },
             },
           ]
           return {
             status: 422,
-            body: { code: "INVALID_INPUT_FILES", issues, meta: { maxItems: inputSpec.fileInputs.urlFiles.maxItems } },
+            body: { code: "INVALID_INPUT_FILES", issues, meta: { maxItems: inputSpec.filesInput.urlFiles.maxItems } },
           }
         }
       } else if (urlFiles.length) {

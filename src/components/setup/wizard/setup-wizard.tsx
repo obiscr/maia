@@ -119,7 +119,7 @@ export function SetupWizard() {
     <SetupWizardFooterContext.Provider value={footerCtx}>
       <SetupWizardStatusContext.Provider value={{ status, statusLoading, initialized, refreshStatus }}>
         <BrandedSectionCardLayout title={t("setupWizard.title")}>
-          <SectionCard className="bg-card/60 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/50">
+          <SectionCard className="shadow-sm">
             <SectionCardHeader className="px-4 py-3 sm:px-5 sm:py-4">
               <Stepper current={step} steps={STEPS} />
             </SectionCardHeader>

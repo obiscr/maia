@@ -47,7 +47,7 @@ function buildSystemPrompt(params: { locale: string }) {
   const template = JSON.stringify(defaultWorkflowInputSpec(), null, 2)
   return [
     "You are CreateInputSchemaAgent for Maia.",
-    "Task: generate or update WorkflowInputSpec (v1) for the given workflow.",
+    "Task: generate or update WorkflowInputSpec (v2) for the given workflow.",
     "Output contract:",
     "- You MUST call validate_input_schema with the final inputSpec JSON (object) to finish.",
     "- Only produce inputSpec. Do not modify workflow name/description/dependencies/steps.",
@@ -57,7 +57,7 @@ function buildSystemPrompt(params: { locale: string }) {
     "- Prefer additionalProperties=false and keep required minimal (only truly required fields).",
     "- Prefer basic types: string/number/integer/boolean; arrays with items.type; enums via enum. Avoid anyOf/oneOf/allOf unless necessary.",
     "- Provide 1-3 examples; put the most common in examples[0] (UI only auto-prefills the first).",
-    "- fileInputs must be an object (or omitted), never an array.",
+    "- filesInput must be an object (or omitted), never an array.",
     "",
     "Valid template you can start from:",
     template,
@@ -70,7 +70,7 @@ const tools: ToolDef[] = [
     function: {
       name: "validate_input_schema",
       description:
-        "Validate and normalize the final inputSpec (WorkflowInputSpec v1). Returns a proposal payload shaped as { draft: { inputSpec: <string> } }.",
+        "Validate and normalize the final inputSpec (WorkflowInputSpec v2). Returns a proposal payload shaped as { draft: { inputSpec: <string> } }.",
       parameters: {
         type: "object",
         properties: {

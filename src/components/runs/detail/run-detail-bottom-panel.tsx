@@ -325,7 +325,7 @@ export function RunDetailBottomPanel(props: {
 
   return (
     <div className={cn("flex h-full min-h-0 flex-col gap-2", props.className)}>
-      <SectionCard className="flex min-h-0 flex-1 flex-col overflow-hidden bg-card text-card-foreground">
+      <SectionCard className="flex min-h-0 flex-1 flex-col overflow-hidden text-card-foreground">
         <SectionCardBody className="overflow-hidden">
           {/* Mode 1: run-level tabs are primary; step-level tabs only live under the "Steps" view. */}
           <Tabs

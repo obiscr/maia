@@ -644,7 +644,7 @@ export default function RunDetailClient({ runId }: { runId: string }) {
             </div>
 
             <TabsContent value="graph" className="min-h-0 flex-1">
-              <SectionCard className="h-full min-h-0 overflow-hidden bg-card text-card-foreground">
+              <SectionCard className="h-full min-h-0 overflow-hidden text-card-foreground">
                 <RunDetailGraphPanel
                   className="h-full"
                   steps={detail.graphSteps}
@@ -700,7 +700,7 @@ export default function RunDetailClient({ runId }: { runId: string }) {
         ) : (
           <>
             {/* Top: graph (fixed height) */}
-            <SectionCard className="h-[600px] min-w-0 overflow-hidden bg-card text-card-foreground">
+            <SectionCard className="h-[600px] min-w-0 overflow-hidden text-card-foreground">
               <RunDetailGraphPanel
                 className="h-full"
                 steps={detail.graphSteps}

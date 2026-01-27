@@ -2,9 +2,9 @@ import { z } from "zod"
 import { isRecord } from "@/lib/shared/lang/is-record"
 
 /**
- * WorkflowInputSpec (v1)
+ * WorkflowInputSpec
  * - paramsSchema: JSON Schema for `initialInput` (user params only; `files` is reserved for system use)
- * - fileInputs: declarative constraints for URL/uploads UI (validated in /api/jobs)
+ * - filesInput: declarative constraints + UI labels for URL/upload files inputs (validated in /api/jobs)
  * - examples: example payloads to prefill UI and guide the agent
  */
 
@@ -115,7 +115,7 @@ export function withReservedKeyGuardsInParamsSchema(schema: JsonSchema, reserved
   return { ...(schema as Record<string, unknown>), ...guard } as JsonSchema
 }
 
-export const workflowInputSpecSchema = z.object({
+const workflowInputSpecSchemaV1 = z.object({
   version: z.literal(1).default(1),
 
   /**
@@ -124,14 +124,11 @@ export const workflowInputSpecSchema = z.object({
    */
   paramsSchema: z.record(z.string(), z.unknown()),
 
-  /**
-   * Optional UI hints (non-semantic). This is intentionally left unvalidated.
-   * You can follow the "uiSchema" style used by react-jsonschema-form, or your own.
-   */
+  // Deprecated (UI schema was removed). Still accepted for backwards compatibility.
   uiSchema: z.unknown().optional(),
 
   /**
-   * Declarative constraints for the separate Files tab (url list + uploads).
+   * Declarative constraints for the separate Files tab (urlFiles + uploads).
    * We keep this separate from paramsSchema because `initialInput.files` is a system-managed field.
    */
   fileInputs: z
@@ -178,7 +175,125 @@ export const workflowInputSpecSchema = z.object({
     .optional(),
 })
 
-export type WorkflowInputSpec = z.infer<typeof workflowInputSpecSchema>
+const workflowInputSpecSchemaV2 = z.object({
+  version: z.literal(2),
+
+  /**
+   * JSON Schema for the user-provided initialInput object.
+   * Must be a valid JSON Schema (Ajv will compile & validate).
+   */
+  paramsSchema: z.record(z.string(), z.unknown()),
+
+  /**
+   * Declarative constraints for the separate Files inputs (urlFiles + uploadFiles).
+   * We keep this separate from paramsSchema because `initialInput.files` is a system-managed field.
+   */
+  filesInput: z
+    .object({
+      urlFiles: z
+        .object({
+          title: z.string().optional(),
+          description: z.string().optional(),
+          enabled: z.boolean().optional().default(true),
+          required: z.boolean().optional().default(false),
+          maxItems: z.number().int().positive().optional(),
+        })
+        .optional(),
+      uploadFiles: z
+        .object({
+          title: z.string().optional(),
+          description: z.string().optional(),
+          enabled: z.boolean().optional().default(true),
+          required: z.boolean().optional().default(false),
+          maxItems: z.number().int().positive().optional(),
+          acceptMime: z.array(z.string().min(1)).optional(),
+        })
+        .optional(),
+    })
+    .optional(),
+
+  /**
+   * Example inputs to prefill the Create Job UI and guide the agent.
+   */
+  examples: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        description: z.string().optional(),
+        params: z.unknown().default({}),
+        urlFiles: z.array(z.object({ url: z.string().min(1), name: z.string().optional() })).optional(),
+        uploadNotes: z.string().optional(),
+      }),
+    )
+    .optional(),
+})
+
+type WorkflowInputSpecV1 = z.infer<typeof workflowInputSpecSchemaV1>
+export type WorkflowInputSpecV2 = z.infer<typeof workflowInputSpecSchemaV2>
+
+/**
+ * Public type: always the normalized v2 shape.
+ * (We still parse v1 for backward compatibility, but callers should not depend on v1 fields.)
+ */
+export type WorkflowInputSpec = WorkflowInputSpecV2
+
+function parseWorkflowInputSpecV1(parsed: unknown): { spec: WorkflowInputSpecV2 | null; error?: string } {
+  const r = workflowInputSpecSchemaV1.safeParse(parsed)
+  if (!r.success) return { spec: null, error: r.error.message }
+  return { spec: normalizeWorkflowInputSpec(r.data) }
+}
+
+function parseWorkflowInputSpecV2(parsed: unknown): { spec: WorkflowInputSpecV2 | null; error?: string } {
+  if (isRecord(parsed)) {
+    const obj: Record<string, unknown> = { ...(parsed as Record<string, unknown>) }
+    if (obj.filesInput == null && isRecord(obj.fileInputs)) {
+      const fi = obj.fileInputs as Record<string, unknown>
+      const urlFiles = isRecord(fi.urlFiles) ? (fi.urlFiles as Record<string, unknown>) : null
+      const uploads = isRecord(fi.uploads) ? (fi.uploads as Record<string, unknown>) : null
+      obj.filesInput = {
+        ...(urlFiles ? { urlFiles } : {}),
+        ...(uploads ? { uploadFiles: uploads } : {}),
+      }
+    }
+    const r2 = workflowInputSpecSchemaV2.safeParse(obj)
+    if (!r2.success) return { spec: null, error: r2.error.message }
+    return { spec: r2.data }
+  }
+  const r = workflowInputSpecSchemaV2.safeParse(parsed)
+  if (!r.success) return { spec: null, error: r.error.message }
+  return { spec: r.data }
+}
+
+function detectWorkflowInputSpecVersion(parsed: unknown): 1 | 2 | null {
+  if (!isRecord(parsed)) return null
+  const v = (parsed as Record<string, unknown>).version
+  if (v === 1) return 1
+  if (v === 2) return 2
+
+  // No explicit version: infer from field names.
+  if ((parsed as Record<string, unknown>).filesInput != null) return 2
+  if ((parsed as Record<string, unknown>).fileInputs != null) return 1
+  return null
+}
+
+export function normalizeWorkflowInputSpec(spec: WorkflowInputSpecV1 | WorkflowInputSpecV2): WorkflowInputSpecV2 {
+  if (spec.version === 2) return spec
+  const fileInputs = spec.fileInputs
+  const urlFiles = fileInputs?.urlFiles
+  const uploads = fileInputs?.uploads
+  return {
+    version: 2,
+    paramsSchema: spec.paramsSchema,
+    filesInput:
+      fileInputs || uploads
+        ? {
+            ...(urlFiles ? { urlFiles } : {}),
+            ...(uploads ? { uploadFiles: uploads } : {}),
+          }
+        : undefined,
+    examples: spec.examples,
+  }
+}
 
 export function extractJsonSchemaObjectShape(schema: unknown): {
   properties: Record<string, unknown> | null
@@ -250,7 +365,7 @@ export function workflowInputSpecParamsShape(spec: WorkflowInputSpec | null | un
  *
  * UX intent:
  * - If paramsSchema is effectively an "empty object" (no properties, no required, no meaningful example params),
- *   we hide the params editor and only show file inputs (urlFiles/uploads) when enabled.
+ *   we hide the params editor and only show file inputs (urlFiles/uploadFiles) when enabled.
  * - If paramsSchema is non-object (string/number/array/etc), we must show the editor because params aren't a key/value object.
  * - If examples contain non-empty params, we show the editor even if schema properties/required are empty.
  */
@@ -300,7 +415,22 @@ export function parseWorkflowInputSpecWithOpts(
   if (!s) return { spec: null }
   try {
     const parsed = JSON.parse(s) as unknown
-    const spec0 = workflowInputSpecSchema.parse(parsed)
+    const detected = detectWorkflowInputSpecVersion(parsed)
+    const parsedRes =
+      detected === 1
+        ? parseWorkflowInputSpecV1(parsed)
+        : detected === 2
+          ? parseWorkflowInputSpecV2(parsed)
+          : // Fallback order: try v2 first (newer), then v1.
+            (() => {
+              const v2 = parseWorkflowInputSpecV2(parsed)
+              if (v2.spec) return v2
+              const v1 = parseWorkflowInputSpecV1(parsed)
+              return v1.spec ? v1 : v2
+            })()
+
+    if (!parsedRes.spec) return { spec: null, error: parsedRes.error || "Invalid inputSpec" }
+    const spec0 = parsedRes.spec
 
     // Enforce reserved keys in spec (schema + examples) and harden runtime validation via propertyNames.
     const reservedKeys = validateWorkflowInputSpecReservedKeysWithKeys(
@@ -327,16 +457,16 @@ export function parseWorkflowInputSpecWithOpts(
 
 export function defaultWorkflowInputSpec(): WorkflowInputSpec {
   return {
-    version: 1,
+    version: 2,
     paramsSchema: {
       type: "object",
       additionalProperties: false,
       properties: {},
       required: [],
     },
-    fileInputs: {
+    filesInput: {
       urlFiles: { enabled: false, required: false },
-      uploads: { enabled: false, required: false },
+      uploadFiles: { enabled: false, required: false },
     },
     examples: [
       {

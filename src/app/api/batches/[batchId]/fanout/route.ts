@@ -162,7 +162,7 @@ export const POST = withApiObservability(async (req: Request, ctx: { params: Pro
         pinnedWorkflowVersionId = latest?.id ?? null
       }
 
-      // InputSpec validation (params + reserved `files` + fileInputs.urlFiles constraints).
+      // InputSpec validation (params + reserved `files` + filesInput.urlFiles constraints).
       // urlFiles can be provided at fanout-time; otherwise use the stored batch value.
       const storedUrlFiles = parseStoredUrlFilesJson(batch.urlFilesJson)
       const effectiveUrlFiles =
@@ -192,30 +192,30 @@ export const POST = withApiObservability(async (req: Request, ctx: { params: Pro
       }
       if (inputSpec) {
         // urlFiles constraints (batch-level shared)
-        if (inputSpec.fileInputs?.urlFiles) {
-          const enabled = inputSpec.fileInputs.urlFiles.enabled !== false
+        if (inputSpec.filesInput?.urlFiles) {
+          const enabled = inputSpec.filesInput.urlFiles.enabled !== false
           if (!enabled && urlInputFiles.length) {
             const issues: ApiIssue[] = [{ path: "/urlFiles", keyword: "disabled", params: { field: "urlFiles" } }]
             return { status: 422, body: { code: "INVALID_INPUT_FILES", issues } }
           }
-          if (inputSpec.fileInputs.urlFiles.required && urlInputFiles.length === 0) {
+          if (inputSpec.filesInput.urlFiles.required && urlInputFiles.length === 0) {
             const issues: ApiIssue[] = [{ path: "/urlFiles", keyword: "required", params: { field: "urlFiles" } }]
             return { status: 422, body: { code: "INVALID_INPUT_FILES", issues } }
           }
           if (
-            typeof inputSpec.fileInputs.urlFiles.maxItems === "number" &&
-            effectiveUrlFiles.length > inputSpec.fileInputs.urlFiles.maxItems
+            typeof inputSpec.filesInput.urlFiles.maxItems === "number" &&
+            effectiveUrlFiles.length > inputSpec.filesInput.urlFiles.maxItems
           ) {
             const issues: ApiIssue[] = [
               {
                 path: "/urlFiles",
                 keyword: "maxItems",
-                params: { limit: inputSpec.fileInputs.urlFiles.maxItems },
+                params: { limit: inputSpec.filesInput.urlFiles.maxItems },
               },
             ]
             return {
               status: 422,
-              body: { code: "INVALID_INPUT_FILES", issues, meta: { maxItems: inputSpec.fileInputs.urlFiles.maxItems } },
+              body: { code: "INVALID_INPUT_FILES", issues, meta: { maxItems: inputSpec.filesInput.urlFiles.maxItems } },
             }
           }
         } else if (urlInputFiles.length) {

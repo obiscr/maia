@@ -24,7 +24,6 @@
     --maia-color-primary: var(--maia-sl-color-text-accent);
     --maia-color-primary-foreground: var(--maia-sl-color-black);
     --maia-color-secondary: var(--maia-sl-color-gray-7);
-    --maia-color-overlay: #f6f7f9cc;
     --maia-color-secondary-foreground: var(--maia-sl-color-gray-2);
     --maia-color-muted: var(--maia-sl-color-gray-6);
     --maia-color-muted-foreground: var(--maia-sl-color-gray-3);
@@ -32,6 +31,8 @@
     --maia-color-accent-foreground: var(--maia-sl-color-gray-1);
     --maia-color-destructive: var(--maia-sl-color-red);
     --maia-color-destructive-foreground: var(--maia-sl-color-black);
+
+    --maia-color-overlay: #f6f7f9cc;
 
     --maia-color-border: var(--maia-sl-color-gray-5);
     --maia-color-border-hover: var(--maia-sl-color-gray-4);
@@ -138,21 +139,22 @@
   .dark {
     --maia-color-background: var(--maia-sl-color-black);
     --maia-color-foreground: var(--maia-sl-color-gray-2);
-    --maia-color-card: var(--maia-sl-color-gray-6);
+    --maia-color-card: var(--maia-sl-color-black);
     --maia-color-card-foreground: var(--maia-sl-color-gray-2);
-    --maia-color-popover: var(--maia-sl-color-gray-6);
+    --maia-color-popover: var(--maia-sl-color-black);
     --maia-color-popover-foreground: var(--maia-sl-color-gray-2);
     --maia-color-primary: var(--maia-sl-color-text-accent);
     --maia-color-primary-foreground: var(--maia-sl-color-black);
-    --maia-color-secondary: var(--maia-sl-color-gray-5);
-    --maia-color-overlay: #353841e6;
+    --maia-color-secondary: var(--maia-sl-color-gray-7);
     --maia-color-secondary-foreground: var(--maia-sl-color-gray-2);
-    --maia-color-muted: var(--maia-sl-color-gray-5);
+    --maia-color-muted: var(--maia-sl-color-gray-6);
     --maia-color-muted-foreground: var(--maia-sl-color-gray-3);
-    --maia-color-accent: var(--maia-sl-color-gray-5);
-    --maia-color-accent-foreground: var(--maia-sl-color-gray-2);
+    --maia-color-accent: var(--maia-sl-color-gray-6);
+    --maia-color-accent-foreground: var(--maia-sl-color-gray-1);
     --maia-color-destructive: var(--maia-sl-color-red);
     --maia-color-destructive-foreground: var(--maia-sl-color-white);
+
+    --maia-color-overlay: #353841e6;
 
     --maia-color-border: var(--maia-sl-color-gray-5);
     --maia-color-border-hover: var(--maia-sl-color-gray-4);
@@ -169,8 +171,8 @@
     --maia-color-sidebar-foreground: var(--maia-sl-color-gray-2);
     --maia-color-sidebar-primary: var(--maia-sl-color-accent);
     --maia-color-sidebar-primary-foreground: var(--maia-sl-color-white);
-    --maia-color-sidebar-accent: var(--maia-sl-color-gray-5);
-    --maia-color-sidebar-accent-foreground: var(--maia-sl-color-gray-2);
+    --maia-color-sidebar-accent: var(--maia-sl-color-gray-7);
+    --maia-color-sidebar-accent-foreground: var(--maia-sl-color-gray-1);
     --maia-color-sidebar-border: var(--maia-sl-color-gray-5);
     --maia-color-sidebar-ring: var(--maia-sl-color-gray-4);
 

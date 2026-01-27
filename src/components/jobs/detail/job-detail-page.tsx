@@ -1095,7 +1095,7 @@ export default function JobDetailPage() {
       })()}
 
       <div className="grid gap-3 lg:grid-cols-2">
-        <SectionCard className="flex-none bg-card text-card-foreground">
+        <SectionCard className="flex-none text-card-foreground">
           <SectionCardHeader>
             <div className="text-sm font-medium">{t("common.overview")}</div>
           </SectionCardHeader>
@@ -1183,7 +1183,7 @@ export default function JobDetailPage() {
           </SectionCardBody>
         </SectionCard>
 
-        <SectionCard className="flex-none bg-card text-card-foreground">
+        <SectionCard className="flex-none text-card-foreground">
           <SectionCardHeader>
             <div className="text-sm font-medium">{t("jobs.detail.timing")}</div>
           </SectionCardHeader>
@@ -1222,7 +1222,7 @@ export default function JobDetailPage() {
           </SectionCardBody>
         </SectionCard>
 
-        <SectionCard className="flex-none bg-card text-card-foreground">
+        <SectionCard className="flex-none text-card-foreground">
           <SectionCardHeader>
             <div className="text-sm font-medium">{t("jobs.detail.leaseAndRetry")}</div>
           </SectionCardHeader>
@@ -1276,7 +1276,7 @@ export default function JobDetailPage() {
           </SectionCardBody>
         </SectionCard>
 
-        <SectionCard className="flex-none bg-card text-card-foreground">
+        <SectionCard className="flex-none text-card-foreground">
           <SectionCardHeader>
             <div className="text-sm font-medium">{t("jobs.detail.related")}</div>
           </SectionCardHeader>
@@ -1384,7 +1384,7 @@ export default function JobDetailPage() {
         </SectionCard>
       </div>
 
-      <SectionCard className="flex-none bg-card text-card-foreground">
+      <SectionCard className="flex-none text-card-foreground">
         <SectionCardHeader>
           <div className="text-sm font-medium">{t("jobs.detail.attemptsTitle")}</div>
         </SectionCardHeader>
@@ -1520,7 +1520,7 @@ export default function JobDetailPage() {
         </SectionCardBody>
       </SectionCard>
 
-      <SectionCard className="flex-none bg-card text-card-foreground">
+      <SectionCard className="flex-none text-card-foreground">
         <SectionCardHeader>
           <div className="text-sm font-medium">{t("common.inputs")}</div>
         </SectionCardHeader>

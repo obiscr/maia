@@ -119,7 +119,7 @@
     "env": {},
     "dependencies": {},
     "inputSpec": {
-      "version": 1,
+      "version": 2,
       "paramsSchema": {
         "type": "object",
         "additionalProperties": false,

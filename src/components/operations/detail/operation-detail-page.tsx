@@ -326,7 +326,7 @@ export default function OperationDetailPage() {
       ) : null}
 
       {target ? (
-        <SectionCard className="flex-none bg-card text-card-foreground">
+        <SectionCard className="flex-none text-card-foreground">
           <SectionCardHeader>
             <div className="text-sm font-medium">{t("operations.detail.target")}</div>
           </SectionCardHeader>
@@ -349,7 +349,7 @@ export default function OperationDetailPage() {
       ) : null}
 
       {!loading && op ? (
-        <SectionCard className="flex-none bg-card text-card-foreground">
+        <SectionCard className="flex-none text-card-foreground">
           <SectionCardHeader>
             <div className="text-sm font-medium">{t("operations.detail.summary")}</div>
           </SectionCardHeader>
@@ -448,7 +448,7 @@ export default function OperationDetailPage() {
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <SectionCard className="bg-card text-card-foreground">
+        <SectionCard className="text-card-foreground">
           <SectionCardHeader>
             <div className="text-sm font-medium">{t("operations.detail.result")}</div>
           </SectionCardHeader>
@@ -456,7 +456,7 @@ export default function OperationDetailPage() {
             <JsonViewer value={op?.result ?? null} />
           </SectionCardBody>
         </SectionCard>
-        <SectionCard className="bg-card text-card-foreground">
+        <SectionCard className="text-card-foreground">
           <SectionCardHeader>
             <div className="text-sm font-medium">{t("common.errorLabel")}</div>
           </SectionCardHeader>
@@ -464,7 +464,7 @@ export default function OperationDetailPage() {
             <JsonViewer value={op?.error ?? null} />
           </SectionCardBody>
         </SectionCard>
-        <SectionCard className="bg-card text-card-foreground">
+        <SectionCard className="text-card-foreground">
           <SectionCardHeader>
             <div className="text-sm font-medium">{t("operations.detail.rootCause")}</div>
           </SectionCardHeader>

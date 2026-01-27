@@ -85,12 +85,12 @@
         },
         "required": ["feedUrl"]
       },
-      "fileInputs": {
+      "filesInput": {
         "urlFiles": {
           "enabled": false,
           "required": false
         },
-        "uploads": {
+        "uploadFiles": {
           "enabled": false,
           "required": false
         }
@@ -117,7 +117,7 @@
       ]
     },
     "outputsSpec": {
-      "version": 1,
+      "version": 2,
       "outputs": {
         "items": {
           "stepKey": "limit_output",

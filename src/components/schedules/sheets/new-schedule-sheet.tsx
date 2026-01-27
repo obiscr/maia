@@ -114,7 +114,7 @@ export function NewScheduleSheet(props: { open: boolean; onOpenChange: (open: bo
 
   const showSelectWorkflowAlert = !workflowId
   const showNoStepsAlert = !!workflowId && workflowStepCount === 0
-  const urlFilesEnabled = inputSpec?.fileInputs?.urlFiles?.enabled === true
+  const urlFilesEnabled = inputSpec?.filesInput?.urlFiles?.enabled === true
   const showNoInputsAlert = !!workflowId && !inputSpecLoading && !paramsEditorEnabled && !urlFilesEnabled
   const showInputsLoadingSkeleton = !!workflowId && inputSpecLoading
 
@@ -474,9 +474,19 @@ export function NewScheduleSheet(props: { open: boolean; onOpenChange: (open: bo
                       {/* Input JSON template */}
                       {paramsEditorEnabled ? (
                         <JsonMonacoEditor
-                          title={t("common.inputTemplate")}
+                          title={
+                            typeof inputSpec?.paramsSchema?.title === "string" && inputSpec.paramsSchema.title.trim()
+                              ? inputSpec.paramsSchema.title.trim()
+                              : t("common.inputParams")
+                          }
                           required={schemaRequired.length > 0}
                           codeLabel="inputJson"
+                          hintText={
+                            typeof inputSpec?.paramsSchema?.description === "string" &&
+                            inputSpec.paramsSchema.description.trim()
+                              ? inputSpec.paramsSchema.description.trim()
+                              : undefined
+                          }
                           editorRef={inputJsonEditorRef}
                           value={inputJsonRaw}
                           onChange={setInputJsonRaw}
@@ -505,7 +515,8 @@ export function NewScheduleSheet(props: { open: boolean; onOpenChange: (open: bo
                         <div className="grid gap-2">
                           <UrlFilesEditor
                             title={urlFilesUi.title}
-                            required={inputSpec?.fileInputs?.urlFiles?.required === true}
+                            required={inputSpec?.filesInput?.urlFiles?.required === true}
+                            codeLabel="urlFiles"
                             hintText={urlFilesUi.description}
                             rightSlot={
                               typeof urlMaxItems === "number" ? (
@@ -517,11 +528,10 @@ export function NewScheduleSheet(props: { open: boolean; onOpenChange: (open: bo
                             value={urlList}
                             onChange={(raw) => onUrlListChange(raw)}
                             rows={3}
-                            textareaClassName="font-mono text-xs max-h-40 overflow-y-auto resize-none"
                             placeholder={"https://example.com/data.csv\nhttps://example.com/image.png"}
                             disabled={uiPending}
-                            headerClassName="flex items-center justify-between gap-2"
-                            titleRowClassName="flex min-w-0 items-center gap-2"
+                            headerClassName="flex items-start justify-between gap-3"
+                            textareaClassName="font-mono text-xs"
                           />
                         </div>
                       ) : null}

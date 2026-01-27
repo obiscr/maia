@@ -547,7 +547,6 @@
     "duration": "Duration",
     "inputParams": "Input params",
     "inputParamsHintRich": "<strong>Accepted shapes</strong><br/><code>{ items: [...] }</code> or <code>[ ... ]</code> or a single object<br/><br/><strong>Notes</strong><br/>Each item becomes a job input params object when the workflow has an input spec<br/>Do not include <code>files</code> (system-managed)",
-    "inputTemplate": "Input template",
     "jobEnqueuedToast": "Job enqueued",
     "source": {
       "manual": "Manual"

@@ -547,7 +547,6 @@
     "duration": "耗时",
     "inputParams": "输入参数",
     "inputParamsHintRich": "<strong>支持的格式</strong><br/><code>{ items: [...] }</code> 或 <code>[ ... ]</code> 或单个对象<br/><br/><strong>注意</strong><br/>如果工作流定义了输入规范，每个 item 必须是对象并作为任务输入参数<br/>不要包含 <code>files</code>（系统字段）",
-    "inputTemplate": "输入模板",
     "jobEnqueuedToast": "任务已入队",
     "source": {
       "manual": "手动"

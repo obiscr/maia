@@ -18,7 +18,7 @@ export default async function SettingsHomePage() {
       <SettingsSectionHeader title={t("sidebar.preferences")} description={t("settings.description")} />
       <SettingsSectionContent>
         <div className="space-y-6">
-          <div className="rounded-md border bg-card p-4">
+          <div className="rounded-md border p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <div className="font-medium">{t("common.entities.agent")}</div>
@@ -35,7 +35,7 @@ export default async function SettingsHomePage() {
             </div>
           </div>
 
-          <div className="rounded-md border bg-card p-4">
+          <div className="rounded-md border p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <div className="font-medium">{t("settings.timezone.title")}</div>
@@ -53,7 +53,7 @@ export default async function SettingsHomePage() {
           </div>
 
           {showSystem ? (
-            <div className="rounded-md border bg-card p-4">
+            <div className="rounded-md border p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <div className="font-medium">{t("sidebar.systemSettings")}</div>

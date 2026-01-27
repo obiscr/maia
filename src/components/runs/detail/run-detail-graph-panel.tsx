@@ -39,6 +39,7 @@ export function RunDetailGraphPanel(props: {
         steps={props.steps}
         mode="view"
         frame={false}
+        enableNodeContextMenu
         showLayoutMenu={false}
         controls={{
           interaction: false,

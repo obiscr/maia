@@ -34,13 +34,13 @@
         "properties": {}
       },
       "examples": [{ "name": "默认运行", "description": "无需输入参数。", "params": {} }],
-      "fileInputs": {
+      "filesInput": {
         "urlFiles": { "enabled": false, "required": false },
-        "uploads": { "enabled": false, "required": false }
+        "uploadFiles": { "enabled": false, "required": false }
       }
     },
     "outputsSpec": {
-      "version": 1,
+      "version": 2,
       "outputs": {
         "greeting": {
           "stepKey": "step_hello",

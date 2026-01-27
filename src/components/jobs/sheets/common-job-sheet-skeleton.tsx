@@ -41,7 +41,7 @@ function ParamsEditorSkeleton() {
   )
 }
 
-function FileInputsSkeleton() {
+function FilesInputSkeleton() {
   return (
     <div className="grid gap-4">
       <div className="grid gap-2">
@@ -114,7 +114,7 @@ export function NewJobSheetSkeleton(props: { t: TFunction }) {
       >
         <div className="grid gap-4">
           <ParamsEditorSkeleton />
-          <FileInputsSkeleton />
+          <FilesInputSkeleton />
         </div>
       </CollapsibleSectionCard>
     </div>

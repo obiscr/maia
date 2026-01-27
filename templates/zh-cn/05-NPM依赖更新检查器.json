@@ -58,9 +58,9 @@
           "uploadNotes": "请上传一个 package.json。"
         }
       ],
-      "fileInputs": {
+      "filesInput": {
         "urlFiles": { "enabled": false, "required": false },
-        "uploads": {
+        "uploadFiles": {
           "title": "上传 package.json",
           "enabled": true,
           "required": true,
@@ -70,7 +70,7 @@
       }
     },
     "outputsSpec": {
-      "version": 1,
+      "version": 2,
       "outputs": {
         "summary": {
           "stepKey": "build_report",

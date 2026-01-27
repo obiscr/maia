@@ -1,6 +1,6 @@
 import type { WorkflowInputSpec } from "@/lib/shared/maia/input-spec"
 
-export type WorkflowFileInputKey = "urlFiles" | "uploads"
+export type WorkflowFileInputKey = "urlFiles" | "uploadFiles"
 
 function norm(s: unknown): string {
   return typeof s === "string" ? s.trim() : ""
@@ -11,8 +11,8 @@ export function workflowFileInputUi(
   key: WorkflowFileInputKey,
   fallbackTitle: string,
 ): { title: string; description: string } {
-  const titleRaw = norm(spec?.fileInputs?.[key]?.title)
-  const descRaw = norm(spec?.fileInputs?.[key]?.description)
+  const titleRaw = norm(spec?.filesInput?.[key]?.title)
+  const descRaw = norm(spec?.filesInput?.[key]?.description)
   return {
     title: titleRaw || fallbackTitle,
     description: descRaw,

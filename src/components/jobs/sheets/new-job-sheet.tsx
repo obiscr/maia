@@ -28,7 +28,7 @@ import { CollapsibleSectionCard } from "@/components/common/collapsible-section-
 import { JobInputsSkeleton, NewJobSheetSkeleton } from "@/components/jobs/sheets/common-job-sheet-skeleton"
 import { JsonMonacoEditor } from "@/components/common/json-monaco-editor"
 import { workflowInputSpecHasParams } from "@/lib/shared/maia/input-spec"
-import { joinHintParts, workflowFileInputUi } from "@/lib/shared/maia/file-inputs-ui"
+import { workflowFileInputUi } from "@/lib/shared/maia/file-inputs-ui"
 import { WorkflowVersionSelect } from "@/components/common/workflow-version-select"
 
 export function NewJobSheet(props: {
@@ -109,19 +109,26 @@ export function NewJobSheet(props: {
   const showSelectWorkflowAlert = !workflowId
   const showNoStepsAlert = !!workflowId && workflowStepCount === 0
   const showInputsLoadingSkeleton = !!workflowId && inputSpecLoading
-  const urlFilesEnabled = inputSpec?.fileInputs?.urlFiles?.enabled === true
-  const uploadsEnabled = inputSpec?.fileInputs?.uploads?.enabled === true
+  const urlFilesEnabled = inputSpec?.filesInput?.urlFiles?.enabled === true
+  const uploadFilesEnabled = inputSpec?.filesInput?.uploadFiles?.enabled === true
   const showNoInputsAlert =
-    !!workflowId && !inputSpecLoading && !inputSpecErr && !paramsEditorEnabled && !urlFilesEnabled && !uploadsEnabled
+    !!workflowId &&
+    !inputSpecLoading &&
+    !inputSpecErr &&
+    !paramsEditorEnabled &&
+    !urlFilesEnabled &&
+    !uploadFilesEnabled
 
   const urlFilesUi = useMemo(() => workflowFileInputUi(inputSpec, "urlFiles", t("jobs.urlFiles")), [inputSpec, t])
-  const uploadsUi = useMemo(() => workflowFileInputUi(inputSpec, "uploads", t("jobs.uploadFiles")), [inputSpec, t])
-  const uploadsHintText = useMemo(() => {
-    const mime = inputSpec?.fileInputs?.uploads?.acceptMime?.length
-      ? inputSpec.fileInputs.uploads.acceptMime.join(", ")
+  const uploadFilesUi = useMemo(
+    () => workflowFileInputUi(inputSpec, "uploadFiles", t("jobs.uploadFiles")),
+    [inputSpec, t],
+  )
+  const uploadFilesMimeText = useMemo(() => {
+    return inputSpec?.filesInput?.uploadFiles?.acceptMime?.length
+      ? inputSpec.filesInput.uploadFiles.acceptMime.join(", ")
       : ""
-    return joinHintParts([uploadsUi.description, mime])
-  }, [inputSpec?.fileInputs?.uploads?.acceptMime, uploadsUi.description])
+  }, [inputSpec?.filesInput?.uploadFiles?.acceptMime])
 
   function submit(action: "start" | "create") {
     const start = action === "start"
@@ -262,9 +269,19 @@ export function NewJobSheet(props: {
                     {/* Input JSON template */}
                     {paramsEditorEnabled ? (
                       <JsonMonacoEditor
-                        title={t("common.inputTemplate")}
+                        title={
+                          typeof inputSpec?.paramsSchema?.title === "string" && inputSpec.paramsSchema.title.trim()
+                            ? inputSpec.paramsSchema.title.trim()
+                            : t("common.inputParams")
+                        }
                         required={schemaRequired.length > 0}
                         codeLabel="inputJson"
+                        hintText={
+                          typeof inputSpec?.paramsSchema?.description === "string" &&
+                          inputSpec.paramsSchema.description.trim()
+                            ? inputSpec.paramsSchema.description.trim()
+                            : undefined
+                        }
                         editorRef={jsonEditorRef}
                         value={inputJson}
                         onChange={setInputJson}
@@ -293,15 +310,15 @@ export function NewJobSheet(props: {
                       <div className="space-y-3">
                         <UrlFilesEditor
                           title={urlFilesUi.title}
-                          required={inputSpec?.fileInputs?.urlFiles?.required === true}
+                          required={inputSpec?.filesInput?.urlFiles?.required === true}
                           codeLabel="urlFiles"
                           hintText={urlFilesUi.description}
                           rightSlot={
-                            typeof inputSpec?.fileInputs?.urlFiles?.maxItems === "number" ? (
+                            typeof inputSpec?.filesInput?.urlFiles?.maxItems === "number" ? (
                               <Badge variant="outline" className="text-[10px]">
                                 {t("jobs.limitCount", {
                                   count: urlLines.length,
-                                  max: inputSpec.fileInputs.urlFiles.maxItems,
+                                  max: inputSpec.filesInput.urlFiles.maxItems,
                                 })}
                               </Badge>
                             ) : null
@@ -317,19 +334,20 @@ export function NewJobSheet(props: {
                       </div>
                     ) : null}
 
-                    {uploadsEnabled ? (
+                    {uploadFilesEnabled ? (
                       <div className="space-y-3">
                         <UploadFilesEditor
-                          title={uploadsUi.title}
-                          required={inputSpec?.fileInputs?.uploads?.required === true}
-                          codeLabel="uploads"
-                          hintText={uploadsHintText}
+                          title={uploadFilesUi.title}
+                          required={inputSpec?.filesInput?.uploadFiles?.required === true}
+                          codeLabel="uploadFiles"
+                          hintText={uploadFilesUi.description}
+                          belowInputHintText={uploadFilesMimeText}
                           rightSlot={
-                            typeof inputSpec?.fileInputs?.uploads?.maxItems === "number" ? (
+                            typeof inputSpec?.filesInput?.uploadFiles?.maxItems === "number" ? (
                               <Badge variant="outline" className="text-[10px]">
                                 {t("jobs.limitCount", {
                                   count: files.length,
-                                  max: inputSpec.fileInputs.uploads.maxItems,
+                                  max: inputSpec.filesInput.uploadFiles.maxItems,
                                 })}
                               </Badge>
                             ) : null
@@ -338,8 +356,8 @@ export function NewJobSheet(props: {
                           onPickFiles={form.onPickFiles}
                           onRemoveFileAt={(idx) => setFiles((prev) => prev.filter((_, i) => i !== idx))}
                           accept={
-                            inputSpec?.fileInputs?.uploads?.acceptMime?.length
-                              ? inputSpec.fileInputs.uploads.acceptMime.join(",")
+                            inputSpec?.filesInput?.uploadFiles?.acceptMime?.length
+                              ? inputSpec.filesInput.uploadFiles.acceptMime.join(",")
                               : undefined
                           }
                           disabled={uiPending}

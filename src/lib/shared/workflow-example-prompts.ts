@@ -47,7 +47,7 @@ const ZH_PROMPTS: Record<WorkflowExampleId, string> = {
 
   ex2: `我有一个 CSV 文件，想让你帮我做个“自动统计小助手”的工作流：读入 CSV → 识别每列是什么类型 → 统计一下（数值列算均值/最大最小/中位数等，文本列看 Top 值）→ 顺便做点数据质量提示（缺失、空值、异常）。
 
-输入：一个 CSV 文件（fileInputs.csv），分隔符可以不传，让你自己识别；必要的话也可以给个可选 params.delimiter。
+输入：一个 CSV 文件（filesInput.csv），分隔符可以不传，让你自己识别；必要的话也可以给个可选 params.delimiter。
 输出：一个 report JSON（每列的类型+统计+质量提示，外加一个总览）。
 
 大文件别一次性全读爆内存：你可以采样/分块，但要在输出里说明清楚你怎么做的；失败也要写 errors，并给降级方案。
@@ -68,7 +68,7 @@ inputSpec v1 也一起生成，required 尽量少，给 examples。
 抓取要考虑失败/超时/无效 feed；把 errors 和你采取的降级策略写在 meta 里。
 inputSpec v1 也一起写好。`,
 
-  ex5: `我会给你一张图片（fileInputs.image），你帮我把里面的文字识别出来（OCR），然后把文本清理一下（去多余空白、排版弄整齐），最后输出：text + 一些 meta（比如猜的语言、置信度、错误原因）。
+  ex5: `我会给你一张图片（filesInput.image），你帮我把里面的文字识别出来（OCR），然后把文本清理一下（去多余空白、排版弄整齐），最后输出：text + 一些 meta（比如猜的语言、置信度、错误原因）。
 
 如果 OCR 效果不佳也别崩：至少把“原始 OCR 文本”输出出来作为降级。
 顺便把 inputSpec v1 写好。`,
@@ -81,17 +81,17 @@ inputSpec v1 要支持“只有 transcript 也能跑”；失败要有降级。`
 
   ex7: `我有一份 Markdown 文档，想把它整理成结构化信息。请做个工作流：解析 Markdown → 生成大纲树（outline）→ 把代码块（含语言）和链接都抽出来 → 输出成 JSON。
 
-输入支持文件（fileInputs.markdown）或者直接传文本（params.markdownText）都行；保持原始顺序。`,
+输入支持文件（filesInput.markdown）或者直接传文本（params.markdownText）都行；保持原始顺序。`,
 
-  ex8: `我有一堆日志（fileInputs.log），想快速知道最常见的报错是啥。请做个工作流：读日志 → 把错误按“同一类”聚起来 → 统计次数/首次出现/最后出现/给几行样例 → 输出一个报告 JSON（summary + groups）。topK 可以做成可选参数。
+  ex8: `我有一堆日志（filesInput.log），想快速知道最常见的报错是啥。请做个工作流：读日志 → 把错误按“同一类”聚起来 → 统计次数/首次出现/最后出现/给几行样例 → 输出一个报告 JSON（summary + groups）。topK 可以做成可选参数。
 
 日志可能很大，别一次性全塞进内存：用采样/分块都行，但要说明，并把失败项写进 errors。`,
 
   ex9: `我有一批商品/应用评论（text + rating），想看整体口碑、大家都在吐槽什么。请做个工作流：清洗评论 → 识别语言 → 判情绪倾向 → 找出常见主题 → 汇总成一个 dashboard JSON（按主题/情绪分布，顺便挑几条代表性评论）。
 
-输入可以是 CSV 文件（fileInputs.reviewsCsv）或直接传 JSON（params.reviewsJson）。请做重复/超短评论的质量检查，并在 diagnostics 里给出统计和 errors。`,
+输入可以是 CSV 文件（filesInput.reviewsCsv）或直接传 JSON（params.reviewsJson）。请做重复/超短评论的质量检查，并在 diagnostics 里给出统计和 errors。`,
 
-  ex10: `我有一张发票 PDF（fileInputs.invoicePdf），想把它变成结构化数据。请做个工作流：先把文字提取出来（必要时 OCR）→ 识别供应商/发票号/日期/总金额 → 把行项目抽出来 → 做个校验（比如行项目加起来跟总计对不对）→ 输出 invoice JSON + validation（告警要解释原因）。
+  ex10: `我有一张发票 PDF（filesInput.invoicePdf），想把它变成结构化数据。请做个工作流：先把文字提取出来（必要时 OCR）→ 识别供应商/发票号/日期/总金额 → 把行项目抽出来 → 做个校验（比如行项目加起来跟总计对不对）→ 输出 invoice JSON + validation（告警要解释原因）。
 
 inputSpec v1 也写好，最后一个最终输出步骤。`,
 
@@ -99,7 +99,7 @@ inputSpec v1 也写好，最后一个最终输出步骤。`,
 
 尽量像真实团队在做分诊那样写，不要太学术；inputSpec v1 + examples；最后一步输出。`,
 
-  ex12: `我手上只有一份“样本数据”（CSV 或 JSON，fileInputs.sample），但我想快速知道这份数据大概长什么样、有哪些字段、应该怎么校验。请做个工作流：解析样本 → 推断 schema → 给约束建议（必填/范围/枚举）→ 顺便提示哪些列可能是 PII → 输出 JSON Schema + recommendations（把你的假设也写出来）。
+  ex12: `我手上只有一份“样本数据”（CSV 或 JSON，filesInput.sample），但我想快速知道这份数据大概长什么样、有哪些字段、应该怎么校验。请做个工作流：解析样本 → 推断 schema → 给约束建议（必填/范围/枚举）→ 顺便提示哪些列可能是 PII → 输出 JSON Schema + recommendations（把你的假设也写出来）。
 
 inputSpec v1 required 少一点，最后一步输出。`,
 
@@ -118,7 +118,7 @@ inputSpec v1 required 少一点，最后一步输出。`,
   ex16: `我要你为 Maia 设计一个“长文档处理 → 分块 → 可检索索引 → 分层摘要 → 术语/实体抽取 → 交叉引用 → 可搜索 bundle 输出”的复杂工作流，并输出可执行 workflow draft。
 
 输入：
-- fileInputs.document：PDF 或纯文本
+- filesInput.document：PDF 或纯文本
 - params.lang（可选）：zh/en
 
 输出：
@@ -136,7 +136,7 @@ inputSpec v1 required 少一点，最后一步输出。`,
   ex17: `我要你为 Maia 设计一个“端到端 ETL：原始数据 → 清洗归一 → 质量闸门 → 隔离错误 → 产出 curated dataset → 报告”的复杂工作流，并输出可执行 workflow draft。
 
 输入：
-- fileInputs.rawCsv：原始 CSV
+- filesInput.rawCsv：原始 CSV
 - params.config：ETL 配置 JSON（规则/阈值/输出字段映射等）
 
 输出：
@@ -161,8 +161,8 @@ inputSpec v1 required 少一点，最后一步输出。`,
 
 输入：
 - params.urls（可选）
-- fileInputs.pdfs（可选，多文件）
-- fileInputs.markdowns（可选，多文件）
+- filesInput.pdfs（可选，多文件）
+- filesInput.markdowns（可选，多文件）
 - params.lang（可选）：zh/en
 
 输出：
@@ -175,8 +175,8 @@ inputSpec v1 required 少一点，最后一步输出。`,
 
 业务目标：
 - 输入：topic、days、lang(zh/en)、maxItems（默认50）、riskThreshold（0-100，默认70），以及可选文件输入：
-  - fileInputs.sourcesCsv：CSV，列：sourceType(rss/web/api)、url、weight(0-1)、enabled(true/false)
-  - fileInputs.blocklistTxt：文本，每行一个需要过滤的域名或关键词
+  - filesInput.sourcesCsv：CSV，列：sourceType(rss/web/api)、url、weight(0-1)、enabled(true/false)
+  - filesInput.blocklistTxt：文本，每行一个需要过滤的域名或关键词
 - 输出：最终 JSON 报告，包含：
   - meta（总条数、去重后条数、命中黑名单条数、按来源分布）
   - topRisks（高风险条目：title/url/source/riskScore/reasons/summary）
@@ -185,7 +185,7 @@ inputSpec v1 required 少一点，最后一步输出。`,
   - diagnostics（各阶段耗时/失败数/重试数/降级情况）
 
 强约束：
-1) 必须提供 inputSpec v1（JSON 字符串），包含 paramsSchema、fileInputs、examples（至少 2 个），required 尽量少。
+1) 必须提供 inputSpec v1（JSON 字符串），包含 paramsSchema、filesInput、examples（至少 2 个），required 尽量少。
 2) deps 清晰：允许多分支并行，但必须有“最终汇聚 + 最终输出”两个明确步骤。
 3) 步骤需要覆盖这些子系统：输入校验、sources 解析与过滤、RSS/Web/API 并行抓取与规范化、清洗与（可选）翻译、摘要与实体抽取、风险评分、聚合、报告生成（JSON + Markdown）、通知生成。
 4) 每个 step 的脚本必须遵循系统提示结构；只能从 ctx.params 与 ctx.upstream 读取。
@@ -211,7 +211,7 @@ Finally: give a clear plan first, then publish_draft_step step-by-step, then val
 
   ex2: `I have a CSV and I want a “quick stats + quality” workflow: read the CSV, guess column types, compute basic stats for numeric columns, show top values for categorical columns, and output a report JSON.
 
-Input: fileInputs.csv (delimiter can be optional; auto-detect when missing).
+Input: filesInput.csv (delimiter can be optional; auto-detect when missing).
 Output: outputs.report with per-column summaries + a short overall note about data quality (missing values, weird outliers, etc.).
 
 Please don’t blow up on large files — sampling/chunking is fine, just explain what you did and record errors when needed. Generate inputSpec v1 (minimal required fields + 2 examples).`,
@@ -224,7 +224,7 @@ If validation fails, don’t just say “invalid” — return structured errors
 
 It should handle bad feeds/timeouts gracefully (errors + fallback behavior). Also generate inputSpec v1 with examples.`,
 
-  ex5: `I’ll upload an image (fileInputs.image). Please build a workflow that runs OCR, cleans the text (whitespace, obvious noise), and outputs { text, meta } where meta includes language guess, confidence, and errors.
+  ex5: `I’ll upload an image (filesInput.image). Please build a workflow that runs OCR, cleans the text (whitespace, obvious noise), and outputs { text, meta } where meta includes language guess, confidence, and errors.
 
 If OCR quality is poor, still output the raw OCR text as a fallback. Provide inputSpec v1 + examples.`,
 
@@ -232,19 +232,19 @@ If OCR quality is poor, still output the raw OCR text as a fallback. Provide inp
 
 Output takeaways, actionItems, and optionally timestamps if you can infer them. Make transcript-only input work. Provide inputSpec v1 + examples, handle failures gracefully.`,
 
-  ex7: `I have a Markdown doc and I want structured output: outline tree, code blocks (with language), and links. Build a workflow that accepts either a file (fileInputs.markdown) or raw text (params.markdownText), preserves ordering, and outputs a single JSON result.
+  ex7: `I have a Markdown doc and I want structured output: outline tree, code blocks (with language), and links. Build a workflow that accepts either a file (filesInput.markdown) or raw text (params.markdownText), preserves ordering, and outputs a single JSON result.
 
 Provide inputSpec v1 + examples and finish with one final output step.`,
 
-  ex8: `I have a big log file (fileInputs.log) and I want to quickly know “what errors happen most”. Build a workflow that groups similar errors, counts them, shows first/last seen, and includes a few sample lines. topK can be optional.
+  ex8: `I have a big log file (filesInput.log) and I want to quickly know “what errors happen most”. Build a workflow that groups similar errors, counts them, shows first/last seen, and includes a few sample lines. topK can be optional.
 
 For huge logs, use sampling/chunking to avoid memory issues (but explain it), record errors, generate inputSpec v1.`,
 
   ex9: `I have a bunch of product/app reviews (text + rating) and I want a dashboard: overall sentiment, common themes, and a few representative examples. Build a workflow that cleans data, detects language, does sentiment + topic extraction, aggregates the results, and outputs a dashboard JSON.
 
-Input can be CSV (fileInputs.reviewsCsv) or JSON (params.reviewsJson). Include basic quality checks (duplicates, very short entries) and put stats/errors into diagnostics.`,
+Input can be CSV (filesInput.reviewsCsv) or JSON (params.reviewsJson). Include basic quality checks (duplicates, very short entries) and put stats/errors into diagnostics.`,
 
-  ex10: `I have an invoice PDF (fileInputs.invoicePdf) and I want structured data out of it. Build a workflow that extracts text (OCR fallback), finds key fields (vendor/invoice number/dates/totals), extracts line items, validates totals, and outputs a normalized invoice JSON plus validation warnings with explanations.
+  ex10: `I have an invoice PDF (filesInput.invoicePdf) and I want structured data out of it. Build a workflow that extracts text (OCR fallback), finds key fields (vendor/invoice number/dates/totals), extracts line items, validates totals, and outputs a normalized invoice JSON plus validation warnings with explanations.
 
 Provide inputSpec v1 + examples, handle extraction failures gracefully.`,
 
@@ -271,7 +271,7 @@ Output a queuePlan plus redaction stats, generate inputSpec v1 + examples, and e
   ex16: `Design a complex Maia workflow for “long document processing → chunking → searchable index → hierarchical summaries → entity/glossary extraction → cross-references → searchable bundle output”, and output an executable workflow draft.
 
 Inputs:
-- fileInputs.document (PDF/text)
+- filesInput.document (PDF/text)
 - params.lang (optional: zh/en)
 
 Outputs:
@@ -283,7 +283,7 @@ Constraints: reproducible chunk IDs; retries/timeouts/degradation; parallel bran
   ex17: `Design a complex Maia workflow for end-to-end ETL: “raw data → normalization → quality gates → quarantine → curated dataset → report”, and output an executable workflow draft.
 
 Inputs:
-- fileInputs.rawCsv
+- filesInput.rawCsv
 - params.config (ETL config JSON)
 
 Outputs:
@@ -311,8 +311,8 @@ Constraints: must handle caching, rate limits, and per-domain backoff; inputSpec
 
 Inputs:
 - params.urls (optional)
-- fileInputs.pdfs (optional, multi)
-- fileInputs.markdowns (optional, multi)
+- filesInput.pdfs (optional, multi)
+- filesInput.markdowns (optional, multi)
 - params.lang (optional: zh/en)
 
 Outputs:
@@ -325,12 +325,12 @@ Constraints: strict provenance; inputSpec v1.`,
 
 Business goal:
 - Inputs: topic, days, lang(zh/en), maxItems(default 50), riskThreshold(0-100, default 70), plus optional files:
-  - fileInputs.sourcesCsv: CSV columns sourceType(rss/web/api), url, weight(0-1), enabled(true/false)
-  - fileInputs.blocklistTxt: lines of blocked domains/keywords
+  - filesInput.sourcesCsv: CSV columns sourceType(rss/web/api), url, weight(0-1), enabled(true/false)
+  - filesInput.blocklistTxt: lines of blocked domains/keywords
 - Output: final JSON report with meta/topRisks/entities/timeline/diagnostics, plus a Markdown report field.
 
 Hard constraints:
-1) Provide inputSpec v1 (JSON string) with paramsSchema/fileInputs/examples (at least 2 examples) and minimal required fields.
+1) Provide inputSpec v1 (JSON string) with paramsSchema/filesInput/examples (at least 2 examples) and minimal required fields.
 2) Parallel branches are allowed but must converge.
 3) Cover subsystems: input validation, sources parsing/filtering, RSS/Web/API fetching & normalization, cleaning + optional translation (degradable), summarization + entity extraction (degradable), risk scoring with reasons, aggregation, report generation (JSON+Markdown), notification message generation.
 4) Step scripts follow the system’s export default async main structure and read only ctx.params / ctx.upstream.

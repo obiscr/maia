@@ -65,8 +65,8 @@ export function useNewJobForm(params: {
     [urlList],
   )
 
-  const urlMaxItems = inputSpec?.fileInputs?.urlFiles?.maxItems
-  const uploadMaxItems = inputSpec?.fileInputs?.uploads?.maxItems
+  const urlMaxItems = inputSpec?.filesInput?.urlFiles?.maxItems
+  const uploadMaxItems = inputSpec?.filesInput?.uploadFiles?.maxItems
 
   const jsonState = useMemo(() => {
     try {
@@ -352,10 +352,10 @@ export function useNewJobForm(params: {
     }
 
     // Match the UI: file inputs are only active when explicitly enabled.
-    const urlEnabled = inputSpec?.fileInputs?.urlFiles?.enabled === true
-    const uploadEnabled = inputSpec?.fileInputs?.uploads?.enabled === true
-    if (urlEnabled && inputSpec?.fileInputs?.urlFiles?.required && urlLines.length === 0) return false
-    if (uploadEnabled && inputSpec?.fileInputs?.uploads?.required && files.length === 0) return false
+    const urlEnabled = inputSpec?.filesInput?.urlFiles?.enabled === true
+    const uploadEnabled = inputSpec?.filesInput?.uploadFiles?.enabled === true
+    if (urlEnabled && inputSpec?.filesInput?.urlFiles?.required && urlLines.length === 0) return false
+    if (uploadEnabled && inputSpec?.filesInput?.uploadFiles?.required && files.length === 0) return false
 
     return true
   }, [
@@ -402,8 +402,14 @@ export function useNewJobForm(params: {
       const remain = Math.max(0, max - prev.length)
       const accepted = picked.slice(0, remain)
       const ignored = picked.length - accepted.length
-      if (ignored > 0) toast.warning(t("jobs.toastUploadsIgnored", { max, ignored }))
-      if (accepted.length === 0) toast.info(t("jobs.toastUploadsMaxReached", { max }))
+      if (ignored > 0)
+        toast.warning(t("jobs.toastUploadsIgnored", { max, ignored }), {
+          id: "jobs.uploads-ignored",
+        })
+      if (accepted.length === 0)
+        toast.info(t("jobs.toastUploadsMaxReached", { max }), {
+          id: "jobs.uploads-max-reached",
+        })
       return [...prev, ...accepted]
     })
   }

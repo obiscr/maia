@@ -66,7 +66,7 @@ export function useNewScheduleForm(params: { t: (key: string, vars?: Record<stri
         .filter(Boolean),
     [urlList],
   )
-  const urlMaxItems = inputSpec?.fileInputs?.urlFiles?.maxItems
+  const urlMaxItems = inputSpec?.filesInput?.urlFiles?.maxItems
 
   const jsonState = useMemo(() => {
     const raw = String(inputJsonRaw ?? "")
@@ -133,9 +133,8 @@ export function useNewScheduleForm(params: { t: (key: string, vars?: Record<stri
 
   const requiredOk = useMemo(() => {
     if (!workflowHasInputSpec) {
-      // UI matches jobs: only enforce file constraints when urlFiles is explicitly enabled.
-      const urlEnabled = inputSpec?.fileInputs?.urlFiles?.enabled === true
-      if (urlEnabled && inputSpec?.fileInputs?.urlFiles?.required && urlLines.length === 0) return false
+      const urlEnabled = inputSpec?.filesInput?.urlFiles?.enabled === true
+      if (urlEnabled && inputSpec?.filesInput?.urlFiles?.required && urlLines.length === 0) return false
       return true
     }
     if (inputSpecLoading) return false
@@ -155,8 +154,8 @@ export function useNewScheduleForm(params: { t: (key: string, vars?: Record<stri
     }
 
     // UI matches jobs: only enforce file constraints when urlFiles is explicitly enabled.
-    const urlEnabled = inputSpec?.fileInputs?.urlFiles?.enabled === true
-    if (urlEnabled && inputSpec?.fileInputs?.urlFiles?.required && urlLines.length === 0) return false
+    const urlEnabled = inputSpec?.filesInput?.urlFiles?.enabled === true
+    if (urlEnabled && inputSpec?.filesInput?.urlFiles?.required && urlLines.length === 0) return false
     return true
   }, [hasValidInputSpec, inputSpec, inputSpecLoading, jsonState, schemaRequired, urlLines.length, workflowHasInputSpec])
 

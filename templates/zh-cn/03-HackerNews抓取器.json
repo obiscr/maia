@@ -57,13 +57,13 @@
           "params": {}
         }
       ],
-      "fileInputs": {
+      "filesInput": {
         "urlFiles": { "enabled": false, "required": false },
-        "uploads": { "enabled": false, "required": false }
+        "uploadFiles": { "enabled": false, "required": false }
       }
     },
     "outputsSpec": {
-      "version": 1,
+      "version": 2,
       "outputs": {
         "items": {
           "stepKey": "parse_top10",

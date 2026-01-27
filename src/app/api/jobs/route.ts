@@ -340,7 +340,7 @@ export const POST = withApiObservability(async (req: Request) => {
         }
 
         // File constraints (validated against the separate Files tab inputs).
-        const fi = inputSpec.fileInputs
+        const fi = inputSpec.filesInput
         if (fi?.urlFiles) {
           const enabled = fi.urlFiles.enabled !== false
           if (!enabled && urlFiles.length) {
@@ -370,48 +370,48 @@ export const POST = withApiObservability(async (req: Request) => {
           }
         }
 
-        if (fi?.uploads) {
-          const enabled = fi.uploads.enabled !== false
+        if (fi?.uploadFiles) {
+          const enabled = fi.uploadFiles.enabled !== false
           if (!enabled && uploadFiles.length) {
             return invalidInput422({
               code: "INVALID_INPUT_FILES",
-              issues: [{ path: "/uploads", keyword: "disabled", params: { field: "uploads" } }],
+              issues: [{ path: "/uploadFiles", keyword: "disabled", params: { field: "uploadFiles" } }],
             })
           }
-          if (fi.uploads.required && uploadFiles.length === 0) {
+          if (fi.uploadFiles.required && uploadFiles.length === 0) {
             return invalidInput422({
               code: "INVALID_INPUT_FILES",
-              issues: [{ path: "/uploads", keyword: "required", params: { missingProperty: "uploads" } }],
+              issues: [{ path: "/uploadFiles", keyword: "required", params: { missingProperty: "uploadFiles" } }],
             })
           }
-          if (typeof fi.uploads.maxItems === "number" && uploadFiles.length > fi.uploads.maxItems) {
+          if (typeof fi.uploadFiles.maxItems === "number" && uploadFiles.length > fi.uploadFiles.maxItems) {
             return invalidInput422({
               code: "INVALID_INPUT_FILES",
               issues: [
                 {
-                  path: "/uploads",
+                  path: "/uploadFiles",
                   keyword: "maxItems",
-                  params: { limit: fi.uploads.maxItems },
+                  params: { limit: fi.uploadFiles.maxItems },
                 },
               ],
-              meta: { maxItems: fi.uploads.maxItems },
+              meta: { maxItems: fi.uploadFiles.maxItems },
             })
           }
-          if (fi.uploads.acceptMime?.length) {
+          if (fi.uploadFiles.acceptMime?.length) {
             for (const f of uploadFiles) {
               const mime = typeof f.type === "string" ? String(f.type) : ""
               if (!mime) continue
-              if (!fi.uploads.acceptMime.includes(mime)) {
+              if (!fi.uploadFiles.acceptMime.includes(mime)) {
                 return invalidInput422({
                   code: "INVALID_INPUT_FILES",
                   issues: [
                     {
-                      path: "/uploads",
+                      path: "/uploadFiles",
                       keyword: "acceptMime",
-                      params: { mime, accept: fi.uploads.acceptMime },
+                      params: { mime, accept: fi.uploadFiles.acceptMime },
                     },
                   ],
-                  meta: { mime, accept: fi.uploads.acceptMime },
+                  meta: { mime, accept: fi.uploadFiles.acceptMime },
                 })
               }
             }

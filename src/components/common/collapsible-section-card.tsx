@@ -60,7 +60,7 @@ export function CollapsibleSectionCard(props: {
       className={cn(
         // Match `SectionCard` base styles + existing section look.
         "min-h-0 flex-1 overflow-hidden rounded-md border",
-        "flex-none bg-card text-card-foreground",
+        "flex-none text-card-foreground",
         props.className,
       )}
       header={({ open, hasBody }) => (

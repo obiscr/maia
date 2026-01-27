@@ -219,7 +219,7 @@
       ]
     },
     "outputsSpec": {
-      "version": 1,
+      "version": 2,
       "outputs": {
         "summary_json": {
           "stepKey": "build_release_report",

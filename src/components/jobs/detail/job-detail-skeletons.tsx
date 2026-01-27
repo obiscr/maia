@@ -26,7 +26,7 @@ function MiniFieldSkeleton(props: { titleW?: string; valueW?: string; showTitleR
 
 function JobOverviewCardSkeleton() {
   return (
-    <SectionCard className="flex-none bg-card text-card-foreground">
+    <SectionCard className="flex-none text-card-foreground">
       <SectionCardHeader>
         <Skeleton className="h-4 w-24" />
       </SectionCardHeader>
@@ -49,7 +49,7 @@ function JobOverviewCardSkeleton() {
 
 function JobTimingCardSkeleton() {
   return (
-    <SectionCard className="flex-none bg-card text-card-foreground">
+    <SectionCard className="flex-none text-card-foreground">
       <SectionCardHeader>
         <Skeleton className="h-4 w-20" />
       </SectionCardHeader>
@@ -71,7 +71,7 @@ function JobTimingCardSkeleton() {
 
 function JobLeaseCardSkeleton() {
   return (
-    <SectionCard className="flex-none bg-card text-card-foreground">
+    <SectionCard className="flex-none text-card-foreground">
       <SectionCardHeader>
         <Skeleton className="h-4 w-28" />
       </SectionCardHeader>
@@ -94,7 +94,7 @@ function JobLeaseCardSkeleton() {
 
 function JobRelatedCardSkeleton() {
   return (
-    <SectionCard className="flex-none bg-card text-card-foreground">
+    <SectionCard className="flex-none text-card-foreground">
       <SectionCardHeader>
         <Skeleton className="h-4 w-24" />
       </SectionCardHeader>

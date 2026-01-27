@@ -129,7 +129,7 @@ export function EditScheduleSheet(props: {
   const [workflowStepCount, setWorkflowStepCount] = useState<number | null>(null)
   const [workflowStepCountLoading, setWorkflowStepCountLoading] = useState(false)
   const lastUrlTruncateToastAtRef = useRef<number>(0)
-  const urlMaxItems = inputSpec?.fileInputs?.urlFiles?.maxItems
+  const urlMaxItems = inputSpec?.filesInput?.urlFiles?.maxItems
   const [submitError, setSubmitError] = useState<{ code: string; issues?: ApiIssue[] } | null>(null)
 
   // Sync from schedule when opening/switching.
@@ -287,8 +287,8 @@ export function EditScheduleSheet(props: {
   }, [ajvResult.errors, ajvResult.ok, hasValidInputSpec, inputJsonErr, inputSpec, inputSpecLoading, jsonState, t])
 
   const requiredOk = useMemo(() => {
-    const urlEnabled = inputSpec?.fileInputs?.urlFiles?.enabled === true
-    if (urlEnabled && inputSpec?.fileInputs?.urlFiles?.required && urlLines.length === 0) return false
+    const urlEnabled = inputSpec?.filesInput?.urlFiles?.enabled === true
+    if (urlEnabled && inputSpec?.filesInput?.urlFiles?.required && urlLines.length === 0) return false
     return true
   }, [inputSpec, urlLines.length])
 
@@ -335,7 +335,7 @@ export function EditScheduleSheet(props: {
 
   const showSelectWorkflowAlert = !workflowId
   const showNoStepsAlert = !!workflowId && workflowStepCount === 0
-  const urlFilesEnabled = inputSpec?.fileInputs?.urlFiles?.enabled === true
+  const urlFilesEnabled = inputSpec?.filesInput?.urlFiles?.enabled === true
   const showNoInputsAlert = !!workflowId && !inputSpecLoading && !paramsEditorEnabled && !urlFilesEnabled
   const showInputsLoadingSkeleton = !!workflowId && inputSpecLoading
 
@@ -729,9 +729,19 @@ export function EditScheduleSheet(props: {
                       {/* Input JSON template */}
                       {paramsEditorEnabled ? (
                         <JsonMonacoEditor
-                          title={t("common.inputTemplate")}
+                          title={
+                            typeof inputSpec?.paramsSchema?.title === "string" && inputSpec.paramsSchema.title.trim()
+                              ? inputSpec.paramsSchema.title.trim()
+                              : t("common.inputParams")
+                          }
                           required={schemaRequired.length > 0}
                           codeLabel="inputJson"
+                          hintText={
+                            typeof inputSpec?.paramsSchema?.description === "string" &&
+                            inputSpec.paramsSchema.description.trim()
+                              ? inputSpec.paramsSchema.description.trim()
+                              : undefined
+                          }
                           editorRef={inputJsonEditorRef}
                           value={inputJsonRaw}
                           onChange={setInputJsonRaw}
@@ -760,7 +770,8 @@ export function EditScheduleSheet(props: {
                         <div className="grid gap-2">
                           <UrlFilesEditor
                             title={urlFilesUi.title}
-                            required={inputSpec?.fileInputs?.urlFiles?.required === true}
+                            required={inputSpec?.filesInput?.urlFiles?.required === true}
+                            codeLabel="urlFiles"
                             hintText={urlFilesUi.description}
                             rightSlot={
                               typeof urlMaxItems === "number" ? (
@@ -772,11 +783,10 @@ export function EditScheduleSheet(props: {
                             value={urlList}
                             onChange={(raw) => onUrlListChange(raw)}
                             rows={3}
-                            textareaClassName="font-mono text-xs max-h-40 overflow-y-auto resize-none"
                             placeholder={"https://example.com/data.csv\nhttps://example.com/image.png"}
                             disabled={uiPending}
-                            headerClassName="flex items-center justify-between gap-2"
-                            titleRowClassName="flex min-w-0 items-center gap-2"
+                            headerClassName="flex items-start justify-between gap-3"
+                            textareaClassName="font-mono text-xs"
                           />
                         </div>
                       ) : null}

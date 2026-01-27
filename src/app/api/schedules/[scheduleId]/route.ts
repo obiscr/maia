@@ -379,25 +379,25 @@ export const PATCH = withApiObservability(async (req: Request, ctx: { params: Pr
 
       if (body.urlFiles !== undefined) {
         const urlFiles = normalizeUrlFilesForStorage(body.urlFiles)
-        if (inputSpec?.fileInputs?.urlFiles) {
-          const enabled = inputSpec.fileInputs.urlFiles.enabled !== false
+        if (inputSpec?.filesInput?.urlFiles) {
+          const enabled = inputSpec.filesInput.urlFiles.enabled !== false
           if (!enabled && urlFiles.length) {
             const issues: ApiIssue[] = [{ path: "/urlFiles", keyword: "disabled", params: { field: "urlFiles" } }]
             return { error: { status: 422, code: "INVALID_INPUT_FILES" as const, issues } }
           }
-          if (inputSpec.fileInputs.urlFiles.required && urlFiles.length === 0) {
+          if (inputSpec.filesInput.urlFiles.required && urlFiles.length === 0) {
             const issues: ApiIssue[] = [{ path: "/urlFiles", keyword: "required", params: { field: "urlFiles" } }]
             return { error: { status: 422, code: "INVALID_INPUT_FILES" as const, issues } }
           }
           if (
-            typeof inputSpec.fileInputs.urlFiles.maxItems === "number" &&
-            urlFiles.length > inputSpec.fileInputs.urlFiles.maxItems
+            typeof inputSpec.filesInput.urlFiles.maxItems === "number" &&
+            urlFiles.length > inputSpec.filesInput.urlFiles.maxItems
           ) {
             const issues: ApiIssue[] = [
               {
                 path: "/urlFiles",
                 keyword: "maxItems",
-                params: { maxItems: inputSpec.fileInputs.urlFiles.maxItems },
+                params: { maxItems: inputSpec.filesInput.urlFiles.maxItems },
               },
             ]
             return {
@@ -405,7 +405,7 @@ export const PATCH = withApiObservability(async (req: Request, ctx: { params: Pr
                 status: 422,
                 code: "INVALID_INPUT_FILES" as const,
                 issues,
-                meta: { maxItems: inputSpec.fileInputs.urlFiles.maxItems },
+                meta: { maxItems: inputSpec.filesInput.urlFiles.maxItems },
               },
             }
           }

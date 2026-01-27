@@ -48,7 +48,7 @@ export function FieldHeader(props: {
           {titleNode}
           {code ? <div className="truncate font-mono text-[11px] text-muted-foreground">{code}</div> : null}
         </div>
-        {hint ? <div className="mt-1 text-xs text-muted-foreground">{hint}</div> : null}
+        {hint ? <div className="mt-1 whitespace-pre-line text-xs text-muted-foreground">{hint}</div> : null}
       </div>
 
       {props.rightSlot ? <div className="flex shrink-0 items-center gap-2">{props.rightSlot}</div> : null}

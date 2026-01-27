@@ -163,7 +163,7 @@ function buildSystemPrompt(params: { locale: string; workflowId?: string }) {
     "- Avoid creating multiple root steps (multiple steps with deps=[]), as it looks like multiple 'starts' in the graph UI.",
     '- dependencies is a JSON object string of npm deps (e.g. {"cheerio":"^1.0.0"}). Keep it minimal.',
     '- envJson (optional): a JSON object string of workflow-scoped env KV (e.g. {"OPENAI_API_KEY":"..."}). Keep it minimal.',
-    "- inputSpec (recommended): a JSON string (WorkflowInputSpec v1) with paramsSchema/fileInputs/examples.",
+    "- inputSpec (recommended): a JSON string (WorkflowInputSpec v2) with paramsSchema/filesInput/examples.",
     "- REQUIRED SCRIPT SKELETON (follow this structure; output EXACTLY ONE script per step):\n\n```js\nexport default {\n  async main(env, ctx) {\n    const { params, upstream, files, urls } = ctx;\n\n    // Write your logic here.\n\n    return {\n      outputs: {\n        // Put ONLY the outputs you want downstream steps to consume.\n      },\n    };\n  },\n};\n```\n",
     "Process:",
     "- Before you start planning, CALL ui_signal({phase:'plan', state:'start'}) first (this tells the UI to show the 'Generating plan…' bar).",
@@ -319,7 +319,7 @@ const tools: ToolDef[] = [
   toolValidateWorkflowPayload,
 ]
 
-function tryCoerceInputSpecV1(raw: string): { next: string; didChange: boolean } | null {
+function tryCoerceInputSpecV2(raw: string): { next: string; didChange: boolean } | null {
   const s = String(raw ?? "").trim()
   if (!s) return null
   let obj: unknown
@@ -332,12 +332,12 @@ function tryCoerceInputSpecV1(raw: string): { next: string; didChange: boolean }
 
   let didChange = false
   const nextObj: Record<string, unknown> = { ...obj }
-  if (nextObj.version !== 1) {
-    nextObj.version = 1
+  if (nextObj.version !== 2) {
+    nextObj.version = 2
     didChange = true
   }
-  if (nextObj.fileInputs != null && !isPlainObject(nextObj.fileInputs)) {
-    nextObj.fileInputs = defaultWorkflowInputSpec().fileInputs
+  if (nextObj.filesInput != null && !isPlainObject(nextObj.filesInput)) {
+    nextObj.filesInput = defaultWorkflowInputSpec().filesInput
     didChange = true
   }
   if (nextObj.paramsSchema == null || !isPlainObject(nextObj.paramsSchema)) {
@@ -401,7 +401,7 @@ async function runTool(name: string, args: unknown) {
     if (isPlainObject(draftCandidate)) {
       const dc = draftCandidate as Record<string, unknown>
       const raw = typeof dc.inputSpec === "string" ? String(dc.inputSpec) : ""
-      const repaired = raw ? tryCoerceInputSpecV1(raw) : null
+      const repaired = raw ? tryCoerceInputSpecV2(raw) : null
       if (repaired?.didChange) {
         dc.inputSpec = repaired.next
       }
@@ -442,7 +442,7 @@ async function runTool(name: string, args: unknown) {
     if (!d) warnings.push("Missing workflow description (add 1-2 sentences).")
     if (!String(normalized.inputSpec ?? "").trim()) {
       warnings.push(
-        'Missing inputSpec (recommended): add a JSON string with version=1 and paramsSchema to improve "Create Job" UX and enable validation.',
+        'Missing inputSpec (recommended): add a JSON string with version=2 and paramsSchema to improve "Create Job" UX and enable validation.',
       )
     }
     if (inputSpecRepairWarning) warnings.push(inputSpecRepairWarning)

@@ -15,8 +15,6 @@ import { monotonicMerge } from "@/lib/shared/realtime/monotonic"
 import { toast } from "@/lib/client/toast"
 import { tApiError } from "@/lib/shared/i18n/error"
 import { HeaderActions } from "@/components/common/header-actions"
-import { HeaderSubbar } from "@/components/common/header-subbar"
-import { type InlineItemRowItem } from "@/components/common/inline-item-row"
 import { scheduleStatusUiSpec } from "@/lib/shared/schedule-status"
 import { scheduleToggleSpec } from "@/lib/shared/schedule-control"
 import { cn } from "@/lib/utils"
@@ -681,7 +679,7 @@ export default function ScheduleDetailPage() {
   return (
     <DetailPageLayout modals={modalsNode} header={<StandardPageHeader {...headerProps} />}>
       <div className="grid gap-3 lg:grid-cols-2">
-        <SectionCard className="flex-none bg-card text-card-foreground">
+        <SectionCard className="flex-none text-card-foreground">
           <SectionCardHeader>
             <div className="text-sm font-medium">{t("common.overview")}</div>
           </SectionCardHeader>
@@ -759,7 +757,7 @@ export default function ScheduleDetailPage() {
           </SectionCardBody>
         </SectionCard>
 
-        <SectionCard className="flex-none bg-card text-card-foreground">
+        <SectionCard className="flex-none text-card-foreground">
           <SectionCardHeader>
             <div className="flex items-center justify-between gap-2">
               <div className="text-sm font-medium">{t("schedules.detail.scheduleSpec")}</div>
@@ -842,7 +840,7 @@ export default function ScheduleDetailPage() {
       </div>
 
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
-        <SectionCard className="flex-none bg-card text-card-foreground">
+        <SectionCard className="flex-none text-card-foreground">
           <SectionCardHeader>
             <div className="text-sm font-medium">{t("common.executionPolicies")}</div>
           </SectionCardHeader>
@@ -872,9 +870,9 @@ export default function ScheduleDetailPage() {
           </SectionCardBody>
         </SectionCard>
 
-        <SectionCard className="flex-none bg-card text-card-foreground">
+        <SectionCard className="flex-none text-card-foreground">
           <SectionCardHeader>
-            <div className="text-sm font-medium">{t("common.inputTemplate")}</div>
+            <div className="text-sm font-medium">{t("common.inputParams")}</div>
           </SectionCardHeader>
           <SectionCardBody>
             <JsonViewer value={inputJsonParsed} />

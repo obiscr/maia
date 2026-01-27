@@ -12,6 +12,7 @@ export function UrlFilesEditor(props: {
   required?: boolean
   codeLabel?: string | null
   hintText?: string | null
+  belowInputHintText?: string | null
   icon?: React.ReactNode
   rightSlot?: React.ReactNode
 
@@ -50,6 +51,10 @@ export function UrlFilesEditor(props: {
         placeholder={props.placeholder}
         disabled={props.disabled}
       />
+
+      {typeof props.belowInputHintText === "string" && props.belowInputHintText.trim() ? (
+        <div className="text-xs text-muted-foreground">{props.belowInputHintText.trim()}</div>
+      ) : null}
     </div>
   )
 }

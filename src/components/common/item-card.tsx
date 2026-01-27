@@ -29,7 +29,7 @@ export function ItemCard(
         "flex-col items-stretch",
         "p-0 gap-0",
         // Visuals: GitHub-ish
-        "bg-card text-card-foreground",
+        "text-card-foreground",
         "transition-colors hover:bg-muted/30",
         className,
       )}

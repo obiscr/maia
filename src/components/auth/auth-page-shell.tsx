@@ -25,13 +25,7 @@ export function AuthPageShell(props: {
       subtitle={subtitleKey ? t(subtitleKey) : undefined}
       className={className}
     >
-      <SectionCard
-        className={cn(
-          "mx-auto w-full max-w-md bg-card/60 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/50",
-          maxWidthClassName,
-          cardClassName,
-        )}
-      >
+      <SectionCard className={cn("mx-auto w-full max-w-md shadow-sm", maxWidthClassName, cardClassName)}>
         <SectionCardBody className="px-4 py-6 sm:px-5 sm:py-8">{children}</SectionCardBody>
         <SectionCardFooter className="px-4 py-3 sm:px-5 sm:py-4 text-sm">
           <AuthAppearanceFooter />
