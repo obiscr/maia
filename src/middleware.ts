@@ -1,6 +1,8 @@
 import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 
+import { shouldSetSecureCookie } from "@/lib/shared/http/cookie-secure"
+
 const SESSION_COOKIE_NAME = "maia_session"
 const RETURN_TO_COOKIE_NAME = "maia_return_to"
 
@@ -46,7 +48,7 @@ export function middleware(req: NextRequest) {
   const cookieOpts = {
     path: "/",
     sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldSetSecureCookie({ headers: req.headers, url: req.nextUrl.href }),
     maxAge: 2 * 60, // seconds
   }
 

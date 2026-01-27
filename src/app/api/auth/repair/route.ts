@@ -6,7 +6,7 @@ import { fail, ok } from "@/lib/server/http/response"
 import { withApiObservability } from "@/lib/server/observability"
 import { allocatePublicId } from "@/lib/server/public-ids"
 import { hashPassword } from "@/lib/server/auth/password"
-import { createSession, cookieHeaderForSession } from "@/lib/server/auth/session"
+import { createSession, cookieHeaderForSession, getSessionCookieSecure } from "@/lib/server/auth/session"
 import { getInstallation } from "@/lib/server/installation"
 import { checkRateLimit, getClientIp, RATE_LIMIT_CONFIG } from "@/lib/server/auth/rate-limit"
 import { zodIssues } from "@/lib/shared/http/zod"
@@ -153,6 +153,11 @@ export const POST = withApiObservability(async (req: Request) => {
         totpEnabled: created.totpEnabled,
       },
     },
-    { status: 201, headers: { "Set-Cookie": cookieHeaderForSession(sess.token, { expiresAt: sess.expiresAt }) } },
+    {
+      status: 201,
+      headers: {
+        "Set-Cookie": cookieHeaderForSession(sess.token, { expiresAt: sess.expiresAt, secure: getSessionCookieSecure(req) }),
+      },
+    },
   )
 })

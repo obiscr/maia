@@ -1,6 +1,6 @@
 import { ok } from "@/lib/server/http/response"
 import { withApiObservability } from "@/lib/server/observability"
-import { cookieHeaderForLogout, readSessionTokenFromRequest } from "@/lib/server/auth/session"
+import { cookieHeaderForLogout, getSessionCookieSecure, readSessionTokenFromRequest } from "@/lib/server/auth/session"
 import { prisma } from "@/lib/server/db"
 import crypto from "node:crypto"
 
@@ -17,5 +17,5 @@ export const POST = withApiObservability(async (req: Request) => {
     // Best-effort revoke
     void prisma.session.updateMany({ where: { tokenHash }, data: { revokedAt: new Date() } }).catch(() => {})
   }
-  return ok({ ok: true }, { headers: { "Set-Cookie": cookieHeaderForLogout() } })
+  return ok({ ok: true }, { headers: { "Set-Cookie": cookieHeaderForLogout({ secure: getSessionCookieSecure(req) }) } })
 })
