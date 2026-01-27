@@ -5,7 +5,7 @@ import { fail, ok } from "@/lib/server/http/response"
 import { withApiObservability } from "@/lib/server/observability"
 import { consumeTotpSigninChallenge } from "@/lib/server/auth/challenge"
 import { verifyTotp } from "@/lib/server/auth/totp"
-import { createSession, cookieHeaderForSession } from "@/lib/server/auth/session"
+import { createSession, cookieHeaderForSession, getSessionCookieSecure } from "@/lib/server/auth/session"
 import { checkRateLimit, getClientIp, RATE_LIMIT_CONFIG } from "@/lib/server/auth/rate-limit"
 import { zodIssues } from "@/lib/shared/http/zod"
 
@@ -87,6 +87,10 @@ export const POST = withApiObservability(async (req: Request) => {
         totpEnabled: user.totpEnabled,
       },
     },
-    { headers: { "Set-Cookie": cookieHeaderForSession(sess.token, { expiresAt: sess.expiresAt }) } },
+    {
+      headers: {
+        "Set-Cookie": cookieHeaderForSession(sess.token, { expiresAt: sess.expiresAt, secure: getSessionCookieSecure(req) }),
+      },
+    },
   )
 })

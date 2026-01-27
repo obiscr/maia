@@ -11,6 +11,7 @@ services:
       # Next standalone server binds to HOSTNAME; force 0.0.0.0 in containers
       - HOSTNAME=0.0.0.0
       - PORT=3690
+
       - MAIA_DATA_DIR=/app/maia-data
       - GLOBAL_RUN_CONCURRENCY=2
       - PER_RUN_STEP_CONCURRENCY=2
@@ -20,6 +21,8 @@ services:
       # Runner (execution plane) - required for container isolation
       - RUNNER_URL=http://runner:9090
       - RUNNER_TOKEN=${RUNNER_TOKEN:-dev-runner-token}
+      # Session cookie Secure policy (true/false/auto)
+      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-true}
     volumes:
       # Instance data directory mount (two modes):
       #

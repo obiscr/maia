@@ -7,6 +7,7 @@ import type { Prisma } from "@prisma/client"
 
 import { prisma } from "@/lib/server/db"
 import { isCurrentDatabaseSchemaReadySync } from "@/lib/server/db/schema-ready"
+import { shouldSetSecureCookie } from "@/lib/shared/http/cookie-secure"
 
 export const SESSION_COOKIE_NAME = "maia_session"
 
@@ -133,19 +134,27 @@ export async function createSession(params: {
   return { token, expiresAt }
 }
 
-export function cookieHeaderForSession(token: string, opts?: { expiresAt?: Date; maxAgeSeconds?: number }) {
-  // Secure is safe in production; in dev over http, browsers ignore Secure cookies.
+export function cookieHeaderForSession(
+  token: string,
+  opts?: { expiresAt?: Date; maxAgeSeconds?: number; secure?: boolean },
+) {
+  // Default to Secure unless explicitly disabled via decision logic upstream.
   const parts: string[] = []
   parts.push(`${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`)
   parts.push("Path=/")
   parts.push("HttpOnly")
   parts.push("SameSite=Lax")
-  if (process.env.NODE_ENV === "production") parts.push("Secure")
+  const secure = typeof opts?.secure === "boolean" ? opts.secure : true
+  if (secure) parts.push("Secure")
   if (opts?.expiresAt instanceof Date) parts.push(`Expires=${opts.expiresAt.toUTCString()}`)
   if (typeof opts?.maxAgeSeconds === "number") parts.push(`Max-Age=${Math.floor(opts.maxAgeSeconds)}`)
   return parts.join("; ")
 }
 
-export function cookieHeaderForLogout() {
-  return cookieHeaderForSession("", { maxAgeSeconds: 0, expiresAt: new Date(0) })
+export function getSessionCookieSecure(req: Request): boolean {
+  return shouldSetSecureCookie({ headers: req.headers, url: req.url })
+}
+
+export function cookieHeaderForLogout(opts?: { secure?: boolean }) {
+  return cookieHeaderForSession("", { maxAgeSeconds: 0, expiresAt: new Date(0), secure: opts?.secure })
 }

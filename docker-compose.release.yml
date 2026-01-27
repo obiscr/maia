@@ -19,6 +19,8 @@ services:
       # Runner (execution plane) - required for container isolation
       - RUNNER_URL=http://runner:9090
       - RUNNER_TOKEN=${RUNNER_TOKEN:-dev-runner-token}
+      # Session cookie Secure policy (true/false/auto)
+      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-true}
     volumes:
       - type: ${MAIA_DATA_MOUNT_TYPE:-volume}
         source: ${MAIA_HOST_DATA_DIR:-maia-data}
