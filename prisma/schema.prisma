@@ -478,6 +478,8 @@ model WorkflowStep {
   /// CommonJS script source.
   scriptEsm   String
   timeoutMs   Int      @default(600000)
+  /// Optional retry/backoff policy (JSON string).
+  retryPolicyJson String @default("{}")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -569,6 +571,10 @@ model RunStep {
   /// Snapshot copy of the step script (CommonJS source).
   scriptEsm  String
   timeoutMs  Int        @default(600000)
+  /// Retry/backoff policy for this step (JSON string).
+  retryPolicyJson String @default("{}")
+  /// If set, step cannot be claimed until this timestamp (used for backoff).
+  nextAttemptAt DateTime?
   startedAt  DateTime?
   finishedAt DateTime?
   createdAt  DateTime   @default(now())
@@ -579,6 +585,7 @@ model RunStep {
 
   @@unique([runId, stepKey])
   @@index([runId, status])
+  @@index([runId, status, nextAttemptAt])
 }
 
 model Attempt {
@@ -587,6 +594,14 @@ model Attempt {
   stepKey     String
   attemptNo   Int
   status      AttemptStatus @default(RUNNING)
+  /// Worker identity that currently owns this attempt (lease holder).
+  workerId     String?
+  /// Lease expiry; if now > leaseExpiresAt, the worker is considered lost.
+  leaseExpiresAt DateTime?
+  /// Last heartbeat timestamp written by the owning worker.
+  heartbeatAt  DateTime?
+  /// Absolute timeout deadline (startedAt + timeoutMs) computed at start.
+  deadlineAt   DateTime?
   exitCode    Int?
   errorCode    String?
   errorMessage String?
@@ -605,6 +620,8 @@ model Attempt {
   @@unique([runId, stepKey, attemptNo])
   @@index([runId, status])
   @@index([runId, stepKey, status])
+  @@index([status, leaseExpiresAt])
+  @@index([status, deadlineAt])
 }
 
 model Artifact {

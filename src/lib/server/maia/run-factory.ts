@@ -234,6 +234,8 @@ export async function createRunFromJobRun(tx: Prisma.TransactionClient, params: 
         depsJson: JSON.stringify(s.deps ?? []),
         scriptEsm: s.scriptEsm,
         timeoutMs: s.timeoutMs,
+        retryPolicyJson: JSON.stringify(s.retryPolicy ?? {}),
+        nextAttemptAt: null,
       })),
     })
   }

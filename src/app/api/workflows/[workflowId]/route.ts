@@ -24,6 +24,7 @@ const stepSchema = z.object({
   description: z.string().optional(),
   scriptEsm: z.string().default(""),
   timeoutMs: z.number().int().positive().optional(),
+  retryPolicy: z.unknown().optional(),
   deps: z.array(z.string().min(1)).default([]),
 })
 
@@ -124,6 +125,13 @@ export const GET = withApiObservability(async (_: Request, ctx: { params: Promis
         description: s.description,
         scriptEsm: s.scriptEsm,
         timeoutMs: s.timeoutMs,
+        retryPolicy: (() => {
+          try {
+            return s.retryPolicyJson ? JSON.parse(String(s.retryPolicyJson)) : undefined
+          } catch {
+            return undefined
+          }
+        })(),
         deps: depMap.get(s.key) ?? [],
       })),
     },
@@ -279,6 +287,8 @@ export const PUT = withApiObservability(async (req: Request, ctx: { params: Prom
     }
   }
 
+  const steps = body.steps ?? []
+
   const updated = await prisma.$transaction(async (tx) => {
     const shouldResetDepsState = depsChanged || depsCount === 0
     const wf = await tx.workflow.update({
@@ -308,7 +318,6 @@ export const PUT = withApiObservability(async (req: Request, ctx: { params: Prom
     await tx.workflowStepDep.deleteMany({ where: { workflowId: current.id } })
     await tx.workflowStep.deleteMany({ where: { workflowId: current.id } })
 
-    const steps = body.steps ?? []
     if (steps.length) {
       await tx.workflowStep.createMany({
         data: steps.map((s) => ({
@@ -319,6 +328,7 @@ export const PUT = withApiObservability(async (req: Request, ctx: { params: Prom
           description: s.description ?? null,
           scriptEsm: s.scriptEsm,
           timeoutMs: s.timeoutMs ?? 10 * 60 * 1000,
+          retryPolicyJson: JSON.stringify((s as any).retryPolicy ?? {}),
         })),
       })
 

@@ -4,6 +4,8 @@ import { RunStatus, StepStatus } from "@prisma/client"
 import type { RunStep } from "@prisma/client"
 
 import { prisma } from "@/lib/server/db"
+import { LogLevel } from "@prisma/client"
+import { emitSystem } from "@/lib/server/maia/logging"
 
 const SQLITE_TICK_RUNNING_RUNS_TAKE = 25
 
@@ -25,6 +27,7 @@ export async function scheduleRun(params: {
   finishRun: (runId: string, status: RunStatus) => Promise<void>
 }) {
   const runId = params.runId
+  const now = new Date()
 
   // If any step FAILED, fail the run and stop.
   //
@@ -51,6 +54,7 @@ export async function scheduleRun(params: {
 
   for (const s of steps) {
     if (s.status !== StepStatus.PENDING) continue
+    if (s.nextAttemptAt && new Date(s.nextAttemptAt).getTime() > now.getTime()) continue
     const deps = JSON.parse(s.depsJson) as string[]
     if (deps.every((d) => succeeded.has(d))) runnable.push(s.stepKey)
   }
@@ -80,5 +84,58 @@ export async function scheduleRun(params: {
   const allSucceeded = steps.every((s: RunStep) => s.status === StepStatus.SUCCEEDED)
   if (allTerminal) {
     await params.finishRun(runId, allSucceeded ? RunStatus.SUCCEEDED : RunStatus.CANCELED)
+    return
+  }
+
+  // Stalled: no runnable/running work, but some steps are still PENDING.
+  // This indicates an invalid/unsatisfied graph (most commonly: cycle or missing deps).
+  //
+  // NOTE: In multi-scheduler/concurrent scenarios, we can briefly observe:
+  // - no RUNNING steps (because a claim/start is in-flight)
+  // - no started steps in this tick (because claimAndStartAttempt returned false)
+  // To reduce false "stalled" failures, do a single re-check from DB before failing.
+  const pending = steps.filter((s) => s.status === StepStatus.PENDING).map((s) => String(s.stepKey))
+  if (pending.length) {
+    const freshSteps: RunStep[] = await prisma.runStep.findMany({ where: { runId } }).catch(() => steps)
+    const freshRunning = freshSteps.filter((s) => s.status === StepStatus.RUNNING).length
+    if (freshRunning > 0) return
+
+    const freshAnyFailed = freshSteps.some((s) => s.status === StepStatus.FAILED)
+    if (freshAnyFailed) {
+      await params.finishRun(runId, RunStatus.FAILED)
+      return
+    }
+
+    const freshAnyCanceled = freshSteps.some((s) => s.status === StepStatus.CANCELED)
+    if (freshAnyCanceled) {
+      await params.finishRun(runId, RunStatus.CANCELED)
+      return
+    }
+
+    const freshSucceeded = new Set(freshSteps.filter((s) => s.status === StepStatus.SUCCEEDED).map((s) => s.stepKey))
+    const freshRunnable: string[] = []
+    for (const s of freshSteps) {
+      if (s.status !== StepStatus.PENDING) continue
+      const deps = JSON.parse(s.depsJson) as string[]
+      if (deps.every((d) => freshSucceeded.has(d))) freshRunnable.push(s.stepKey)
+    }
+    if (freshRunnable.length) return
+
+    const pendingStepKeys = freshSteps.filter((s) => s.status === StepStatus.PENDING).map((s) => String(s.stepKey))
+    const succeededStepKeys = [...freshSucceeded].map((k) => String(k))
+    const detail = `run stalled: no runnable steps (pending=${pendingStepKeys.length})`
+    await prisma.run
+      .update({
+        where: { id: runId },
+        data: {
+          failureCode: "RUN_STALLED",
+          failureMessage: detail,
+          failureMetaJson: JSON.stringify({ pendingStepKeys, succeededStepKeys }),
+          failureAt: new Date(),
+        },
+      })
+      .catch(() => {})
+    await emitSystem(runId, detail, LogLevel.ERROR).catch(() => {})
+    await params.finishRun(runId, RunStatus.FAILED)
   }
 }

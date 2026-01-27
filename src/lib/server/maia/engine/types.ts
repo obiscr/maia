@@ -34,7 +34,9 @@ type RunningProcBase = {
   runId: string
   stepKey: string
   attemptNo: number
+  workerId: string
   timeout: NodeJS.Timeout | null
+  heartbeat: NodeJS.Timeout | null
   timeoutMs: number
   timedOut: boolean
 }

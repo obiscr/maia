@@ -12,6 +12,7 @@ import { recordArtifact } from "@/lib/server/maia/artifacts"
 import { linesFromChunk, safeJsonStringify } from "@/lib/server/maia/engine/helpers"
 import { readStepOutput } from "@/lib/server/maia/engine/read-step-output"
 import type { RunningProc } from "@/lib/server/maia/engine/types"
+import { ATTEMPT_HEARTBEAT_MS, ATTEMPT_LEASE_MS } from "@/lib/server/maia/config"
 import { ensureWorkflowDepsInstalled } from "@/lib/server/maia/deps"
 import { ensureDir, pathExists, readJsonFile, writeJsonAtomic, writeTextAtomic } from "@/lib/server/maia/fs"
 import { emitLogLine, emitLogLineWithMeta, emitStepError, emitStepStatus, emitSystem } from "@/lib/server/maia/logging"
@@ -38,10 +39,11 @@ export async function executeAttempt(params: {
   runId: string
   stepKey: string
   attemptNo: number
+  workerId: string
   running: Map<string, RunningProc>
   finishRun: (runId: string, status: RunStatus) => Promise<void>
 }) {
-  const { runId, stepKey, attemptNo, running } = params
+  const { runId, stepKey, attemptNo, running, workerId } = params
   const key = `${runId}:${stepKey}`
   if (running.has(key)) return
 
@@ -567,10 +569,22 @@ run().catch((e) => {
       stepKey,
       attemptNo,
       timeout: null as NodeJS.Timeout | null,
+      heartbeat: null as NodeJS.Timeout | null,
+      workerId,
       timeoutMs: rs.timeoutMs,
       timedOut: false as boolean,
     }
     running.set(key, proc)
+
+    proc.heartbeat = setInterval(() => {
+      const hb = new Date()
+      prisma.attempt
+        .updateMany({
+          where: { runId, stepKey, attemptNo, status: AttemptStatus.RUNNING, workerId },
+          data: { heartbeatAt: hb, leaseExpiresAt: new Date(hb.getTime() + ATTEMPT_LEASE_MS) },
+        })
+        .catch(() => {})
+    }, ATTEMPT_HEARTBEAT_MS)
 
     proc.timeout = setTimeout(() => {
       proc.timedOut = true
@@ -619,6 +633,7 @@ run().catch((e) => {
       }).catch(() => {})
     } finally {
       if (proc.timeout) clearTimeout(proc.timeout)
+      if (proc.heartbeat) clearInterval(proc.heartbeat)
       running.delete(key)
     }
 
@@ -655,6 +670,8 @@ run().catch((e) => {
     stepKey,
     attemptNo,
     timeout: null as NodeJS.Timeout | null,
+    heartbeat: null as NodeJS.Timeout | null,
+    workerId,
     timeoutMs: rs.timeoutMs,
     timedOut: false as boolean,
   }
@@ -675,6 +692,16 @@ run().catch((e) => {
     }
   })
 
+  proc.heartbeat = setInterval(() => {
+    const hb = new Date()
+    prisma.attempt
+      .updateMany({
+        where: { runId, stepKey, attemptNo, status: AttemptStatus.RUNNING, workerId },
+        data: { heartbeatAt: hb, leaseExpiresAt: new Date(hb.getTime() + ATTEMPT_LEASE_MS) },
+      })
+      .catch(() => {})
+  }, ATTEMPT_HEARTBEAT_MS)
+
   proc.timeout = setTimeout(() => {
     proc.timedOut = true
     void emitSystem(runId, `step ${stepKey} timed out after ${proc.timeoutMs}ms`, LogLevel.WARN).catch(() => {})
@@ -684,6 +711,7 @@ run().catch((e) => {
   child.on("close", (code, signal) => {
     void (async () => {
       if (proc.timeout) clearTimeout(proc.timeout)
+      if (proc.heartbeat) clearInterval(proc.heartbeat)
       running.delete(key)
 
       // Flush leftover partial lines.

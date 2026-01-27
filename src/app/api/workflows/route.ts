@@ -38,6 +38,7 @@ const stepSchema = z.object({
   description: z.string().optional(),
   scriptEsm: z.string().default(""),
   timeoutMs: z.number().int().positive().optional(),
+  retryPolicy: z.unknown().optional(),
   deps: z.array(z.string().min(1)).default([]),
 })
 
@@ -412,7 +413,8 @@ export const POST = withApiObservability(async (req: Request) => {
       }
 
       const id = crypto.randomUUID()
-      const steps = body.steps
+      const steps = body.steps ?? []
+
       let inputSpec: string | null =
         typeof body.inputSpec === "string" && body.inputSpec.trim().length ? body.inputSpec.trim() : null
       if (inputSpec) {
@@ -519,6 +521,7 @@ export const POST = withApiObservability(async (req: Request) => {
               description: s.description ?? null,
               scriptEsm: s.scriptEsm,
               timeoutMs: s.timeoutMs ?? 10 * 60 * 1000,
+              retryPolicyJson: JSON.stringify((s as any).retryPolicy ?? {}),
             })),
           })
 
@@ -559,6 +562,7 @@ export const POST = withApiObservability(async (req: Request) => {
           name: s.name,
           scriptEsm: s.scriptEsm,
           timeoutMs: s.timeoutMs ?? 10 * 60 * 1000,
+          retryPolicy: (s as any).retryPolicy ?? undefined,
           deps: s.deps ?? [],
         })),
       })

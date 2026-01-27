@@ -42,6 +42,23 @@ export const workflowSnapshotSchema = z.object({
       name: z.string().min(1),
       scriptEsm: z.string(),
       timeoutMs: z.number().int().positive(),
+      // Optional per-step retry/backoff policy.
+      // Stored as structured JSON for portability (UI can be added later).
+      retryPolicy: z
+        .object({
+          workerLost: z
+            .object({
+              maxRetries: z.number().int().min(0).optional(),
+              backoffMs: z.number().int().min(0).optional(),
+              maxBackoffMs: z.number().int().min(0).optional(),
+              multiplier: z.number().min(1).optional(),
+              jitter: z.number().min(0).max(1).optional(),
+            })
+            .partial()
+            .optional(),
+        })
+        .partial()
+        .optional(),
       deps: z.array(z.string().min(1)).default([]),
     }),
   ),

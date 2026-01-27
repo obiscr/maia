@@ -15,7 +15,12 @@ import {
 import { rollupBatches as rollupBatchesImpl } from "@/lib/server/maia/engine/batches"
 import { processPendingInputs as processPendingInputsImpl } from "@/lib/server/maia/engine/inputs"
 import type { DownloadingInput } from "@/lib/server/maia/engine/types"
-import { GLOBAL_RUN_CONCURRENCY, PER_RUN_STEP_CONCURRENCY } from "@/lib/server/maia/config"
+import {
+  ATTEMPT_LEASE_MS,
+  GLOBAL_RUN_CONCURRENCY,
+  MAX_INTERRUPTED_ATTEMPTS_PER_STEP,
+  PER_RUN_STEP_CONCURRENCY,
+} from "@/lib/server/maia/config"
 import { ensureMaiaInitialized } from "@/lib/server/maia/init"
 import { createRunFromJobRun } from "@/lib/server/maia/run-factory"
 import { processSchedules } from "@/lib/server/maia/scheduler"
@@ -36,6 +41,7 @@ import {
   retryStep as retryStepImpl,
 } from "@/lib/server/maia/engine/commands"
 import { scheduleRun as scheduleRunImpl, scheduleRuns as scheduleRunsImpl } from "@/lib/server/maia/engine/scheduling"
+import { reconcileAttempts as reconcileAttemptsImpl } from "./engine/reconcile-attempts"
 
 import type { RunningProc } from "@/lib/server/maia/engine/types"
 
@@ -71,6 +77,9 @@ export class MaiaEngine {
     for (const [k, proc] of this.running.entries()) {
       try {
         if (proc.timeout) clearTimeout(proc.timeout)
+      } catch {}
+      try {
+        if (proc.heartbeat) clearInterval(proc.heartbeat)
       } catch {}
       try {
         if (proc.kind === "child_process") {
@@ -120,6 +129,7 @@ export class MaiaEngine {
       const doLeaseRecovery = seq % 10 === 0 // ~5s
       const doJobRunReconcile = seq % 2 === 1 // ~1s (offset from schedules)
       const doBatchRollup = seq % 4 === 0 // ~2s
+      const doAttemptReconcile = seq % 2 === 0 // ~1s
 
       if (doSchedules) {
         const res = await prisma.$transaction(async (tx) => {
@@ -139,6 +149,7 @@ export class MaiaEngine {
       await this.processQueuedJobRuns()
       await this.processCancelRequestedRuns()
       await this.processPendingInputs()
+      if (doAttemptReconcile) await this.reconcileAttempts()
       await this.reconcileTerminalRuns()
       if (doJobRunReconcile) await this.reconcileJobRunsWithTerminalRuns()
       await this.scheduleRuns()
@@ -243,25 +254,38 @@ export class MaiaEngine {
     })
   }
 
+  private async reconcileAttempts() {
+    await reconcileAttemptsImpl({
+      maxInterruptedAttemptsPerStep: MAX_INTERRUPTED_ATTEMPTS_PER_STEP,
+      finishRun: async (runId, status) => {
+        await this.finishRun(runId, status)
+      },
+    })
+  }
+
   private async finishRun(runId: string, status: RunStatus) {
     await finishRunImpl({ runId, status, running: this.running, inputDownloads: this.inputDownloads })
   }
 
   private async claimAndStartAttempt(runId: string, stepKey: string) {
+    const workerId = getEngineInstanceId()
     return await claimAndStartAttemptImpl({
       runId,
       stepKey,
+      workerId,
+      attemptLeaseMs: ATTEMPT_LEASE_MS,
       executeAttempt: ({ runId, stepKey, attemptNo }) => {
-        void this.executeAttempt(runId, stepKey, attemptNo)
+        void this.executeAttempt(workerId, runId, stepKey, attemptNo)
       },
     })
   }
 
-  private async executeAttempt(runId: string, stepKey: string, attemptNo: number) {
+  private async executeAttempt(workerId: string, runId: string, stepKey: string, attemptNo: number) {
     await executeAttemptImpl({
       runId,
       stepKey,
       attemptNo,
+      workerId,
       running: this.running,
       finishRun: async (runId, status) => {
         await this.finishRun(runId, status)

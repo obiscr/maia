@@ -86,6 +86,7 @@ async function cleanupAfterTerminal(params: {
     if (proc.runId !== runId) continue
     try {
       if (proc.timeout) clearTimeout(proc.timeout)
+      if (proc.heartbeat) clearInterval(proc.heartbeat)
       if (proc.kind === "child_process") {
         proc.child.kill("SIGKILL")
       } else if (proc.kind === "runner") {

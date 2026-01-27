@@ -71,6 +71,16 @@ export const DEFAULT_STEP_TIMEOUT_MS = readIntSetting({
   max: 24 * 60 * 60 * 1000,
 })
 
+// Attempt leases / heartbeats (reliability primitives)
+// - Heartbeat should be frequent (low latency detection).
+// - Lease should be a small multiple of heartbeat (tolerate transient pauses).
+export const ATTEMPT_HEARTBEAT_MS = readIntEnv("ATTEMPT_HEARTBEAT_MS", 5_000, { min: 250, max: 60_000 })
+export const ATTEMPT_LEASE_MS = readIntEnv("ATTEMPT_LEASE_MS", 20_000, { min: 1_000, max: 10 * 60_000 })
+export const MAX_INTERRUPTED_ATTEMPTS_PER_STEP = readIntEnv("MAX_INTERRUPTED_ATTEMPTS_PER_STEP", 3, {
+  min: 1,
+  max: 10_000,
+})
+
 // Run-level input downloads (URL -> runDir/uploads/...)
 export const INPUT_DOWNLOAD_CONCURRENCY = readIntSetting({
   envName: "INPUT_DOWNLOAD_CONCURRENCY",

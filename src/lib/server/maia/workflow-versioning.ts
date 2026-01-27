@@ -26,6 +26,7 @@ export async function createWorkflowVersionSnapshot(params: {
     name: string
     scriptEsm: string
     timeoutMs: number
+    retryPolicy?: unknown
     deps: string[]
   }>
 }) {

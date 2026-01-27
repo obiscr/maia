@@ -24,6 +24,9 @@ function normalizeSnapshot(snapshot: WorkflowSnapshot): WorkflowSnapshot {
         name: String(s.name ?? "").trim() || String(s.stepKey ?? "").trim(),
         scriptEsm: typeof s.scriptEsm === "string" ? s.scriptEsm : String(s.scriptEsm ?? ""),
         timeoutMs: Number.isFinite(s.timeoutMs) ? Math.trunc(Number(s.timeoutMs)) : 10 * 60 * 1000,
+        retryPolicy: s && typeof (s as any).retryPolicy === "object" && (s as any).retryPolicy && !Array.isArray((s as any).retryPolicy)
+          ? (s as any).retryPolicy
+          : undefined,
         deps: depsSorted,
       }
     })
@@ -55,7 +58,7 @@ async function buildCurrentWorkflowSnapshot(workflowId: string): Promise<Workflo
   const steps = await prisma.workflowStep.findMany({
     where: { workflowId },
     orderBy: [{ key: "asc" }],
-    select: { key: true, name: true, scriptEsm: true, timeoutMs: true },
+    select: { key: true, name: true, scriptEsm: true, timeoutMs: true, retryPolicyJson: true },
   })
   const deps = await prisma.workflowStepDep.findMany({
     where: { workflowId },
@@ -96,6 +99,15 @@ async function buildCurrentWorkflowSnapshot(workflowId: string): Promise<Workflo
       name: s.name,
       scriptEsm: s.scriptEsm ?? "",
       timeoutMs: s.timeoutMs,
+      retryPolicy: (() => {
+        try {
+          const raw = String(s.retryPolicyJson ?? "{}")
+          const parsed = JSON.parse(raw || "{}")
+          return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : undefined
+        } catch {
+          return undefined
+        }
+      })(),
       deps: depMap.get(s.key) ?? [],
     })),
   })
