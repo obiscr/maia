@@ -9,7 +9,10 @@ import { mark, withApiObservability } from "@/lib/server/observability"
 import { depsHash, parseDependenciesJson } from "@/lib/server/maia/deps"
 import { parseWorkflowInputSpec } from "@/lib/shared/maia/input-spec"
 import { parseWorkflowOutputsSpec } from "@/lib/shared/maia/outputs-spec"
-import { validateWorkflowGraph, workflowGraphValidationErrorToApiError } from "@/lib/shared/maia/workflow-graph-validation"
+import {
+  validateWorkflowGraph,
+  workflowGraphValidationErrorToApiError,
+} from "@/lib/shared/maia/workflow-graph-validation"
 import { compileJsonSchema } from "@/lib/server/maia/jsonschema"
 import { createWorkflowVersionSnapshot } from "@/lib/server/maia/workflow-versioning"
 import { ensureEngineRunning } from "@/lib/server/maia/server"

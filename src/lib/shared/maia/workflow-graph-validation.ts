@@ -30,11 +30,15 @@ export function workflowGraphValidationErrorToApiError(err: WorkflowGraphValidat
 
 export type WorkflowGraphSnapshotInvalidReason = WorkflowGraphValidationError["code"]
 
-export function workflowGraphValidationErrorToInvalidSnapshotMeta(err: WorkflowGraphValidationError): Record<string, unknown> {
-  if (err.code === "DUP_STEP_KEY") return { reason: "DUP_STEP_KEY" satisfies WorkflowGraphSnapshotInvalidReason, stepKey: err.stepKey }
+export function workflowGraphValidationErrorToInvalidSnapshotMeta(
+  err: WorkflowGraphValidationError,
+): Record<string, unknown> {
+  if (err.code === "DUP_STEP_KEY")
+    return { reason: "DUP_STEP_KEY" satisfies WorkflowGraphSnapshotInvalidReason, stepKey: err.stepKey }
   if (err.code === "UNKNOWN_DEP")
     return { reason: "UNKNOWN_DEP" satisfies WorkflowGraphSnapshotInvalidReason, stepKey: err.stepKey, dep: err.dep }
-  if (err.code === "SELF_DEP") return { reason: "SELF_DEP" satisfies WorkflowGraphSnapshotInvalidReason, stepKey: err.stepKey }
+  if (err.code === "SELF_DEP")
+    return { reason: "SELF_DEP" satisfies WorkflowGraphSnapshotInvalidReason, stepKey: err.stepKey }
   return { reason: "CYCLE" satisfies WorkflowGraphSnapshotInvalidReason, cycle: err.cycle }
 }
 
@@ -77,9 +81,9 @@ function uniqStrings(arr: string[]) {
  * - deps are treated as edges stepKey -> dep (i.e. step depends on dep).
  * - returns a representative cycle path when a cycle exists.
  */
-export function validateWorkflowGraph(steps: WorkflowGraphStepLike[]):
-  | { ok: true }
-  | { ok: false; error: WorkflowGraphValidationError } {
+export function validateWorkflowGraph(
+  steps: WorkflowGraphStepLike[],
+): { ok: true } | { ok: false; error: WorkflowGraphValidationError } {
   const keys: string[] = steps.map((s) => String(s.stepKey || "").trim())
 
   const keySet = new Set<string>()
@@ -135,4 +139,3 @@ export function validateWorkflowGraph(steps: WorkflowGraphStepLike[]):
 
   return { ok: true }
 }
-

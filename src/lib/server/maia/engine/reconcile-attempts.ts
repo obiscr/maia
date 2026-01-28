@@ -16,9 +16,7 @@ export async function reconcileAttempts(params: {
   await reconcileExpiredAttemptLeases(params)
 }
 
-async function reconcileTimedOutAttempts(params: {
-  finishRun: (runId: string, status: RunStatus) => Promise<void>
-}) {
+async function reconcileTimedOutAttempts(params: { finishRun: (runId: string, status: RunStatus) => Promise<void> }) {
   const now = new Date()
   const timedOut = await prisma.attempt.findMany({
     where: {
@@ -42,9 +40,7 @@ async function reconcileTimedOutAttempts(params: {
     const attemptNo = Number(a.attemptNo)
     const timeoutMs = Number(a.runStep?.timeoutMs ?? 0)
     const message =
-      Number.isFinite(timeoutMs) && timeoutMs > 0
-        ? `Timed out after ${timeoutMs}ms`
-        : `Timed out (deadline exceeded)`
+      Number.isFinite(timeoutMs) && timeoutMs > 0 ? `Timed out after ${timeoutMs}ms` : `Timed out (deadline exceeded)`
 
     const applied = await prisma.$transaction(async (tx) => {
       const at = await tx.attempt.updateMany({
@@ -204,12 +200,16 @@ function parseRetryPolicy(retryPolicyJson: string): RetryPolicy {
   try {
     const raw = JSON.parse(String(retryPolicyJson || "{}"))
     const wl = raw?.workerLost ?? null
-    const maxRetries = typeof wl?.maxRetries === "number" ? Math.max(0, Math.floor(wl.maxRetries)) : defaults.workerLost.maxRetries
-    const backoffMs = typeof wl?.backoffMs === "number" ? Math.max(0, Math.floor(wl.backoffMs)) : defaults.workerLost.backoffMs
+    const maxRetries =
+      typeof wl?.maxRetries === "number" ? Math.max(0, Math.floor(wl.maxRetries)) : defaults.workerLost.maxRetries
+    const backoffMs =
+      typeof wl?.backoffMs === "number" ? Math.max(0, Math.floor(wl.backoffMs)) : defaults.workerLost.backoffMs
     const maxBackoffMs =
       typeof wl?.maxBackoffMs === "number" ? Math.max(0, Math.floor(wl.maxBackoffMs)) : defaults.workerLost.maxBackoffMs
-    const multiplier = typeof wl?.multiplier === "number" ? Math.max(1, Number(wl.multiplier)) : defaults.workerLost.multiplier
-    const jitter = typeof wl?.jitter === "number" ? Math.min(1, Math.max(0, Number(wl.jitter))) : defaults.workerLost.jitter
+    const multiplier =
+      typeof wl?.multiplier === "number" ? Math.max(1, Number(wl.multiplier)) : defaults.workerLost.multiplier
+    const jitter =
+      typeof wl?.jitter === "number" ? Math.min(1, Math.max(0, Number(wl.jitter))) : defaults.workerLost.jitter
     return { workerLost: { maxRetries, backoffMs, maxBackoffMs, multiplier, jitter } }
   } catch {
     return defaults
@@ -231,4 +231,3 @@ function computeBackoffMs(params: {
   const factor = 1 - j + Math.random() * (2 * j)
   return Math.max(0, Math.floor(capped * factor))
 }
-
