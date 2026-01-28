@@ -638,7 +638,7 @@ export default function RunDetailClient({ runId }: { runId: string }) {
                   {t("common.tabs.details")}
                 </TabsTrigger>
                 <TabsTrigger value="graph" className="flex-1">
-                  {t("common.tabs.graph")}
+                  {t("common.steps")}
                 </TabsTrigger>
               </TabsList>
             </div>

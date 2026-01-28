@@ -454,9 +454,8 @@
     "createActionVersionFromSnapshotFailed": "Restore failed",
     "tabs": {
       "chat": "Chat",
-      "canvas": "Canvas",
-      "details": "Details",
-      "graph": "Graph"
+      "editor": "Editor",
+      "details": "Details"
     },
     "graphControls": {
       "panModeAriaLabel": "Pan mode",
@@ -677,7 +676,7 @@
       "dependenciesMenu": "Dependencies",
       "selectAllAction": "Select all",
       "deleteSelectedAction": "Delete selected",
-      "clearCanvasAction": "Clear canvas"
+      "clearCanvasAction": "Clear editor"
     },
     "stepBasics": "Basics",
     "stepKey": "Unique key",
@@ -688,9 +687,9 @@
     "stepDeletedToast": "Step deleted",
     "deleteSelectedStepsTitle": "Delete {n} steps?",
     "deleteSelectedStepsDescription": "This will delete the selected steps and remove them from other steps' dependencies",
-    "clearCanvasTitle": "Clear canvas?",
+    "clearCanvasTitle": "Clear editor?",
     "clearCanvasDescription": "This will delete all steps and remove them from other steps' dependencies. This cannot be undone.",
-    "canvasClearedToast": "Canvas cleared",
+    "canvasClearedToast": "Editor cleared",
     "createJobAction": "Create job",
     "saveWorkflowAction": "Save workflow",
     "createVersionAction": "Create version",
