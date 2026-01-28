@@ -62,4 +62,3 @@ export function shouldSetSecureCookie(params: {
   if (mode === "auto") return isExternalHttps({ headers: params.headers, url: params.url })
   return true
 }
-

@@ -89,7 +89,10 @@ export const POST = withApiObservability(async (req: Request) => {
     },
     {
       headers: {
-        "Set-Cookie": cookieHeaderForSession(sess.token, { expiresAt: sess.expiresAt, secure: getSessionCookieSecure(req) }),
+        "Set-Cookie": cookieHeaderForSession(sess.token, {
+          expiresAt: sess.expiresAt,
+          secure: getSessionCookieSecure(req),
+        }),
       },
     },
   )

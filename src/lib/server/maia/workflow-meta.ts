@@ -24,9 +24,13 @@ function normalizeSnapshot(snapshot: WorkflowSnapshot): WorkflowSnapshot {
         name: String(s.name ?? "").trim() || String(s.stepKey ?? "").trim(),
         scriptEsm: typeof s.scriptEsm === "string" ? s.scriptEsm : String(s.scriptEsm ?? ""),
         timeoutMs: Number.isFinite(s.timeoutMs) ? Math.trunc(Number(s.timeoutMs)) : 10 * 60 * 1000,
-        retryPolicy: s && typeof (s as any).retryPolicy === "object" && (s as any).retryPolicy && !Array.isArray((s as any).retryPolicy)
-          ? (s as any).retryPolicy
-          : undefined,
+        retryPolicy:
+          s &&
+          typeof (s as any).retryPolicy === "object" &&
+          (s as any).retryPolicy &&
+          !Array.isArray((s as any).retryPolicy)
+            ? (s as any).retryPolicy
+            : undefined,
         deps: depsSorted,
       }
     })

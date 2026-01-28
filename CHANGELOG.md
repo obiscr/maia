@@ -8,7 +8,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
-## v0.1.0 - 2026-01-25
+## v0.1.2
+
+### Added
+
+- Workflow editor context menus.
+- Attempt leases/heartbeats and per-step retry/backoff policy.
+
+### Changed
+
+- Migrate workflow input spec to v2 (`filesInput`).
+
+### Fixed
+
+- Make session cookie `Secure` policy proxy-aware (`SESSION_COOKIE_SECURE=auto`).
+- Reject invalid workflow graphs (unknown deps / duplicates / cycles).
+- Reconcile timed-out steps and lost workers to avoid stuck runs.
+
+## v0.1.1
+
+### Changed
+
+- Automatically pull the sandbox container image when missing.
+
+## v0.1.0
 
 ### Added
 
