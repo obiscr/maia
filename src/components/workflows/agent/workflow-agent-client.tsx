@@ -254,7 +254,7 @@ export default function WorkflowAgentClient(props: { agentRunId?: string | null;
                   {t("common.tabs.chat")}
                 </TabsTrigger>
                 <TabsTrigger value="canvas" className="flex-1">
-                  {t("common.tabs.canvas")}
+                  {t("common.tabs.editor")}
                 </TabsTrigger>
               </TabsList>
             </div>

@@ -515,7 +515,7 @@ export default function WorkflowEditClient({ workflowId }: { workflowId: string 
             <div className="shrink-0">
               <TabsList className="w-full">
                 <TabsTrigger value="canvas" className="flex-1">
-                  {t("common.tabs.canvas")}
+                  {t("common.tabs.editor")}
                 </TabsTrigger>
                 <TabsTrigger value="details" className="flex-1">
                   {t("common.tabs.details")}

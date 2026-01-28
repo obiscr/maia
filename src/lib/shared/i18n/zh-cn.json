@@ -454,9 +454,8 @@
     "createActionVersionFromSnapshotFailed": "恢复失败",
     "tabs": {
       "chat": "对话",
-      "canvas": "画布",
-      "details": "详情",
-      "graph": "节点"
+      "editor": "编辑器",
+      "details": "详情"
     },
     "graphControls": {
       "panModeAriaLabel": "平移模式",
@@ -677,7 +676,7 @@
       "dependenciesMenu": "依赖",
       "selectAllAction": "全选",
       "deleteSelectedAction": "删除选中",
-      "clearCanvasAction": "清空画布"
+      "clearCanvasAction": "清空编辑器"
     },
     "stepBasics": "基本信息",
     "stepKey": "步骤标识",
@@ -688,9 +687,9 @@
     "stepDeletedToast": "步骤已删除",
     "deleteSelectedStepsTitle": "删除 {n} 个步骤？",
     "deleteSelectedStepsDescription": "这将删除选中的步骤，并从其他步骤的依赖中移除它们",
-    "clearCanvasTitle": "清空画布？",
+    "clearCanvasTitle": "清空编辑器？",
     "clearCanvasDescription": "这将删除所有步骤，并从其他步骤的依赖中移除它们。此操作无法撤销。",
-    "canvasClearedToast": "画布已清空",
+    "canvasClearedToast": "编辑器已清空",
     "createJobAction": "创建任务",
     "saveWorkflowAction": "保存工作流",
     "createVersionAction": "创建版本",
