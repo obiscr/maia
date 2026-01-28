@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
+## v0.1.3
+
+### Fixed
+
+- Fixed the templates input/output spec.
+
 ## v0.1.2
 
 ### Added

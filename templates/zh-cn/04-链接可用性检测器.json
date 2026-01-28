@@ -55,7 +55,7 @@
     "env": {},
     "dependencies": {},
     "inputSpec": {
-      "version": 1,
+      "version": 2,
       "paramsSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -179,7 +179,7 @@
       }
     },
     "outputsSpec": {
-      "version": 2,
+      "version": 1,
       "outputs": {
         "summary": {
           "stepKey": "merge_results",
