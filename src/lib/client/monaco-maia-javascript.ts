@@ -24,7 +24,7 @@ function escapeRegExpLiteral(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
-async function configureMaiaJavascriptMonarch(monaco: Monaco) {
+async function configureMaiaJavascriptMonarch(monaco: Monaco, targetLanguageId: string) {
   const jsBasic = await import("monaco-editor/esm/vs/basic-languages/javascript/javascript.js")
   const jsLanguage = jsBasic.language
   const jsConf = jsBasic.conf
@@ -41,8 +41,8 @@ async function configureMaiaJavascriptMonarch(monaco: Monaco) {
 
   // Keep JS keywords as-is; Maia keywords are handled by the custom rule above.
   const maiaLanguage = { ...jsLanguage, keywords: baseKeywords, tokenizer }
-  monaco.languages.setMonarchTokensProvider(MAIA_JAVASCRIPT_LANGUAGE_ID, maiaLanguage as never)
-  monaco.languages.setLanguageConfiguration(MAIA_JAVASCRIPT_LANGUAGE_ID, jsConf as never)
+  monaco.languages.setMonarchTokensProvider(targetLanguageId, maiaLanguage as never)
+  monaco.languages.setLanguageConfiguration(targetLanguageId, jsConf as never)
 }
 
 export function ensureMaiaJavascriptLanguage(monaco: Monaco) {
@@ -52,14 +52,19 @@ export function ensureMaiaJavascriptLanguage(monaco: Monaco) {
   if (didRegister) return
   didRegister = true
 
+  // 1) Register a dedicated language id (kept for compatibility / future use).
   monaco.languages.register({
     id: MAIA_JAVASCRIPT_LANGUAGE_ID,
     aliases: ["Maia JavaScript", "maiajs"],
     mimetypes: ["text/maia-javascript"],
   })
 
-  // Load JS Monarch grammar lazily (browser only) to avoid SSR `window` crashes.
-  // If the basic language module isn't available for some bundling reason, fail silently.
-  // The editor still works; only custom highlighting will be missing.
-  void configureMaiaJavascriptMonarch(monaco).catch(() => {})
+  // 2) Enhance Monaco's *built-in* JavaScript tokenization so we keep default JS IntelliSense
+  // while still highlighting Maia runtime contract words (env/ctx/upstream/etc).
+  //
+  // This is intentionally a tokenization-only tweak (Monarch). It does NOT replace JS language services.
+  void configureMaiaJavascriptMonarch(monaco, "javascript").catch(() => {})
+
+  // 3) Also wire the custom language id to the same tokenization (if used anywhere).
+  void configureMaiaJavascriptMonarch(monaco, MAIA_JAVASCRIPT_LANGUAGE_ID).catch(() => {})
 }

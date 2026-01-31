@@ -22,7 +22,6 @@ import { WorkflowGraphCanvasWrapper } from "@/components/graph/workflow-graph-ca
 import { useWorkflowAgentSession } from "@/components/workflows/agent/use-workflow-agent-session"
 import { WorkflowAgentProgressCompact } from "@/components/workflows/agent/workflow-agent-progress-compact"
 import { setupMaiaMonaco, maiaMonacoOptions } from "@/lib/client/monaco"
-import { MAIA_JAVASCRIPT_LANGUAGE_ID } from "@/lib/client/monaco-maia-javascript"
 import { StandardActionDialog } from "@/components/common/standard-action-dialog"
 import { WorkflowQuickExamples } from "@/components/workflows/common/workflow-quick-examples"
 import { WorkflowAgentStageCard } from "@/components/workflows/agent/workflow-agent-stage-card"
@@ -218,7 +217,7 @@ export default function WorkflowAgentClient(props: { agentRunId?: string | null;
                       <div className="min-h-0 flex-1">
                         <MaiaMonacoEditor
                           height="100%"
-                          defaultLanguage={MAIA_JAVASCRIPT_LANGUAGE_ID}
+                          defaultLanguage="javascript"
                           theme={session.monacoTheme}
                           value={selectedStep.scriptEsm}
                           onChange={(v) => session.updateDraftStep(selectedStep.stepKey, { scriptEsm: v ?? "" })}
