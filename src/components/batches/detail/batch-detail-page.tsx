@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
 import type { ErrorObject } from "ajv"
 import type { editor as MonacoEditor } from "monaco-editor"
@@ -43,6 +43,8 @@ import { TwoLineMiniCard } from "@/components/common/two-line-mini-card"
 import { batchStatusUiSpec, toCanonicalBatchStatus } from "@/lib/shared/batch-status"
 import { batchControlAvailability } from "@/lib/shared/batch-control"
 import { cn } from "@/lib/utils"
+import { HeaderActions } from "@/components/common/header-actions"
+import { StandardDeleteDialog } from "@/components/common/standard-confirm-dialog"
 import {
   Ban,
   Braces,
@@ -55,6 +57,7 @@ import {
   PauseCircle,
   Play,
   Save,
+  Trash2,
   WorkflowIcon,
   XCircle,
 } from "lucide-react"
@@ -141,6 +144,7 @@ function coerceJobsByStatus(x: unknown): JobsByStatus | null {
 
 export default function BatchDetailPage() {
   const { t, locale } = useI18n()
+  const router = useRouter()
   const params = useParams<{ batchId: string }>()
   const batchId = String(params?.batchId ?? "")
   const queryClient = useQueryClient()
@@ -231,6 +235,9 @@ export default function BatchDetailPage() {
   const didAutoPrefillWorkflowRef = React.useRef<string | null>(null)
 
   const locked = !!batch && ((typeof batch.jobsTotal === "number" && batch.jobsTotal > 0) || !!batch.startedAt)
+
+  const [deleteOpen, setDeleteOpen] = React.useState(false)
+  const [deletePending, setDeletePending] = React.useState(false)
 
   // Batch settings (editable only before fanout).
   type WorkflowVersionRow = { id: string; version: number; description: string | null }
@@ -652,6 +659,21 @@ export default function BatchDetailPage() {
       void refreshJobs()
     } catch (e) {
       toast.error(tApiError({ t, err: e, fallbackKey: "common.error" }))
+    }
+  }
+
+  async function deleteBatch() {
+    if (!batchId || deletePending) return
+    setDeletePending(true)
+    try {
+      await apiFetchJson(`/api/batches/${batchId}`, { method: "DELETE" })
+      toast.success(t("batches.deletedToast"))
+      router.replace("/batches")
+    } catch (e) {
+      toast.error(tApiError({ t, err: e, fallbackKey: "common.deleteActionFailed" }))
+    } finally {
+      setDeletePending(false)
+      setDeleteOpen(false)
     }
   }
 
@@ -1109,35 +1131,52 @@ export default function BatchDetailPage() {
       <span className="text-muted-foreground">{t("common.notFound")}</span>
     ),
     right: (
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => void pauseBatch()}
-          disabled={!batch || loading || !canPause}
-        >
-          <PauseCircle className="size-4" aria-hidden="true" />
-          {t("batches.controlPauseAction")}
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => void resumeBatch()}
-          disabled={!batch || loading || !canResume}
-        >
-          <Play className="size-4" aria-hidden="true" />
-          {t("batches.controlResumeAction")}
-        </Button>
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={() => void cancelBatch()}
-          disabled={!batch || loading || !canCancel}
-        >
-          <Ban className="size-4" aria-hidden="true" />
-          {t("batches.controlCancelAction")}
-        </Button>
-      </div>
+      <HeaderActions
+        iconOnlyBelow="md"
+        overflow
+        overflowAlign="end"
+        sections={[
+          {
+            key: "main",
+            items: [
+              {
+                key: "pause",
+                label: t("batches.controlPauseAction"),
+                icon: <PauseCircle className="size-4" aria-hidden="true" />,
+                onClick: () => void pauseBatch(),
+                variant: "secondary",
+                disabled: !batch || loading || !canPause,
+              },
+              {
+                key: "resume",
+                label: t("batches.controlResumeAction"),
+                icon: <Play className="size-4" aria-hidden="true" />,
+                onClick: () => void resumeBatch(),
+                variant: "secondary",
+                disabled: !batch || loading || !canResume,
+              },
+              {
+                key: "cancel",
+                label: t("batches.controlCancelAction"),
+                icon: <Ban className="size-4" aria-hidden="true" />,
+                onClick: () => void cancelBatch(),
+                variant: "destructive",
+                menuVariant: "destructive",
+                disabled: !batch || loading || !canCancel,
+              },
+              {
+                key: "delete",
+                label: t("common.deleteAction"),
+                icon: <Trash2 className="size-4" aria-hidden="true" />,
+                onClick: () => setDeleteOpen(true),
+                overflowOnly: true,
+                menuVariant: "destructive",
+                disabled: !batch || loading || deletePending,
+              },
+            ],
+          },
+        ]}
+      />
     ),
     bottom: (
       <HeaderSubbar hideAt="lg" className="flex-row items-center justify-between">
@@ -1161,6 +1200,17 @@ export default function BatchDetailPage() {
     ),
   } satisfies React.ComponentProps<typeof StandardPageHeader>
 
+  const modalsNode = (
+    <StandardDeleteDialog
+      open={deleteOpen}
+      onOpenChange={(o) => !deletePending && setDeleteOpen(o)}
+      title={t("batches.deleteBatchTitle")}
+      description={t("batches.deleteBatchDescription")}
+      onConfirm={deleteBatch}
+      pending={deletePending}
+    />
+  )
+
   // Main resource load failure: render a page-level error state (no top alert).
   if (err && !batch && !loading) {
     return (
@@ -1174,7 +1224,7 @@ export default function BatchDetailPage() {
   }
 
   return (
-    <DetailPageLayout header={<StandardPageHeader {...headerProps} />}>
+    <DetailPageLayout modals={modalsNode} header={<StandardPageHeader {...headerProps} />}>
       {/* Summary */}
       <SectionCard className="flex-none text-card-foreground">
         <SectionCardHeader>
