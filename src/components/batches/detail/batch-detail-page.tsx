@@ -43,7 +43,21 @@ import { TwoLineMiniCard } from "@/components/common/two-line-mini-card"
 import { batchStatusUiSpec, toCanonicalBatchStatus } from "@/lib/shared/batch-status"
 import { batchControlAvailability } from "@/lib/shared/batch-control"
 import { cn } from "@/lib/utils"
-import { Ban, Braces, Calendar, Clock3, ExternalLink, Layers, PauseCircle, Play, Save } from "lucide-react"
+import {
+  Ban,
+  Braces,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  Clock3,
+  ExternalLink,
+  Layers,
+  PauseCircle,
+  Play,
+  Save,
+  WorkflowIcon,
+  XCircle,
+} from "lucide-react"
 import Link from "next/link"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -1176,43 +1190,43 @@ export default function BatchDetailPage() {
             />
             <TwoLineMiniCard
               title={t("common.statusValues.queued")}
-              titleRight={<Clock3 className="size-4" aria-hidden="true" />}
+              titleRight={<Clock className="size-4" aria-hidden="true" />}
               value={String(batch?.jobsByStatus?.QUEUED ?? 0)}
               valueClassName="font-mono text-sm"
             />
             <TwoLineMiniCard
               title={t("common.statusValues.running")}
-              titleRight={<Clock3 className="size-4" aria-hidden="true" />}
+              titleRight={<Spinner className="size-4" aria-hidden="true" />}
               value={String(batch?.jobsByStatus?.RUNNING ?? 0)}
               valueClassName="font-mono text-sm"
             />
             <TwoLineMiniCard
               title={t("common.statusValues.succeeded")}
-              titleRight={<Clock3 className="size-4" aria-hidden="true" />}
+              titleRight={<CheckCircle2 className="size-4" aria-hidden="true" />}
               value={String(batch?.jobsByStatus?.SUCCEEDED ?? 0)}
               valueClassName="font-mono text-sm"
             />
             <TwoLineMiniCard
               title={t("common.statusValues.failed")}
-              titleRight={<Clock3 className="size-4" aria-hidden="true" />}
+              titleRight={<XCircle className="size-4" aria-hidden="true" />}
               value={String(batch?.jobsByStatus?.FAILED ?? 0)}
               valueClassName="font-mono text-sm"
             />
             <TwoLineMiniCard
               title={t("common.statusValues.canceled")}
-              titleRight={<Clock3 className="size-4" aria-hidden="true" />}
+              titleRight={<Ban className="size-4" aria-hidden="true" />}
               value={String(batch?.jobsByStatus?.CANCELED ?? 0)}
               valueClassName="font-mono text-sm"
             />
             <TwoLineMiniCard
               title={t("common.statusValues.paused")}
-              titleRight={<Clock3 className="size-4" aria-hidden="true" />}
+              titleRight={<PauseCircle className="size-4" aria-hidden="true" />}
               value={String(batch?.jobsByStatus?.PAUSED ?? 0)}
               valueClassName="font-mono text-sm"
             />
             <TwoLineMiniCard
               title={t("common.duration")}
-              titleRight={<Calendar className="size-4" aria-hidden="true" />}
+              titleRight={<Clock3 className="size-4" aria-hidden="true" />}
               value={durationMs == null ? "—" : formatDurationMs(durationMs)}
               valueClassName="font-mono text-sm"
             />
@@ -1231,31 +1245,19 @@ export default function BatchDetailPage() {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               <TwoLineMiniCard
                 title={t("common.pinnedWorkflowVersion")}
-                titleRight={<Layers className="size-4" aria-hidden="true" />}
+                titleRight={<WorkflowIcon className="size-4" aria-hidden="true" />}
                 value={pinnedSummary}
                 valueClassName="font-mono text-sm"
               />
               <TwoLineMiniCard
                 title={t("batches.concurrencyLimit")}
-                titleRight={<Clock3 className="size-4" aria-hidden="true" />}
                 value={concurrencySummary}
                 valueClassName="font-mono text-sm"
               />
-              <TwoLineMiniCard
-                title={t("batches.failurePolicy")}
-                titleRight={<Clock3 className="size-4" aria-hidden="true" />}
-                value={failPolicySummary}
-                valueClassName="text-sm"
-              />
-              <TwoLineMiniCard
-                title={urlFilesUi.title}
-                titleRight={<ExternalLink className="size-4" aria-hidden="true" />}
-                value={urlCountSummary}
-                valueClassName="font-mono text-sm"
-              />
+              <TwoLineMiniCard title={t("batches.failurePolicy")} value={failPolicySummary} valueClassName="text-sm" />
+              <TwoLineMiniCard title={urlFilesUi.title} value={urlCountSummary} valueClassName="font-mono text-sm" />
               <TwoLineMiniCard
                 title={t("batches.sourceJson")}
-                titleRight={<Layers className="size-4" aria-hidden="true" />}
                 value={sourceConfiguredSummary}
                 valueClassName="text-sm"
               />
