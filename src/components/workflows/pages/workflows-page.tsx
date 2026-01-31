@@ -32,6 +32,9 @@ import { useStableListRows } from "@/hooks/use-stable-list-rows"
 import { copyTextToClipboard } from "@/lib/client/clipboard"
 import { toast } from "@/lib/client/toast"
 import { workflowDepsStatusUiSpec } from "@/lib/shared/workflow-deps-status"
+import { workflowEnvStatusUiSpec } from "@/lib/shared/workflow-env-status"
+import { workflowInputSpecStatusUiSpec } from "@/lib/shared/workflow-inputspec-status"
+import { workflowOutputsSpecStatusUiSpec } from "@/lib/shared/workflow-outputspec-status"
 import { cn } from "@/lib/utils"
 
 export default function WorkflowsPage() {
@@ -152,19 +155,45 @@ export default function WorkflowsPage() {
     },
   ]
 
-  const configuredOpts: NavMenuFilterOption[] = [
-    { value: "ANY", label: t("common.any") },
-    {
-      value: "CONFIGURED",
-      label: t("common.configured"),
-      icon: <CheckCircle2 className="text-emerald-600" aria-hidden="true" />,
+  const configuredOptsFor = React.useCallback(
+    (
+      getUi: (status: string) => {
+        Icon: React.ComponentType<{ className?: string }> | null
+        varsClassName: string
+        textClassName: string
+        iconClassName?: string
+      },
+      statuses: { configured: string; notConfigured: string },
+    ): NavMenuFilterOption[] => {
+      const makeIcon = (status: string) => {
+        const ui = getUi(status)
+        const Icon = ui.Icon
+        return Icon ? (
+          <Icon className={cn("size-4", ui.varsClassName, ui.textClassName, ui.iconClassName)} aria-hidden="true" />
+        ) : null
+      }
+      return [
+        { value: "ANY", label: t("common.any") },
+        { value: "CONFIGURED", label: t("common.configured"), icon: makeIcon(statuses.configured) },
+        { value: "NOT_CONFIGURED", label: t("common.notConfigured"), icon: makeIcon(statuses.notConfigured) },
+      ]
     },
-    {
-      value: "NOT_CONFIGURED",
-      label: t("common.notConfigured"),
-      icon: <TriangleAlertIcon className="text-muted-foreground" aria-hidden="true" />,
-    },
-  ]
+    [t],
+  )
+
+  const envConfiguredOpts = configuredOptsFor(workflowEnvStatusUiSpec, {
+    configured: "READY",
+    notConfigured: "NOT_CONFIGURED",
+  })
+  const inputSpecConfiguredOpts = configuredOptsFor(workflowInputSpecStatusUiSpec, {
+    configured: "VALID",
+    notConfigured: "NOT_CONFIGURED",
+  })
+  // Outputs spec is recommended; NOT_CONFIGURED should be warning (needs-action).
+  const outputsSpecConfiguredOpts = configuredOptsFor(workflowOutputsSpecStatusUiSpec, {
+    configured: "VALID",
+    notConfigured: "NOT_CONFIGURED",
+  })
 
   const listFilters = (opts: { className?: string; disabled?: boolean }) => (
     <NavMenuFilters
@@ -200,7 +229,7 @@ export default function WorkflowsPage() {
         label={t("workflows.filtersShort.env")}
         showValueInTrigger={false}
         selectedValue={envConfigured}
-        options={configuredOpts}
+        options={envConfiguredOpts}
         onSelectValue={(v) => setEnvConfigured(v as WorkflowsPageBoolConfiguredFilter)}
         closeMenu={() => setFiltersOpen("")}
         disabled={opts.disabled}
@@ -210,7 +239,7 @@ export default function WorkflowsPage() {
         label={t("common.inputs")}
         showValueInTrigger={false}
         selectedValue={inputSpecConfigured}
-        options={configuredOpts}
+        options={inputSpecConfiguredOpts}
         onSelectValue={(v) => setInputSpecConfigured(v as WorkflowsPageBoolConfiguredFilter)}
         closeMenu={() => setFiltersOpen("")}
         disabled={opts.disabled}
@@ -220,7 +249,7 @@ export default function WorkflowsPage() {
         label={t("common.outputs")}
         showValueInTrigger={false}
         selectedValue={outputsSpecConfigured}
-        options={configuredOpts}
+        options={outputsSpecConfiguredOpts}
         onSelectValue={(v) => setOutputsSpecConfigured(v as WorkflowsPageBoolConfiguredFilter)}
         closeMenu={() => setFiltersOpen("")}
         disabled={opts.disabled}

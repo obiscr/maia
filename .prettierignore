@@ -21,3 +21,5 @@ coverage/**
 # Documentation
 **/*.md
 
+# Maia
+.maia/

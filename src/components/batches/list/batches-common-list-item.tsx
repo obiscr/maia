@@ -136,6 +136,12 @@ export function BatchesCommonListItem(props: {
 
   const statsItems = React.useMemo((): InlineItemRowItem[] => {
     const items: InlineItemRowItem[] = []
+    const statusIconClass = (status: string) => {
+      const s = toCanonicalBatchStatus(status)
+      const ui = batchStatusUiSpec(s)
+      return cn(ui.varsClassName, ui.textClassName)
+    }
+    const pendingIconClass = cn("maia-status-badge--pending", "text-[color:var(--maia-status-text)]")
 
     items.push({
       key: "total",
@@ -149,6 +155,7 @@ export function BatchesCommonListItem(props: {
         key: "running",
         title: t("common.statusValues.running"),
         Icon: Spinner,
+        iconClassName: statusIconClass("RUNNING"),
         text: statusCounts.running,
       })
     }
@@ -157,7 +164,7 @@ export function BatchesCommonListItem(props: {
         key: "failed",
         title: t("common.statusValues.failed"),
         Icon: XCircle,
-        iconClassName: "text-destructive",
+        iconClassName: statusIconClass("FAILED"),
         text: statusCounts.failed,
       })
     }
@@ -166,23 +173,36 @@ export function BatchesCommonListItem(props: {
         key: "succeeded",
         title: t("common.statusValues.succeeded"),
         Icon: CheckCircle2,
-        iconClassName: "text-emerald-500",
+        iconClassName: statusIconClass("SUCCEEDED"),
         text: statusCounts.succeeded,
       })
     }
     if (statusCounts.queued > 0) {
-      items.push({ key: "queued", title: t("common.statusValues.queued"), Icon: Hourglass, text: statusCounts.queued })
+      items.push({
+        key: "queued",
+        title: t("common.statusValues.queued"),
+        Icon: Hourglass,
+        iconClassName: pendingIconClass,
+        text: statusCounts.queued,
+      })
     }
     if (statusCounts.paused > 0) {
       items.push({
         key: "paused",
         title: t("common.statusValues.paused"),
         Icon: PauseCircle,
+        iconClassName: statusIconClass("PAUSED"),
         text: statusCounts.paused,
       })
     }
     if (statusCounts.canceled > 0) {
-      items.push({ key: "canceled", title: t("common.statusValues.canceled"), Icon: Ban, text: statusCounts.canceled })
+      items.push({
+        key: "canceled",
+        title: t("common.statusValues.canceled"),
+        Icon: Ban,
+        iconClassName: statusIconClass("CANCELED"),
+        text: statusCounts.canceled,
+      })
     }
 
     return items
