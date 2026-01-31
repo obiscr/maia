@@ -25,7 +25,6 @@ import {
   setWorkflowCompletionMessages,
   setWorkflowCompletionContextForModelUri,
 } from "@/lib/client/monaco-workflow-completions"
-import { MAIA_JAVASCRIPT_LANGUAGE_ID } from "@/lib/client/monaco-maia-javascript"
 
 export type WorkflowStepSheetStep = {
   stepKey: string
@@ -236,7 +235,7 @@ export function WorkflowStepSheet(props: {
                 <div className="min-h-0 flex-1">
                   <MaiaMonacoEditor
                     height="100%"
-                    defaultLanguage={MAIA_JAVASCRIPT_LANGUAGE_ID}
+                    defaultLanguage="javascript"
                     theme={monacoTheme}
                     value={draft.scriptEsm}
                     onChange={(v) => setDraft((p) => (p ? { ...p, scriptEsm: v ?? "" } : p))}

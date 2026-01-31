@@ -152,6 +152,11 @@ export function useWorkflowGraphCanvas(args: {
   showLayoutMenu: boolean
   allowCustomLayout: boolean
   /**
+   * Optional: delete currently selected step nodes (bulk).
+   * Intentionally scoped to the canvas focus (so typing in an editor sheet is safe).
+   */
+  onDeleteSelectedSteps?: () => void
+  /**
    * Optional: enable node right-click context menu.
    * Defaults to false so other canvases remain unchanged unless explicitly enabled.
    */
@@ -629,6 +634,8 @@ export function useWorkflowGraphCanvas(args: {
   // implement "Delete selected edges" ourselves.
   React.useEffect(() => {
     if (readonly) return
+    const el = containerRef.current
+    if (!el) return
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "Delete" && e.key !== "Backspace") return
       const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase()
@@ -638,14 +645,23 @@ export function useWorkflowGraphCanvas(args: {
         (e.target as HTMLElement | null)?.getAttribute?.("contenteditable") === "true"
       if (isTyping) return
 
-      const selected = rf.getEdges().filter((ed) => Boolean((ed as { selected?: boolean }).selected))
-      if (!selected.length) return
+      // Priority: delete selected edges first, then selected nodes (if handler provided).
+      const selectedEdges = rf.getEdges().filter((ed) => Boolean((ed as { selected?: boolean }).selected))
+      if (selectedEdges.length) {
+        e.preventDefault()
+        handleEdgesDelete(selectedEdges)
+        return
+      }
+
+      const selectedNodes = rf.getNodes().filter((n) => Boolean((n as { selected?: boolean }).selected))
+      if (!selectedNodes.length) return
+      if (!args.onDeleteSelectedSteps) return
       e.preventDefault()
-      handleEdgesDelete(selected)
+      args.onDeleteSelectedSteps()
     }
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  }, [handleEdgesDelete, readonly, rf])
+    el.addEventListener("keydown", onKeyDown)
+    return () => el.removeEventListener("keydown", onKeyDown)
+  }, [args.onDeleteSelectedSteps, handleEdgesDelete, readonly, rf])
 
   const handleNodeDragStart: NodeDragHandler = React.useCallback(() => {
     nodeDragInProgressRef.current = true
@@ -751,6 +767,8 @@ export function useWorkflowGraphCanvas(args: {
   React.useEffect(() => {
     if (readonly) return
     if (!showToolbar) return
+    const el = containerRef.current
+    if (!el) return
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return
@@ -790,8 +808,8 @@ export function useWorkflowGraphCanvas(args: {
       }
     }
 
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
+    el.addEventListener("keydown", onKeyDown)
+    return () => el.removeEventListener("keydown", onKeyDown)
   }, [readonly, selectAllSteps, selectLayoutPreset, setInteractionMode, showToolbar])
 
   const resetCustomLayout = React.useCallback(() => {

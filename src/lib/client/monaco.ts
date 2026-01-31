@@ -58,7 +58,7 @@ export function setupMaiaMonaco(monaco: Monaco) {
   // Themes must be defined before using `theme="maia-vs"` / `theme="maia-vs-dark"`.
   ensureMaiaMonacoThemes(monaco)
 
-  // Custom Maia JS language (Monarch tokenizer) for workflow script keywords highlighting.
+  // Maia JS highlighting (Monarch tokenizer enhancement) for workflow script keywords.
   ensureMaiaJavascriptLanguage(monaco)
 
   // JSON: syntax validation + basic diagnostics

@@ -139,24 +139,6 @@ export function useWorkflowEditorGraph(params: {
     })
   }, [wf])
 
-  React.useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!selectedGraphStepKeys.length) return
-      const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase()
-      const isTyping =
-        tag === "input" ||
-        tag === "textarea" ||
-        (e.target as HTMLElement | null)?.getAttribute?.("contenteditable") === "true"
-      if (isTyping) return
-      if (e.key === "Delete" || e.key === "Backspace") {
-        e.preventDefault()
-        onRequestDeleteSelectedSteps?.()
-      }
-    }
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  }, [onRequestDeleteSelectedSteps, selectedGraphStepKeys])
-
   const handleEditStep = React.useCallback((stepKey: string) => {
     setSelectedStepKey(stepKey)
     setStepSheetOpen(true)

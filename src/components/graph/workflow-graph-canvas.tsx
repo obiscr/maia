@@ -124,6 +124,7 @@ export function WorkflowGraphCanvasCore(
     forceAutoFit,
     showLayoutMenu,
     allowCustomLayout,
+    onDeleteSelectedSteps: props.onDeleteSelectedSteps,
     enableNodeContextMenu: props.enableNodeContextMenu,
     enableEditCanvasContextMenu: props.enableEditCanvasContextMenu,
     highlightStepKeys: props.highlightStepKeys,
@@ -175,7 +176,15 @@ export function WorkflowGraphCanvasCore(
     // React Flow needs an explicit height on a parent container.
     <div
       ref={g.containerRef}
-      className="relative h-full w-full overflow-hidden"
+      className="relative h-full w-full overflow-hidden outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 focus-visible:ring-0"
+      tabIndex={0}
+      aria-label="Workflow graph canvas"
+      onPointerDownCapture={(e) => {
+        // Keep keyboard shortcuts scoped to the canvas by ensuring the canvas owns focus
+        // when users interact with it. Avoid stealing focus on non-primary buttons.
+        if (e.button !== 0) return
+        g.containerRef.current?.focus({ preventScroll: true })
+      }}
       onContextMenuCapture={() => {
         if (!enableContextMenu) return
         if (!menu) g.setContextMenu({ kind: "pane" })
