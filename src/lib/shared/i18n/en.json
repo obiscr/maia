@@ -728,6 +728,7 @@
     "outputsSpec": {
       "title": "Outputs spec",
       "description": "Define named run outputs (a stable contract) mapped from step outputs",
+      "unsavedDescription": "You changed the outputs spec but haven't saved. Save before closing, or discard changes?",
       "openDocsAction": "Open outputs spec docs",
       "generateWithAi": "Generate with agent",
       "generatingWithAi": "Generating…",

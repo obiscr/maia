@@ -24,6 +24,7 @@ export function useWorkflowEditorData(params: {
   locale: string
   t: (key: string, vars?: Record<string, string | number>) => string
   onRequestInputSpecCloseConfirm?: () => void
+  onRequestOutputsSpecCloseConfirm?: () => void
   api: {
     saveWorkflow: (body: SaveWorkflowPayload) => Promise<unknown>
     updateWorkflowMeta: (body: UpdateWorkflowMetaPayload) => Promise<unknown>
@@ -33,7 +34,7 @@ export function useWorkflowEditorData(params: {
     createWorkflowVersion: (payload?: { description?: string | null }) => Promise<unknown>
   }
 }) {
-  const { workflowId, locale, t, api, onRequestInputSpecCloseConfirm } = params
+  const { workflowId, locale, t, api, onRequestInputSpecCloseConfirm, onRequestOutputsSpecCloseConfirm } = params
   const router = useRouter()
 
   // Structural sharing: keep the same `steps` array reference when the server payload's steps
@@ -886,7 +887,7 @@ export function useWorkflowEditorData(params: {
 
   function onOutputsSpecSheetOpenChange(o: boolean) {
     if (!o && outputsSpecDirty) {
-      onRequestInputSpecCloseConfirm?.()
+      onRequestOutputsSpecCloseConfirm?.()
       return
     }
     setOutputsSpecSheetOpen(o)
