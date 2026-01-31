@@ -338,7 +338,7 @@ export const PUT = withApiObservability(async (req: Request, ctx: { params: Prom
           description: s.description ?? null,
           scriptEsm: s.scriptEsm,
           timeoutMs: s.timeoutMs ?? 10 * 60 * 1000,
-          retryPolicyJson: JSON.stringify((s as any).retryPolicy ?? {}),
+          retryPolicyJson: JSON.stringify(s.retryPolicy ?? {}),
         })),
       })
 

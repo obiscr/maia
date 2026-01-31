@@ -9,6 +9,7 @@ import { parseDependenciesJson } from "@/lib/server/maia/deps"
 import { depsHash as hashDeps } from "@/lib/server/maia/deps"
 import { ensureEngineRunning } from "@/lib/server/maia/server"
 import { workflowSnapshotSchema } from "@/lib/server/maia/snapshot"
+import { normalizeRetryPolicyObject } from "@/lib/server/maia/workflow-snapshot-normalize"
 import { createWorkflowVersionSnapshot } from "@/lib/server/maia/workflow-versioning"
 import {
   validateWorkflowGraph,
@@ -102,6 +103,7 @@ export const POST = withApiObservability(
             description: null,
             scriptEsm: s.scriptEsm ?? "",
             timeoutMs: s.timeoutMs ?? 10 * 60 * 1000,
+            retryPolicyJson: JSON.stringify(normalizeRetryPolicyObject(s.retryPolicy) ?? {}),
           })),
         })
 
@@ -136,6 +138,7 @@ export const POST = withApiObservability(
         name: s.name,
         scriptEsm: s.scriptEsm ?? "",
         timeoutMs: s.timeoutMs ?? 10 * 60 * 1000,
+        retryPolicy: normalizeRetryPolicyObject(s.retryPolicy),
         deps: s.deps ?? [],
       })),
     })

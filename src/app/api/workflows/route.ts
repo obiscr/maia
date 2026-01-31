@@ -532,7 +532,7 @@ export const POST = withApiObservability(async (req: Request) => {
               description: s.description ?? null,
               scriptEsm: s.scriptEsm,
               timeoutMs: s.timeoutMs ?? 10 * 60 * 1000,
-              retryPolicyJson: JSON.stringify((s as any).retryPolicy ?? {}),
+              retryPolicyJson: JSON.stringify(s.retryPolicy ?? {}),
             })),
           })
 
@@ -573,7 +573,7 @@ export const POST = withApiObservability(async (req: Request) => {
           name: s.name,
           scriptEsm: s.scriptEsm,
           timeoutMs: s.timeoutMs ?? 10 * 60 * 1000,
-          retryPolicy: (s as any).retryPolicy ?? undefined,
+          retryPolicy: s.retryPolicy ?? undefined,
           deps: s.deps ?? [],
         })),
       })

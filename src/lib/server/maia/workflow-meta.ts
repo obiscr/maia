@@ -4,6 +4,7 @@ import crypto from "node:crypto"
 
 import { prisma } from "@/lib/server/db"
 import { workflowSnapshotSchema, type WorkflowSnapshot } from "@/lib/server/maia/snapshot"
+import { normalizeRetryPolicyJson, normalizeRetryPolicyObject } from "@/lib/server/maia/workflow-snapshot-normalize"
 import { listReservedInitialInputKeys } from "@/lib/shared/maia/input-spec"
 
 function sha256Hex(input: string): string {
@@ -19,18 +20,13 @@ function normalizeSnapshot(snapshot: WorkflowSnapshot): WorkflowSnapshot {
     .map((s) => {
       const deps = Array.isArray(s.deps) ? s.deps : []
       const depsSorted = [...new Set(deps.map((x) => String(x).trim()).filter(Boolean))].sort()
+      const retryPolicy = normalizeRetryPolicyObject(s.retryPolicy)
       return {
         stepKey: String(s.stepKey ?? "").trim(),
         name: String(s.name ?? "").trim() || String(s.stepKey ?? "").trim(),
         scriptEsm: typeof s.scriptEsm === "string" ? s.scriptEsm : String(s.scriptEsm ?? ""),
         timeoutMs: Number.isFinite(s.timeoutMs) ? Math.trunc(Number(s.timeoutMs)) : 10 * 60 * 1000,
-        retryPolicy:
-          s &&
-          typeof (s as any).retryPolicy === "object" &&
-          (s as any).retryPolicy &&
-          !Array.isArray((s as any).retryPolicy)
-            ? (s as any).retryPolicy
-            : undefined,
+        retryPolicy,
         deps: depsSorted,
       }
     })
@@ -103,15 +99,7 @@ async function buildCurrentWorkflowSnapshot(workflowId: string): Promise<Workflo
       name: s.name,
       scriptEsm: s.scriptEsm ?? "",
       timeoutMs: s.timeoutMs,
-      retryPolicy: (() => {
-        try {
-          const raw = String(s.retryPolicyJson ?? "{}")
-          const parsed = JSON.parse(raw || "{}")
-          return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : undefined
-        } catch {
-          return undefined
-        }
-      })(),
+      retryPolicy: normalizeRetryPolicyJson(s.retryPolicyJson),
       deps: depMap.get(s.key) ?? [],
     })),
   })

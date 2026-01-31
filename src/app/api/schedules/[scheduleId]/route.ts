@@ -10,6 +10,7 @@ import { findReservedKeysInRecord, parseWorkflowInputSpecWithOpts } from "@/lib/
 import { validateWithJsonSchema } from "@/lib/server/maia/jsonschema"
 import { workflowSnapshotSchema } from "@/lib/server/maia/snapshot"
 import { createWorkflowVersionSnapshot, getLatestWorkflowVersion } from "@/lib/server/maia/workflow-versioning"
+import { normalizeRetryPolicyJson } from "@/lib/server/maia/workflow-snapshot-normalize"
 import { normalizeUrlFilesForStorage, parseStoredUrlFilesJson } from "@/lib/server/maia/url-files"
 import type { ApiIssue } from "@/lib/shared/http/types"
 import { requireRequestAuth } from "@/lib/server/authz"
@@ -326,6 +327,7 @@ export const PATCH = withApiObservability(async (req: Request, ctx: { params: Pr
               name: s.name,
               scriptEsm: s.scriptEsm,
               timeoutMs: s.timeoutMs,
+              retryPolicy: normalizeRetryPolicyJson(s.retryPolicyJson),
               deps: depMap.get(s.key) ?? [],
             })),
           })

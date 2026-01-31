@@ -11,6 +11,7 @@ import { setOperationProgress, storeOperationResponse } from "@/lib/server/opera
 import { allocatePublicNumberBlock, formatPublicId } from "@/lib/server/public-ids"
 import { isRecord } from "@/lib/shared/lang/is-record"
 import { createWorkflowVersionSnapshot, getLatestWorkflowVersion } from "@/lib/server/maia/workflow-versioning"
+import { normalizeRetryPolicyJson } from "@/lib/server/maia/workflow-snapshot-normalize"
 import { isAdmin, requireRequestAuth } from "@/lib/server/authz"
 
 export const runtime = "nodejs"
@@ -112,6 +113,7 @@ export const POST = withApiObservability(async (req: Request, ctx: { params: Pro
                     name: s.name,
                     scriptEsm: s.scriptEsm ?? "",
                     timeoutMs: s.timeoutMs,
+                    retryPolicy: normalizeRetryPolicyJson(s.retryPolicyJson),
                     deps: depMap.get(s.key) ?? [],
                   })),
                 })

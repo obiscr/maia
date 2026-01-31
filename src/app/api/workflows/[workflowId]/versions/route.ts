@@ -3,6 +3,7 @@ import { z } from "zod"
 import { prisma } from "@/lib/server/db"
 import { fail, notFound, ok } from "@/lib/server/http/response"
 import { mark, withApiObservability } from "@/lib/server/observability"
+import { normalizeRetryPolicyJson } from "@/lib/server/maia/workflow-snapshot-normalize"
 import { createWorkflowVersionSnapshot } from "@/lib/server/maia/workflow-versioning"
 import {
   validateWorkflowGraph,
@@ -208,9 +209,10 @@ export const POST = withApiObservability(async (_: Request, ctx: { params: Promi
     name: s.name,
     scriptEsm: s.scriptEsm ?? "",
     timeoutMs: s.timeoutMs,
+    retryPolicy: normalizeRetryPolicyJson(s.retryPolicyJson),
     deps: depMap.get(s.key) ?? [],
   }))
-  const graphOk = validateWorkflowGraph(snapSteps)
+  const graphOk = validateWorkflowGraph(snapSteps.map(({ retryPolicy: _rp, ...rest }) => rest))
   if (!graphOk.ok) {
     const mapped = workflowGraphValidationErrorToApiError(graphOk.error)
     return fail({ status: 400, code: mapped.code, meta: mapped.meta })

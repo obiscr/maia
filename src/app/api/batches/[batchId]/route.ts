@@ -7,6 +7,7 @@ import { parseWorkflowInputSpecWithOpts } from "@/lib/shared/maia/input-spec"
 import type { ApiIssue } from "@/lib/shared/http/types"
 import { workflowSnapshotSchema } from "@/lib/server/maia/snapshot"
 import { createWorkflowVersionSnapshot, getLatestWorkflowVersion } from "@/lib/server/maia/workflow-versioning"
+import { normalizeRetryPolicyJson } from "@/lib/server/maia/workflow-snapshot-normalize"
 import { normalizeUrlFilesForStorage, parseStoredUrlFilesJson } from "@/lib/server/maia/url-files"
 import { requireRequestAuth } from "@/lib/server/authz"
 import { makeUpdateAudit } from "@/lib/server/audit/write"
@@ -260,6 +261,7 @@ export const PATCH = withApiObservability(async (req: Request, ctx: { params: Pr
                 name: s.name,
                 scriptEsm: s.scriptEsm ?? "",
                 timeoutMs: s.timeoutMs,
+                retryPolicy: normalizeRetryPolicyJson(s.retryPolicyJson),
                 deps: depMap.get(s.key) ?? [],
               })),
             })
