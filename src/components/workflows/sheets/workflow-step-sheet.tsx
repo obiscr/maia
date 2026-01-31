@@ -47,8 +47,14 @@ export function WorkflowStepSheet(props: {
   savePending?: boolean
   onSaveStep: (args: { originalStepKey: string; draft: WorkflowStepSheetStep }) => void | Promise<void>
 }) {
-  const { t, messages } = useI18n()
+  const { t, messages, locale } = useI18n()
   const contentRef = React.useRef<HTMLDivElement | null>(null)
+
+  const inputSpecDocsUrl = React.useMemo(() => {
+    const base = "https://maia.obiscr.com"
+    const path = "/workflows/editor/"
+    return locale === "en" ? `${base}${path}` : `${base}/${locale}${path}`
+  }, [locale])
 
   // Keep workflow editor completions localized with the active UI language.
   React.useEffect(() => {
@@ -217,7 +223,14 @@ export function WorkflowStepSheet(props: {
             <div className="min-h-0 flex flex-1 flex-col">
               <SectionCard className="flex flex-col">
                 <SectionCardHeader>
-                  <FieldLabelWithHelp label={t("workflows.scriptEsm")} tooltip={t("workflows.scriptEsmTooltip")} />
+                  <FieldLabelWithHelp
+                    label={t("workflows.scriptEsm")}
+                    tooltip={t("workflows.scriptEsmTooltip")}
+                    tooltipAction={() => {
+                      const w = window.open(inputSpecDocsUrl, "_blank", "noopener,noreferrer")
+                      if (w) w.opener = null
+                    }}
+                  />
                 </SectionCardHeader>
 
                 <div className="min-h-0 flex-1">
