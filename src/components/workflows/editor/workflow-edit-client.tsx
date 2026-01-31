@@ -54,6 +54,7 @@ export default function WorkflowEditClient({ workflowId }: { workflowId: string 
   const [createVersionDescription, setCreateVersionDescription] = React.useState("")
   const api = useWorkflowEditorApi({ workflowId })
   const inputSpecUnsavedDialog = useStandardDialog({ closeOnConfirm: false })
+  const outputsSpecUnsavedDialog = useStandardDialog({ closeOnConfirm: false })
   const deleteWorkflowDialog = useStandardDialog()
   const deleteStepDialog = useStandardDialog()
   const bulkDeleteDialog = useStandardDialog()
@@ -64,13 +65,15 @@ export default function WorkflowEditClient({ workflowId }: { workflowId: string 
     t,
     api,
     onRequestInputSpecCloseConfirm: inputSpecUnsavedDialog.openDialog,
+    onRequestOutputsSpecCloseConfirm: outputsSpecUnsavedDialog.openDialog,
   })
   const [deleteStepKey, setDeleteStepKey] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     // Mirror external "saving" state so the dialog can't be dismissed mid-save.
     inputSpecUnsavedDialog.setPending(data.saving)
-  }, [data.saving, inputSpecUnsavedDialog.setPending])
+    outputsSpecUnsavedDialog.setPending(data.saving)
+  }, [data.saving, inputSpecUnsavedDialog.setPending, outputsSpecUnsavedDialog.setPending])
 
   React.useEffect(() => {
     deleteWorkflowDialog.closeDialog()
@@ -78,6 +81,7 @@ export default function WorkflowEditClient({ workflowId }: { workflowId: string 
     bulkDeleteDialog.closeDialog()
     clearCanvasDialog.closeDialog()
     inputSpecUnsavedDialog.closeDialog()
+    outputsSpecUnsavedDialog.closeDialog()
     setDeleteStepKey(null)
     setCreateVersionOpen(false)
     setCreateVersionDescription("")
@@ -88,6 +92,7 @@ export default function WorkflowEditClient({ workflowId }: { workflowId: string 
     deleteStepDialog.closeDialog,
     deleteWorkflowDialog.closeDialog,
     inputSpecUnsavedDialog.closeDialog,
+    outputsSpecUnsavedDialog.closeDialog,
   ])
 
   const graph = useWorkflowEditorGraph({
@@ -304,6 +309,46 @@ export default function WorkflowEditClient({ workflowId }: { workflowId: string 
             onClick: async () => {
               const ok = await data.saveAndCloseInputSpecSheet()
               if (ok) inputSpecUnsavedDialog.closeDialog()
+            },
+          },
+        ]}
+      />
+      <StandardActionDialog
+        open={outputsSpecUnsavedDialog.open}
+        onOpenChange={outputsSpecUnsavedDialog.onOpenChange}
+        title={t("common.unsavedChanges")}
+        description={t("workflows.outputsSpec.unsavedDescription")}
+        pending={data.saving}
+        actions={[
+          {
+            key: "cancel",
+            kind: "cancel",
+            label: t("common.keepEditingAction"),
+            icon: <Pencil className="h-4 w-4" />,
+            disabled: data.saving,
+            onClick: () => {
+              outputsSpecUnsavedDialog.closeDialog()
+            },
+          },
+          {
+            key: "discard",
+            label: t("common.discardAction"),
+            icon: <Trash2Icon className="h-4 w-4" />,
+            variant: "destructive",
+            disabled: data.saving,
+            onClick: () => {
+              data.discardAndCloseOutputsSpec()
+              outputsSpecUnsavedDialog.closeDialog()
+            },
+          },
+          {
+            key: "save",
+            label: data.saving ? t("common.saving") : t("common.saveAction"),
+            icon: data.saving ? <Spinner className="h-4 w-4" /> : <Save className="h-4 w-4" />,
+            disabled: data.saving,
+            onClick: async () => {
+              const ok = await data.saveAndCloseOutputsSpecSheet()
+              if (ok) outputsSpecUnsavedDialog.closeDialog()
             },
           },
         ]}
