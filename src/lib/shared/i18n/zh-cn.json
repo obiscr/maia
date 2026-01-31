@@ -715,6 +715,7 @@
       "title": "输入规范",
       "description": "定义工作流的输入契约，用于校验输入，并在创建任务时提供引导填写",
       "unsavedDescription": "你修改了输入规范，但还没有保存。要保存后关闭，还是放弃更改？",
+      "openDocsAction": "打开输入规范文档",
       "generateWithAi": "智能体生成",
       "generatingWithAi": "生成中…",
       "insertDefaultAction": "插入默认模板",
@@ -727,6 +728,7 @@
     "outputsSpec": {
       "title": "输出规范",
       "description": "定义运行输出的命名契约，并从步骤 outputs 映射生成，用于标准化对外消费",
+      "openDocsAction": "打开输出规范文档",
       "generateWithAi": "智能体生成",
       "generatingWithAi": "生成中…",
       "insertDefaultAction": "插入默认模板",

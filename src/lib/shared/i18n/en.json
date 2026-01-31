@@ -715,6 +715,7 @@
       "title": "Input spec",
       "description": "Define the workflow input spec used to validate inputs and guide the Create Job form",
       "unsavedDescription": "You changed the input spec but haven't saved. Save before closing, or discard changes?",
+      "openDocsAction": "Open input spec docs",
       "generateWithAi": "Generate with agent",
       "generatingWithAi": "Generating…",
       "insertDefaultAction": "Insert default",
@@ -727,6 +728,7 @@
     "outputsSpec": {
       "title": "Outputs spec",
       "description": "Define named run outputs (a stable contract) mapped from step outputs",
+      "openDocsAction": "Open outputs spec docs",
       "generateWithAi": "Generate with agent",
       "generatingWithAi": "Generating…",
       "insertDefaultAction": "Insert default",

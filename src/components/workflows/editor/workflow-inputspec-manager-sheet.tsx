@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Bot, Braces, Pencil, Plus, RotateCcw, Save } from "lucide-react"
+import { Bot, Braces, CircleHelp, Pencil, Plus, RotateCcw, Save } from "lucide-react"
 
 import { AgentButton } from "@/components/ui/agent-button"
 import { Spinner } from "@/components/ui/spinner"
@@ -53,7 +53,13 @@ export function WorkflowInputSpecManagerSheet(props: {
 
   saving: boolean
 }) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
+
+  const inputSpecDocsUrl = React.useMemo(() => {
+    const base = "https://maia.obiscr.com"
+    const path = "/workflows/input-spec/"
+    return locale === "en" ? `${base}${path}` : `${base}/${locale}${path}`
+  }, [locale])
 
   const [isDarkTheme, setIsDarkTheme] = React.useState(false)
   React.useEffect(() => {
@@ -168,25 +174,42 @@ export function WorkflowInputSpecManagerSheet(props: {
 
           <SectionCard>
             <SectionCardHeader>
-              <div className="flex flex-wrap items-center gap-2">
-                <AgentButton
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <AgentButton
+                    type="button"
+                    size="sm"
+                    onClick={() => void props.onGenerateWithAi()}
+                    loading={props.inputSpecAiPending}
+                    icon={<Bot className="h-4 w-4" />}
+                  >
+                    {props.inputSpecAiPending
+                      ? t("workflows.inputSpec.generatingWithAi")
+                      : t("workflows.inputSpec.generateWithAi")}
+                  </AgentButton>
+                  <Button type="button" variant="outline" size="sm" onClick={props.onInsertDefault}>
+                    <Plus className="h-4 w-4" />
+                    {t("workflows.inputSpec.insertDefaultAction")}
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={formatJson} disabled={!canFormat}>
+                    <Braces className="h-4 w-4" />
+                    {t("workflows.inputSpec.formatAction")}
+                  </Button>
+                </div>
+
+                <Button
                   type="button"
-                  size="sm"
-                  onClick={() => void props.onGenerateWithAi()}
-                  loading={props.inputSpecAiPending}
-                  icon={<Bot className="h-4 w-4" />}
+                  variant="ghost"
+                  size="icon-sm"
+                  className="shrink-0 text-muted-foreground hover:text-foreground"
+                  aria-label={t("workflows.inputSpec.openDocsAction")}
+                  onClick={() => {
+                    const w = window.open(inputSpecDocsUrl, "_blank", "noopener,noreferrer")
+                    if (w) w.opener = null
+                  }}
                 >
-                  {props.inputSpecAiPending
-                    ? t("workflows.inputSpec.generatingWithAi")
-                    : t("workflows.inputSpec.generateWithAi")}
-                </AgentButton>
-                <Button type="button" variant="outline" size="sm" onClick={props.onInsertDefault}>
-                  <Plus className="h-4 w-4" />
-                  {t("workflows.inputSpec.insertDefaultAction")}
-                </Button>
-                <Button type="button" variant="outline" size="sm" onClick={formatJson} disabled={!canFormat}>
-                  <Braces className="h-4 w-4" />
-                  {t("workflows.inputSpec.formatAction")}
+                  <CircleHelp className="size-4" aria-hidden="true" />
+                  <span className="sr-only">{t("workflows.inputSpec.openDocsAction")}</span>
                 </Button>
               </div>
             </SectionCardHeader>
