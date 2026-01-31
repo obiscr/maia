@@ -245,7 +245,11 @@ export default function RunsPage(props: { viewer: Viewer }) {
         ),
       }}
       listHeader={{
-        left: <div className="hidden lg:block">{t("runs.showingTotal", { total })}</div>,
+        left: (
+          <div className="hidden lg:block text-sm font-medium text-muted-foreground">
+            {t("runs.showingTotal", { total })}
+          </div>
+        ),
         right: (
           <div className="w-full lg:w-auto">
             {filters({ className: "justify-start lg:justify-end", disabled: busy })}

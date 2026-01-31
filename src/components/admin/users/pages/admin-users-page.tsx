@@ -223,7 +223,11 @@ export default function AdminUsersPage() {
         ),
       }}
       listHeader={{
-        left: <div className="hidden lg:block">{t("admin.users.showingTotal", { total })}</div>,
+        left: (
+          <div className="hidden lg:block text-sm font-medium text-muted-foreground">
+            {t("admin.users.showingTotal", { total })}
+          </div>
+        ),
         right: (
           <div className="w-full lg:w-auto">
             {listFilters({ className: "justify-start lg:justify-end", disabled: busy })}

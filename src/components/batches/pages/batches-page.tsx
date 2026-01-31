@@ -184,7 +184,11 @@ export default function BatchesPage(props: { viewer: Viewer }) {
         right: <HeaderActions sections={[{ key: "main", items: [...headerActions] }]} iconOnlyBelow="md" />,
       }}
       listHeader={{
-        left: <div className="hidden lg:block">{t("batches.showingTotal", { total })}</div>,
+        left: (
+          <div className="hidden lg:block text-sm font-medium text-muted-foreground">
+            {t("batches.showingTotal", { total })}
+          </div>
+        ),
         right: (
           <div className="w-full lg:w-auto">
             {filters({ className: "justify-start lg:justify-end", disabled: busy })}

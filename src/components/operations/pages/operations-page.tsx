@@ -132,7 +132,9 @@ export default function OperationsPage(props: { viewer: Viewer }) {
       listHeader={{
         left: (
           <div className="flex min-w-0 flex-col gap-1">
-            <div className="hidden lg:block">{t("operations.showingTotal", { total })}</div>
+            <div className="hidden lg:block text-sm font-medium text-muted-foreground">
+              {t("operations.showingTotal", { total })}
+            </div>
             {pendingCount > 0 ? (
               <div className="flex min-w-0 items-center gap-2">
                 <div className="min-w-0 truncate text-sm text-muted-foreground">
