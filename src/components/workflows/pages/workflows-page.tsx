@@ -302,7 +302,11 @@ export default function WorkflowsPage() {
         right: <HeaderActions sections={[{ key: "main", items: [...headerActions] }]} iconOnlyBelow="md" />,
       }}
       listHeader={{
-        left: <div className="hidden lg:block">{t("workflows.showingTotal", { total })}</div>,
+        left: (
+          <div className="hidden lg:block text-sm font-medium text-muted-foreground">
+            {t("workflows.showingTotal", { total })}
+          </div>
+        ),
         right: (
           <div className="w-full lg:w-auto">
             {listFilters({ className: "justify-start lg:justify-end", disabled: busy })}

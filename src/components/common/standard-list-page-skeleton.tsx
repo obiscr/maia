@@ -84,7 +84,7 @@ export function StandardListPageSkeleton(props: StandardListPageSkeletonProps) {
       <div className="rounded-md border">
         <div className="flex items-center gap-3 border-b bg-muted/10 px-4 py-3">
           <div className="flex min-w-0 items-center gap-2">
-            <div className="hidden lg:block">
+            <div className="hidden lg:block text-sm font-medium text-muted-foreground">
               <Skeleton className="h-4 w-36" />
             </div>
           </div>
