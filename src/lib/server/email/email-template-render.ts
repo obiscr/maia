@@ -1,6 +1,7 @@
 import "server-only"
 
 import type { EmailTemplateKey } from "@prisma/client"
+import { convert } from "html-to-text"
 
 import { prisma } from "@/lib/server/db"
 import { renderTemplateString } from "@/lib/shared/email/template-string"
@@ -12,20 +13,18 @@ export type RenderedEmailTemplate = {
 }
 
 function htmlToText(html: string): string {
-  // Keep this intentionally simple (no dependency). It's good enough as a fallback.
-  return String(html ?? "")
-    .replace(/<\s*br\s*\/?\s*>/gi, "\n")
-    .replace(/<\/\s*p\s*>/gi, "\n\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim()
+  // Use a mature, well-tested converter instead of regex sanitization.
+  // This avoids incomplete sanitization / double-unescaping pitfalls flagged by CodeQL.
+  return convert(String(html ?? ""), {
+    wordwrap: false,
+    preserveNewlines: true,
+    selectors: [
+      // Keep links readable in plain text.
+      { selector: "a", options: { hideLinkHrefIfSameAsText: true } },
+      // Avoid duplicating images' alt/src.
+      { selector: "img", format: "skip" },
+    ],
+  }).trim()
 }
 
 async function getEmailTemplateRow(params: { key: EmailTemplateKey; locale: string }) {
