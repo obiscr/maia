@@ -4,7 +4,7 @@ import fs from "node:fs/promises"
 import { z } from "zod"
 
 import { prisma, switchDatabaseUrl } from "@/lib/server/db"
-import { migrateCurrentSqliteDatabase } from "@/lib/server/db/migrate-sqlite"
+import { prismaMigrateDeploy } from "@/lib/server/db/prisma-migrate"
 import { isCurrentDatabaseSchemaReadySync } from "@/lib/server/db/schema-ready"
 import { fail, ok } from "@/lib/server/http/response"
 import { withApiObservability } from "@/lib/server/observability"
@@ -172,16 +172,17 @@ export const PUT = withApiObservability(async (req: Request) => {
   const nextUrl = toSqliteDatabaseUrl(effectiveDataDir)
   const switched = await switchDatabaseUrl(nextUrl).catch(() => ({ ok: true as const, changed: false }))
 
-  // Ensure DB schema exists for the new location.
-  const migrated = await migrateCurrentSqliteDatabase({
-    databaseUrl: nextUrl,
-  }).catch(() => null)
-  if (!migrated) return fail({ status: 500, code: "SQLITE_MIGRATION_FAILED" })
+  // Ensure DB schema exists for the new location (local/dev only).
+  const migrated = await prismaMigrateDeploy()
+  if (!migrated.ok) {
+    const status = migrated.code === "MIGRATOR_REQUIRED" ? 409 : 500
+    return fail({ status, code: migrated.code, meta: migrated.meta })
+  }
 
   return ok({
     ok: true,
     switched,
-    migrated,
+    migrated: true,
     effective: {
       dataDir: effectiveDataDir,
       databaseUrl: nextUrl,

@@ -7,6 +7,8 @@ import { prisma } from "@/lib/server/db"
 import { getT } from "@/lib/server/i18n/server"
 import { getInstallation } from "@/lib/server/installation"
 
+export const dynamic = "force-dynamic"
+
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getT()
   return { title: t("auth.repair.title") }

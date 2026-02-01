@@ -1,10 +1,26 @@
 name: maia
 
 services:
+  migrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrator
+    environment:
+      - MAIA_DATA_DIR=/app/maia-data
+    volumes:
+      - type: ${MAIA_DATA_MOUNT_TYPE:-volume}
+        source: ${MAIA_HOST_DATA_DIR:-maia-data}
+        target: /app/maia-data
+    restart: "no"
+
   maia:
     build:
       context: .
       dockerfile: Dockerfile
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
     ports:
       - "3690:3690"
     environment:
@@ -48,6 +64,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.runner
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
     environment:
       - RUNNER_PORT=9090
       - RUNNER_TOKEN=${RUNNER_TOKEN:-dev-runner-token}

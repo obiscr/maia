@@ -1,9 +1,22 @@
 name: maia
 
 services:
+  migrator:
+    image: ${MAIA_MIGRATOR_IMAGE:-obiscr/maia-migrator:latest}
+    restart: "no"
+    environment:
+      - MAIA_DATA_DIR=/app/maia-data
+    volumes:
+      - type: ${MAIA_DATA_MOUNT_TYPE:-volume}
+        source: ${MAIA_HOST_DATA_DIR:-maia-data}
+        target: /app/maia-data
+
   maia:
     image: ${MAIA_IMAGE:-obiscr/maia:latest}
     restart: unless-stopped
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
     ports:
       - "3690:3690"
     environment:
@@ -29,6 +42,9 @@ services:
   runner:
     image: ${MAIA_RUNNER_IMAGE:-obiscr/maia-runner:latest}
     restart: unless-stopped
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
     environment:
       - RUNNER_PORT=9090
       - RUNNER_TOKEN=${RUNNER_TOKEN:-dev-runner-token}
