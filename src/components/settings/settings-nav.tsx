@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import type { ComponentType } from "react"
-import { Bot, Clock, Mail, Settings } from "lucide-react"
+import { Bot, Clock, Mail, Settings, Shield } from "lucide-react"
 
 import { useI18n } from "@/components/i18n-provider"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
@@ -30,6 +30,11 @@ export function SettingsNav({ showSystem = false }: { showSystem?: boolean }) {
       href: "/preference",
       label: t("settings.overview"),
       Icon: Settings,
+    },
+    {
+      href: "/preference/security",
+      label: t("settings.security.title"),
+      Icon: Shield,
     },
     {
       href: "/preference/agent",

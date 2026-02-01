@@ -195,7 +195,7 @@ export function useRunDetail(params: { runId: string }) {
     const sSteps = stream.stepStatusByKey ?? {}
     if (!sRun && Object.keys(sSteps).length === 0) return
 
-    queryClient.setQueryData(runDetailQueryKey, (old) => {
+    queryClient.setQueryData<RunDetailResponse>(runDetailQueryKey, (old: RunDetailResponse | undefined) => {
       const oldObj = asRunDetailResponse(old)
       const curRun = oldObj?.run ?? null
       if (!curRun) return old

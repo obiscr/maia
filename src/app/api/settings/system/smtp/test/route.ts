@@ -1,18 +1,29 @@
-import nodemailer from "nodemailer"
 import { z } from "zod"
 
 import { getAuthedUserFromRequest } from "@/lib/server/auth/session"
 import { fail, ok } from "@/lib/server/http/response"
 import { withApiObservability } from "@/lib/server/observability"
 import { prisma } from "@/lib/server/db"
-import { SYSTEM_SECRET_KEYS, getSystemSecretPlaintext } from "@/lib/server/settings/system-secrets"
-import { renderSmtpTestEmail } from "@/lib/server/email/templates"
+import { readSmtpConfig } from "@/lib/server/email/email-settings"
+import { requestLocale, requestOrigin, sendTemplatedEmail } from "@/lib/server/email/send-templated-email"
+import { EMAIL_SETTINGS_ROW_ID, INSTALLATION_ROW_ID, ensureInstallationRowTx } from "@/lib/server/installation"
+import { SYSTEM_SECRET_KEYS, upsertSystemSecretTx } from "@/lib/server/settings/system-secrets"
 import { zodIssues } from "@/lib/shared/http/zod"
 
 export const runtime = "nodejs"
 
 const schema = z.object({
   toEmail: z.string().trim().email(),
+
+  // Optional: allow testing with current form values (avoids "save required" deadlock).
+  smtpHost: z.union([z.string(), z.null()]).optional(),
+  smtpPort: z.union([z.number().int().min(1).max(65535), z.null()]).optional(),
+  smtpSecure: z.boolean().optional(),
+  smtpUsername: z.union([z.string(), z.null()]).optional(),
+  smtpFromEmail: z.union([z.string().email(), z.null()]).optional(),
+  smtpFromName: z.union([z.string(), z.null()]).optional(),
+  // If provided and non-empty, update the stored secret.
+  smtpPassword: z.union([z.string(), z.null()]).optional(),
 })
 
 export const POST = withApiObservability(async (req: Request) => {
@@ -28,50 +39,131 @@ export const POST = withApiObservability(async (req: Request) => {
     throw e
   }
 
-  const inst = await prisma.installation.findUnique({
-    where: { id: "installation" },
-    select: {
-      smtpEnabled: true,
-      smtpHost: true,
-      smtpPort: true,
-      smtpSecure: true,
-      smtpUsername: true,
-      smtpFromEmail: true,
-      smtpFromName: true,
-    },
-  })
-  if (!inst) return fail({ status: 409, code: "NOT_INSTALLED" })
-  if (!inst.smtpEnabled) return fail({ status: 409, code: "SMTP_DISABLED" })
+  const touchedSmtp =
+    body.smtpHost !== undefined ||
+    body.smtpPort !== undefined ||
+    body.smtpSecure !== undefined ||
+    body.smtpUsername !== undefined ||
+    body.smtpFromEmail !== undefined ||
+    body.smtpFromName !== undefined ||
+    body.smtpPassword !== undefined
 
-  const host = String(inst.smtpHost ?? "").trim()
-  const port = typeof inst.smtpPort === "number" ? inst.smtpPort : null
-  const secure = Boolean(inst.smtpSecure)
-  const username = String(inst.smtpUsername ?? "").trim()
-  const fromEmail = String(inst.smtpFromEmail ?? "").trim() || username
-  const fromName = String(inst.smtpFromName ?? "").trim() || "Maia"
+  // If the client sent SMTP fields, persist them first (kept disabled) so verification can be recorded.
+  if (touchedSmtp) {
+    await prisma
+      .$transaction(async (tx) => {
+        await ensureInstallationRowTx(tx, {})
 
-  if (!host || !port) return fail({ status: 422, code: "SMTP_INCOMPLETE" })
+        const emailUpdate: Record<string, unknown> = { smtpVerifiedAt: null }
+        const instUpdate: Record<string, unknown> = {}
 
-  const password = await getSystemSecretPlaintext({ key: SYSTEM_SECRET_KEYS.smtpPassword, touchLastUsed: true }).catch(
-    () => null,
-  )
-  if (!password) return fail({ status: 422, code: "SMTP_PASSWORD_MISSING" })
+        if (body.smtpHost === null) {
+          emailUpdate.smtpHost = null
+          instUpdate.smtpHost = null
+        } else if (typeof body.smtpHost === "string") {
+          const v = body.smtpHost.trim() || null
+          emailUpdate.smtpHost = v
+          instUpdate.smtpHost = v
+        }
 
-  const transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth: username ? { user: username, pass: password } : undefined,
-  })
+        if (body.smtpPort === null) {
+          emailUpdate.smtpPort = null
+          instUpdate.smtpPort = null
+        } else if (typeof body.smtpPort === "number") {
+          emailUpdate.smtpPort = body.smtpPort
+          instUpdate.smtpPort = body.smtpPort
+        }
 
-  const msg = renderSmtpTestEmail({ appName: "Maia" })
+        if (typeof body.smtpSecure === "boolean") {
+          emailUpdate.smtpSecure = body.smtpSecure
+          instUpdate.smtpSecure = body.smtpSecure
+        }
 
-  const info = await transporter.sendMail({
-    from: fromName ? `${fromName} <${fromEmail}>` : fromEmail,
+        if (body.smtpUsername === null) {
+          emailUpdate.smtpUsername = null
+          instUpdate.smtpUsername = null
+        } else if (typeof body.smtpUsername === "string") {
+          const v = body.smtpUsername.trim() || null
+          emailUpdate.smtpUsername = v
+          instUpdate.smtpUsername = v
+        }
+
+        if (body.smtpFromEmail === null) {
+          emailUpdate.smtpFromEmail = null
+          instUpdate.smtpFromEmail = null
+        } else if (typeof body.smtpFromEmail === "string") {
+          const v = body.smtpFromEmail.trim() || null
+          emailUpdate.smtpFromEmail = v
+          instUpdate.smtpFromEmail = v
+        }
+
+        if (body.smtpFromName === null) {
+          emailUpdate.smtpFromName = null
+          instUpdate.smtpFromName = null
+        } else if (typeof body.smtpFromName === "string") {
+          const v = body.smtpFromName.trim() || null
+          emailUpdate.smtpFromName = v
+          instUpdate.smtpFromName = v
+        }
+
+        if (typeof body.smtpPassword === "string") {
+          const trimmed = body.smtpPassword.trim()
+          if (trimmed) await upsertSystemSecretTx(tx, { key: SYSTEM_SECRET_KEYS.smtpPassword, plaintext: trimmed })
+        }
+
+        if (Object.keys(instUpdate).length) {
+          await tx.installation.update({ where: { id: INSTALLATION_ROW_ID }, data: instUpdate })
+        }
+
+        await tx.emailSettings.upsert({
+          where: { id: EMAIL_SETTINGS_ROW_ID },
+          create: {
+            id: EMAIL_SETTINGS_ROW_ID,
+            installationId: INSTALLATION_ROW_ID,
+            smtpEnabled: false,
+            emailNotificationMask: 0,
+            ...emailUpdate,
+          },
+          update: emailUpdate,
+        })
+      })
+      .catch(() => {})
+  }
+
+  const smtp = await readSmtpConfig({ touchPasswordLastUsed: true, ignoreEnabled: true })
+  if (!smtp.ok) {
+    const codeToStatus: Record<string, number> = {
+      SYSTEM_SMTP_NOT_INSTALLED: 409,
+      SYSTEM_SMTP_DISABLED: 409,
+      SYSTEM_SMTP_INCOMPLETE: 422,
+      SYSTEM_SMTP_PASSWORD_MISSING: 422,
+    }
+    return fail({ status: codeToStatus[smtp.code] ?? 422, code: smtp.code })
+  }
+
+  const locale = requestLocale(req)
+  const sent = await sendTemplatedEmail({
+    smtp,
     to: body.toEmail,
-    subject: msg.subject,
-    text: msg.text,
+    key: "SYSTEM_SMTP_TEST",
+    locale,
+    vars: { appName: "Maia", instanceOrigin: requestOrigin(req) ?? "" },
   })
+  if (!sent.ok) return fail({ status: 500, code: sent.code })
 
-  return ok({ ok: true, messageId: typeof info.messageId === "string" ? info.messageId : String(info.messageId ?? "") })
+  // Mark SMTP as verified on successful send.
+  await prisma.emailSettings
+    .upsert({
+      where: { id: EMAIL_SETTINGS_ROW_ID },
+      create: {
+        id: EMAIL_SETTINGS_ROW_ID,
+        installationId: INSTALLATION_ROW_ID,
+        smtpVerifiedAt: new Date(),
+      },
+      update: { smtpVerifiedAt: new Date() },
+      select: { id: true },
+    })
+    .catch(() => {})
+
+  return ok({ ok: true, messageId: sent.messageId })
 })

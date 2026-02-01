@@ -12,6 +12,7 @@ export type SystemSettings = {
   smtpFromName: string
   smtpPassword: string
   smtpPasswordConfigured: boolean
+  emailNotificationMask: number
 
   globalRunConcurrency: number | null
   perRunStepConcurrency: number | null
@@ -33,6 +34,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   smtpFromName: "",
   smtpPassword: "",
   smtpPasswordConfigured: false,
+  emailNotificationMask: 0,
 
   globalRunConcurrency: null,
   perRunStepConcurrency: null,
@@ -61,6 +63,7 @@ export function normalizeSystemSettings(input: Partial<SystemSettings> | null | 
     smtpFromName: String(s.smtpFromName ?? ""),
     smtpPassword: String(s.smtpPassword ?? ""),
     smtpPasswordConfigured: Boolean(s.smtpPasswordConfigured),
+    emailNotificationMask: typeof s.emailNotificationMask === "number" ? s.emailNotificationMask : 0,
 
     globalRunConcurrency: typeof s.globalRunConcurrency === "number" ? s.globalRunConcurrency : null,
     perRunStepConcurrency: typeof s.perRunStepConcurrency === "number" ? s.perRunStepConcurrency : null,

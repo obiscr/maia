@@ -9,6 +9,7 @@ import { getSettingsEncryptionKeyBytes } from "@/lib/server/settings/crypto"
 import { isCurrentDatabaseSchemaReadySync } from "@/lib/server/db/schema-ready"
 
 export const INSTALLATION_ROW_ID = "installation" as const
+export const EMAIL_SETTINGS_ROW_ID = "email_settings" as const
 
 export type RegistrationMode = "DISABLED" | "OPEN" | "INVITE_ONLY"
 
@@ -73,7 +74,7 @@ export async function ensureInstallationRowTx(
   const instanceId = crypto.randomUUID()
 
   // Single-row upsert, safe for concurrent first-run requests.
-  return await tx.installation.upsert({
+  const inst = await tx.installation.upsert({
     where: { id: INSTALLATION_ROW_ID },
     create: {
       id: INSTALLATION_ROW_ID,
@@ -92,4 +93,25 @@ export async function ensureInstallationRowTx(
     },
     select: { id: true },
   })
+
+  // Ensure EmailSettings exists (single-row semantics).
+  // This keeps new installs and repaired instances consistent after schema migrations.
+  await tx.emailSettings
+    .upsert({
+      where: { id: EMAIL_SETTINGS_ROW_ID },
+      create: {
+        id: EMAIL_SETTINGS_ROW_ID,
+        installationId: INSTALLATION_ROW_ID,
+        smtpEnabled: false,
+        smtpSecure: false,
+        emailNotificationMask: 0,
+        createdAt: now,
+        updatedAt: now,
+      },
+      update: { installationId: INSTALLATION_ROW_ID },
+      select: { id: true },
+    })
+    .catch(() => {})
+
+  return inst
 }

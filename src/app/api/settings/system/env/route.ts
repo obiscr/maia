@@ -154,6 +154,51 @@ export const GET = withApiObservability(async (req: Request) => {
 
   // Security (rate limits) - positive ints only.
   {
+    const v = readPositiveIntEnv({ name: "RATE_LIMIT_MAX_BUCKETS", fallback: 5000 })
+    vars.push({
+      name: "RATE_LIMIT_MAX_BUCKETS",
+      defaultValue: "5000",
+      source: v.source,
+      effectiveValue: String(v.value),
+    })
+  }
+  {
+    const v = readPositiveIntEnv({ name: "RATE_LIMIT_PRUNE_EVERY_MS", fallback: 10_000 })
+    vars.push({
+      name: "RATE_LIMIT_PRUNE_EVERY_MS",
+      defaultValue: "10000",
+      source: v.source,
+      effectiveValue: String(v.value),
+    })
+  }
+  {
+    const v = readPositiveIntEnv({ name: "AUTH_RATE_LIMIT_SIGNIN_WINDOW_MS", fallback: 60000 })
+    vars.push({
+      name: "AUTH_RATE_LIMIT_SIGNIN_WINDOW_MS",
+      defaultValue: "60000",
+      source: v.source,
+      effectiveValue: String(v.value),
+    })
+  }
+  {
+    const v = readPositiveIntEnv({ name: "AUTH_RATE_LIMIT_SIGNIN_PER_IP", fallback: 30 })
+    vars.push({
+      name: "AUTH_RATE_LIMIT_SIGNIN_PER_IP",
+      defaultValue: "30",
+      source: v.source,
+      effectiveValue: String(v.value),
+    })
+  }
+  {
+    const v = readPositiveIntEnv({ name: "AUTH_RATE_LIMIT_SIGNIN_PER_IP_EMAIL", fallback: 10 })
+    vars.push({
+      name: "AUTH_RATE_LIMIT_SIGNIN_PER_IP_EMAIL",
+      defaultValue: "10",
+      source: v.source,
+      effectiveValue: String(v.value),
+    })
+  }
+  {
     const v = readPositiveIntEnv({ name: "AUTH_RATE_LIMIT_SIGNUP_WINDOW_MS", fallback: 60000 })
     vars.push({
       name: "AUTH_RATE_LIMIT_SIGNUP_WINDOW_MS",
@@ -194,6 +239,123 @@ export const GET = withApiObservability(async (req: Request) => {
     vars.push({
       name: "AUTH_RATE_LIMIT_PASSWORD_FORGOT_PER_IP_EMAIL",
       defaultValue: "5",
+      source: v.source,
+      effectiveValue: String(v.value),
+    })
+  }
+  {
+    const v = readPositiveIntEnv({ name: "AUTH_RATE_LIMIT_MAGIC_LINK_REQUEST_WINDOW_MS", fallback: 60000 })
+    vars.push({
+      name: "AUTH_RATE_LIMIT_MAGIC_LINK_REQUEST_WINDOW_MS",
+      defaultValue: "60000",
+      source: v.source,
+      effectiveValue: String(v.value),
+    })
+  }
+  {
+    const v = readPositiveIntEnv({ name: "AUTH_RATE_LIMIT_MAGIC_LINK_REQUEST_PER_IP", fallback: 10 })
+    vars.push({
+      name: "AUTH_RATE_LIMIT_MAGIC_LINK_REQUEST_PER_IP",
+      defaultValue: "10",
+      source: v.source,
+      effectiveValue: String(v.value),
+    })
+  }
+  {
+    const v = readPositiveIntEnv({ name: "AUTH_RATE_LIMIT_MAGIC_LINK_REQUEST_PER_IP_EMAIL", fallback: 5 })
+    vars.push({
+      name: "AUTH_RATE_LIMIT_MAGIC_LINK_REQUEST_PER_IP_EMAIL",
+      defaultValue: "5",
+      source: v.source,
+      effectiveValue: String(v.value),
+    })
+  }
+  {
+    const v = readPositiveIntEnv({ name: "AUTH_RATE_LIMIT_EMAIL_OTP_REQUEST_WINDOW_MS", fallback: 60000 })
+    vars.push({
+      name: "AUTH_RATE_LIMIT_EMAIL_OTP_REQUEST_WINDOW_MS",
+      defaultValue: "60000",
+      source: v.source,
+      effectiveValue: String(v.value),
+    })
+  }
+  {
+    const v = readPositiveIntEnv({ name: "AUTH_RATE_LIMIT_EMAIL_OTP_REQUEST_PER_IP", fallback: 10 })
+    vars.push({
+      name: "AUTH_RATE_LIMIT_EMAIL_OTP_REQUEST_PER_IP",
+      defaultValue: "10",
+      source: v.source,
+      effectiveValue: String(v.value),
+    })
+  }
+  {
+    const v = readPositiveIntEnv({ name: "AUTH_RATE_LIMIT_EMAIL_OTP_REQUEST_PER_IP_EMAIL", fallback: 5 })
+    vars.push({
+      name: "AUTH_RATE_LIMIT_EMAIL_OTP_REQUEST_PER_IP_EMAIL",
+      defaultValue: "5",
+      source: v.source,
+      effectiveValue: String(v.value),
+    })
+  }
+  {
+    const v = readPositiveIntEnv({ name: "AUTH_RATE_LIMIT_EMAIL_OTP_VERIFY_WINDOW_MS", fallback: 60000 })
+    vars.push({
+      name: "AUTH_RATE_LIMIT_EMAIL_OTP_VERIFY_WINDOW_MS",
+      defaultValue: "60000",
+      source: v.source,
+      effectiveValue: String(v.value),
+    })
+  }
+  {
+    const v = readPositiveIntEnv({ name: "AUTH_RATE_LIMIT_EMAIL_OTP_VERIFY_PER_IP", fallback: 30 })
+    vars.push({
+      name: "AUTH_RATE_LIMIT_EMAIL_OTP_VERIFY_PER_IP",
+      defaultValue: "30",
+      source: v.source,
+      effectiveValue: String(v.value),
+    })
+  }
+  {
+    const v = readPositiveIntEnv({ name: "AUTH_RATE_LIMIT_EMAIL_OTP_VERIFY_PER_IP_EMAIL", fallback: 10 })
+    vars.push({
+      name: "AUTH_RATE_LIMIT_EMAIL_OTP_VERIFY_PER_IP_EMAIL",
+      defaultValue: "10",
+      source: v.source,
+      effectiveValue: String(v.value),
+    })
+  }
+  {
+    const v = readPositiveIntEnv({ name: "AUTH_RATE_LIMIT_CHALLENGE_WINDOW_MS", fallback: 60000 })
+    vars.push({
+      name: "AUTH_RATE_LIMIT_CHALLENGE_WINDOW_MS",
+      defaultValue: "60000",
+      source: v.source,
+      effectiveValue: String(v.value),
+    })
+  }
+  {
+    const v = readPositiveIntEnv({ name: "AUTH_RATE_LIMIT_CHALLENGE_PER_IP", fallback: 30 })
+    vars.push({
+      name: "AUTH_RATE_LIMIT_CHALLENGE_PER_IP",
+      defaultValue: "30",
+      source: v.source,
+      effectiveValue: String(v.value),
+    })
+  }
+  {
+    const v = readPositiveIntEnv({ name: "AUTH_RATE_LIMIT_SETUP_WINDOW_MS", fallback: 60 * 60_000 })
+    vars.push({
+      name: "AUTH_RATE_LIMIT_SETUP_WINDOW_MS",
+      defaultValue: "3600000",
+      source: v.source,
+      effectiveValue: String(v.value),
+    })
+  }
+  {
+    const v = readPositiveIntEnv({ name: "AUTH_RATE_LIMIT_SETUP_PER_IP", fallback: 10 })
+    vars.push({
+      name: "AUTH_RATE_LIMIT_SETUP_PER_IP",
+      defaultValue: "10",
       source: v.source,
       effectiveValue: String(v.value),
     })

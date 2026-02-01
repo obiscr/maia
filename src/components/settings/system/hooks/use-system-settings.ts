@@ -9,7 +9,7 @@ import { tApiError } from "@/lib/shared/i18n/error"
 import { toast } from "@/lib/client/toast"
 import { useI18n } from "@/components/i18n-provider"
 
-export type SavingSection = null | "registration" | "smtp" | "performance"
+export type SavingSection = null | "registration" | "smtp" | "emailNotifications" | "performance"
 
 type PerfSource = "override" | "env" | "default" | "invalid_env"
 type PerfInfo = {
@@ -56,10 +56,13 @@ export function useSystemSettings() {
 
   const [smtpPasswordDraft, setSmtpPasswordDraft] = useState("")
   const [lastSavedSmtpPasswordDraft, setLastSavedSmtpPasswordDraft] = useState("")
+  const [smtpPasswordClearRequested, setSmtpPasswordClearRequested] = useState(false)
   const [smtpPasswordConfigured, setSmtpPasswordConfigured] = useState(false)
   const [showSmtpPassword, setShowSmtpPassword] = useState(false)
   const [smtpTestTo, setSmtpTestTo] = useState("")
   const [sendingTest, setSendingTest] = useState(false)
+
+  const [emailNotificationMask, setEmailNotificationMask] = useState(DEFAULT_SYSTEM_SETTINGS.emailNotificationMask)
 
   // Advanced runtime tuning (persisted overrides; env stays as fallback)
   const [globalRunConcurrency, setGlobalRunConcurrency] = useState<string>("")
@@ -97,11 +100,13 @@ export function useSystemSettings() {
         setSmtpUsername(s.smtpUsername)
         setSmtpFromEmail(s.smtpFromEmail)
         setSmtpFromName(s.smtpFromName)
-        const loadedPass = String(s.smtpPassword ?? "").trim()
-        setSmtpPasswordDraft(loadedPass)
-        setLastSavedSmtpPasswordDraft(loadedPass)
+        // Never prefill secrets into the UI.
+        setSmtpPasswordDraft("")
+        setLastSavedSmtpPasswordDraft("")
+        setSmtpPasswordClearRequested(false)
         setSmtpPasswordConfigured(s.smtpPasswordConfigured)
         setSmtpTestTo("")
+        setEmailNotificationMask(s.emailNotificationMask)
 
         setGlobalRunConcurrency(s.globalRunConcurrency ? String(s.globalRunConcurrency) : "")
         setPerRunStepConcurrency(s.perRunStepConcurrency ? String(s.perRunStepConcurrency) : "")
@@ -158,11 +163,13 @@ export function useSystemSettings() {
     if (smtpUsername !== initial.smtpUsername) return true
     if (smtpFromEmail !== initial.smtpFromEmail) return true
     if (smtpFromName !== initial.smtpFromName) return true
+    if (smtpPasswordClearRequested) return true
     if (smtpPasswordDraft.trim() !== lastSavedSmtpPasswordDraft) return true
     return false
   }, [
     initial,
     lastSavedSmtpPasswordDraft,
+    smtpPasswordClearRequested,
     smtpEnabled,
     smtpFromEmail,
     smtpFromName,
@@ -240,8 +247,8 @@ export function useSystemSettings() {
       const nextSmtpPasswordDraft = smtpPasswordDraft.trim()
       if (nextSmtpPasswordDraft) {
         body.smtpPassword = nextSmtpPasswordDraft
-      } else if (lastSavedSmtpPasswordDraft) {
-        // User cleared a previously-saved password.
+      } else if (smtpPasswordClearRequested) {
+        // User explicitly cleared a previously-saved password.
         body.smtpPassword = null
       }
 
@@ -264,13 +271,36 @@ export function useSystemSettings() {
       })
 
       setInitial(next)
-      const loadedPass = String(next.smtpPassword ?? "").trim()
-      setSmtpPasswordDraft(loadedPass)
-      setLastSavedSmtpPasswordDraft(loadedPass)
+      setSmtpPasswordDraft("")
+      setLastSavedSmtpPasswordDraft("")
+      setSmtpPasswordClearRequested(false)
       setSmtpPasswordConfigured(Boolean(next.smtpPasswordConfigured))
       toast.success(t("common.saved"))
     } catch (e) {
       toast.error(tApiError({ t, err: e, fallbackKey: "settings.system.saveFailed" }))
+    } finally {
+      setSaving(false)
+      setSavingSection(null)
+    }
+  }
+
+  async function updateEmailNotificationMask(nextMask: number) {
+    if (saving || savingSection) return
+    setSaving(true)
+    setSavingSection("emailNotifications")
+    try {
+      const json = await apiFetchJson<{ settings?: Partial<SystemSettings> }>("/api/settings/system", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emailNotificationMask: Math.max(0, Math.floor(nextMask)) }),
+      })
+      const next = normalizeSystemSettings({ ...initial, ...json.settings })
+      setInitial(next)
+      setEmailNotificationMask(next.emailNotificationMask)
+      toast.success(t("common.saved"))
+    } catch (e) {
+      toast.error(tApiError({ t, err: e, fallbackKey: "settings.system.saveFailed" }))
+      setEmailNotificationMask(initial.emailNotificationMask)
     } finally {
       setSaving(false)
       setSavingSection(null)
@@ -339,7 +369,16 @@ export function useSystemSettings() {
       await apiFetchJson("/api/settings/system/smtp/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ toEmail }),
+        body: JSON.stringify({
+          toEmail,
+          smtpHost,
+          smtpPort: smtpPort.trim() ? Number(smtpPort) : null,
+          smtpSecure,
+          smtpUsername,
+          smtpFromEmail,
+          smtpFromName,
+          smtpPassword: smtpPasswordDraft.trim() ? smtpPasswordDraft.trim() : undefined,
+        }),
       })
       toast.success(t("settings.system.email.testSent"))
     } catch (e) {
@@ -361,9 +400,9 @@ export function useSystemSettings() {
     setSmtpUsername(initial.smtpUsername)
     setSmtpFromEmail(initial.smtpFromEmail)
     setSmtpFromName(initial.smtpFromName)
-    const loadedPass = String(initial.smtpPassword ?? "").trim()
-    setSmtpPasswordDraft(loadedPass)
-    setLastSavedSmtpPasswordDraft(loadedPass)
+    setSmtpPasswordDraft("")
+    setLastSavedSmtpPasswordDraft("")
+    setSmtpPasswordClearRequested(false)
     setSmtpPasswordConfigured(initial.smtpPasswordConfigured)
     setSmtpTestTo("")
   }
@@ -406,12 +445,17 @@ export function useSystemSettings() {
     setSmtpFromName,
     smtpPasswordDraft,
     setSmtpPasswordDraft,
+    smtpPasswordClearRequested,
+    setSmtpPasswordClearRequested,
     smtpPasswordConfigured,
     showSmtpPassword,
     setShowSmtpPassword,
     smtpTestTo,
     setSmtpTestTo,
     sendingTest,
+
+    emailNotificationMask,
+    setEmailNotificationMask,
 
     globalRunConcurrency,
     setGlobalRunConcurrency,
@@ -435,6 +479,7 @@ export function useSystemSettings() {
 
     saveRegistration,
     saveSmtp,
+    updateEmailNotificationMask,
     savePerformance,
     sendSmtpTest,
 
