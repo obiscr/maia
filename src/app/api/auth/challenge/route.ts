@@ -5,6 +5,8 @@ import { fail, ok } from "@/lib/server/http/response"
 import { withApiObservability } from "@/lib/server/observability"
 import { consumeTotpSigninChallenge } from "@/lib/server/auth/challenge"
 import { verifyTotp } from "@/lib/server/auth/totp"
+import { consumeTotpRecoveryCode } from "@/lib/server/auth/recovery-codes"
+import { getTotpSecretBase32ForUser } from "@/lib/server/auth/totp-secret"
 import { createSession, cookieHeaderForSession, getSessionCookieSecure } from "@/lib/server/auth/session"
 import { checkRateLimit, getClientIp, RATE_LIMIT_CONFIG } from "@/lib/server/auth/rate-limit"
 import { zodIssues } from "@/lib/shared/http/zod"
@@ -59,17 +61,18 @@ export const POST = withApiObservability(async (req: Request) => {
       role: true,
       isDisabled: true,
       totpEnabled: true,
-      totpSecret: true,
     },
   })
   if (!user || user.isDisabled) return fail({ status: 401, code: "UNAUTHORIZED" })
   if (!user.totpEnabled) return fail({ status: 409, code: "TOTP_NOT_ENABLED" })
-  const secret = user.totpSecret
+  const secret = await getTotpSecretBase32ForUser(user.id)
   if (!secret) return fail({ status: 409, code: "TOTP_NOT_SETUP" })
 
   const okTotp = verifyTotp({ secretBase32: secret, code: body.code, window: 1 })
+  const okRecovery = okTotp ? false : await consumeTotpRecoveryCode({ userId: user.id, code: body.code })
   // Bad verification code is a validation error, not an auth session failure.
-  if (!okTotp) return fail({ status: 422, code: "TOTP_INVALID" })
+  // Intentionally return the same error for both TOTP + recovery to avoid code-type probing.
+  if (!okTotp && !okRecovery) return fail({ status: 422, code: "TOTP_INVALID" })
 
   const ip = clientIp === "unknown" ? null : clientIp
   const ua = req.headers.get("user-agent") ?? null

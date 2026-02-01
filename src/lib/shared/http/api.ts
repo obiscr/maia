@@ -72,8 +72,12 @@ export async function apiFetchJson<T>(input: RequestInfo | URL, init?: RequestIn
         path === "/signup" ||
         path === "/setup" ||
         path === "/otp" ||
+        path === "/email-otp" ||
+        path === "/magic-link" ||
         path === "/forgot-password" ||
         path === "/reset-password" ||
+        path === "/confirm-email" ||
+        path === "/auth/magic" ||
         path === "/auth/redirect"
       if (!isAuthPage) {
         try {

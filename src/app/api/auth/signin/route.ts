@@ -5,8 +5,8 @@ import { fail, ok } from "@/lib/server/http/response"
 import { withApiObservability } from "@/lib/server/observability"
 import { verifyPassword } from "@/lib/server/auth/password"
 import { createSession, cookieHeaderForSession, getSessionCookieSecure } from "@/lib/server/auth/session"
-import { verifyTotp } from "@/lib/server/auth/totp"
 import { createTotpSigninChallenge } from "@/lib/server/auth/challenge"
+import { getTotpSecretBase32ForUser } from "@/lib/server/auth/totp-secret"
 import { checkRateLimit, getClientIp, RATE_LIMIT_CONFIG } from "@/lib/server/auth/rate-limit"
 import { zodIssues } from "@/lib/shared/http/zod"
 
@@ -75,7 +75,6 @@ export const POST = withApiObservability(async (req: Request) => {
       isDisabled: true,
       passwordHash: true,
       totpEnabled: true,
-      totpSecret: true,
     },
   })
   if (!user || user.isDisabled) return fail({ status: 401, code: "INVALID_CREDENTIALS" })
@@ -84,7 +83,7 @@ export const POST = withApiObservability(async (req: Request) => {
   // If TOTP is enabled, we don't complete the session here.
   // Instead we issue a short-lived, one-time challenge token and ask the client to finish on /otp.
   if (user.totpEnabled) {
-    const secret = user.totpSecret
+    const secret = await getTotpSecretBase32ForUser(user.id)
     if (!secret) return fail({ status: 409, code: "TOTP_NOT_SETUP" })
 
     const ip = clientIp === "unknown" ? null : clientIp

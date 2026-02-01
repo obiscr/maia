@@ -23,18 +23,11 @@ export function ForgotPasswordForm({ className, ...props }: React.ComponentProps
     if (submitting) return
     setSubmitting(true)
     try {
-      const res = await apiFetchJson<{ ok?: boolean; smtpAvailable?: boolean; smtpCode?: string }>(
-        "/api/auth/password/forgot",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
-        },
-      )
-      if (res?.smtpAvailable === false) {
-        toast.error(t("auth.forgot.errors.smtpUnavailable"))
-        return
-      }
+      await apiFetchJson<{ ok?: boolean }>("/api/auth/password/forgot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      })
       setSent(true)
       toast.success(t("auth.forgot.sentToast"))
     } catch (e) {

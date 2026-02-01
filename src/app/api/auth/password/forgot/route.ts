@@ -1,13 +1,13 @@
 import crypto from "node:crypto"
-import nodemailer from "nodemailer"
 import { z } from "zod"
 
 import { prisma } from "@/lib/server/db"
 import { fail, ok } from "@/lib/server/http/response"
 import { withApiObservability } from "@/lib/server/observability"
 import { checkRateLimit, getClientIp, RATE_LIMIT_CONFIG } from "@/lib/server/auth/rate-limit"
-import { SYSTEM_SECRET_KEYS, getSystemSecretPlaintext } from "@/lib/server/settings/system-secrets"
-import { renderPasswordResetEmail } from "@/lib/server/email/templates"
+import { readSmtpConfig } from "@/lib/server/email/email-settings"
+import { issueOpaqueEmailToken, revokeOpaqueEmailTokenBestEffort } from "@/lib/server/auth/email-token-flow"
+import { requestLocale, requestOrigin, sendTemplatedEmailBestEffort } from "@/lib/server/email/send-templated-email"
 import { zodIssues } from "@/lib/shared/http/zod"
 
 export const runtime = "nodejs"
@@ -15,50 +15,6 @@ export const runtime = "nodejs"
 const schema = z.object({
   email: z.string().trim().email(),
 })
-
-function sha256Hex(input: string) {
-  return crypto.createHash("sha256").update(input).digest("hex")
-}
-
-function requestOrigin(req: Request) {
-  const proto = req.headers.get("x-forwarded-proto") ?? "http"
-  const host = req.headers.get("host")
-  if (!host) return null
-  return `${proto}://${host}`
-}
-
-async function readSmtpConfig() {
-  const inst = await prisma.installation.findUnique({
-    where: { id: "installation" },
-    select: {
-      smtpEnabled: true,
-      smtpHost: true,
-      smtpPort: true,
-      smtpSecure: true,
-      smtpUsername: true,
-      smtpFromEmail: true,
-      smtpFromName: true,
-    },
-  })
-  if (!inst) return { ok: false as const, code: "NOT_INSTALLED" as const }
-  if (!inst.smtpEnabled) return { ok: false as const, code: "SMTP_DISABLED" as const }
-
-  const host = String(inst.smtpHost ?? "").trim()
-  const port = typeof inst.smtpPort === "number" ? inst.smtpPort : null
-  const secure = Boolean(inst.smtpSecure)
-  const username = String(inst.smtpUsername ?? "").trim()
-  const fromEmail = String(inst.smtpFromEmail ?? "").trim() || username
-  const fromName = String(inst.smtpFromName ?? "").trim() || "Maia"
-
-  if (!host || !port) return { ok: false as const, code: "SMTP_INCOMPLETE" as const }
-
-  const password = await getSystemSecretPlaintext({ key: SYSTEM_SECRET_KEYS.smtpPassword, touchLastUsed: true }).catch(
-    () => null,
-  )
-  if (!password) return { ok: false as const, code: "SMTP_PASSWORD_MISSING" as const }
-
-  return { ok: true as const, host, port, secure, username, password, fromEmail, fromName }
-}
 
 // POST /api/auth/password/forgot
 export const POST = withApiObservability(async (req: Request) => {
@@ -107,63 +63,68 @@ export const POST = withApiObservability(async (req: Request) => {
   }
 
   // Do not reveal whether the email exists.
-  const smtp = await readSmtpConfig()
+  const smtp = await readSmtpConfig({ touchPasswordLastUsed: true })
   if (!smtp.ok) {
-    return ok({ ok: true, smtpAvailable: false, smtpCode: smtp.code })
+    return ok({ ok: true })
   }
 
   const origin = requestOrigin(req)
-  if (!origin) return ok({ ok: true, smtpAvailable: true })
+  if (!origin) return ok({ ok: true })
 
   const user = await prisma.user
     .findUnique({ where: { email }, select: { id: true, isDisabled: true } })
     .catch(() => null)
-  if (!user || user.isDisabled) return ok({ ok: true, smtpAvailable: true })
+  if (!user || user.isDisabled) return ok({ ok: true })
 
-  const token = crypto.randomBytes(32).toString("base64url")
-  const tokenHash = sha256Hex(token)
   const now = new Date()
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000)
 
-  await prisma.passwordResetToken.create({
-    data: {
-      id: crypto.randomUUID(),
-      userId: user.id,
-      tokenHash,
-      createdAt: now,
-      expiresAt,
-      usedAt: null,
-      ip: clientIp === "unknown" ? null : clientIp,
-      userAgent: req.headers.get("user-agent") ?? null,
+  const issued = await issueOpaqueEmailToken({
+    create: async (tokenHash) => {
+      return await prisma.passwordResetToken.create({
+        data: {
+          id: crypto.randomUUID(),
+          userId: user.id,
+          tokenHash,
+          createdAt: now,
+          expiresAt,
+          usedAt: null,
+          ip: clientIp === "unknown" ? null : clientIp,
+          userAgent: req.headers.get("user-agent") ?? null,
+        },
+        select: { id: true },
+      })
     },
-    select: { id: true },
   })
+  if (!issued.ok) return ok({ ok: true })
 
-  const resetUrl = `${origin}/reset-password?token=${encodeURIComponent(token)}`
-  const transporter = nodemailer.createTransport({
-    host: smtp.host,
-    port: smtp.port,
-    secure: smtp.secure,
-    auth: smtp.username ? { user: smtp.username, pass: smtp.password } : undefined,
-  })
+  const resetUrl = `${origin}/reset-password?token=${encodeURIComponent(issued.token)}`
 
-  const msg = renderPasswordResetEmail({
-    appName: "Maia",
-    email,
-    resetUrl,
-    expiresIn: "1 hour",
-    supportEmail: smtp.fromEmail || undefined,
-    requestedAt: now.toISOString(),
-    requestIp: clientIp === "unknown" ? null : clientIp,
-    requestUserAgent: req.headers.get("user-agent") ?? null,
-  })
-
-  await transporter.sendMail({
-    from: smtp.fromName ? `${smtp.fromName} <${smtp.fromEmail}>` : smtp.fromEmail,
+  const locale = requestLocale(req)
+  const sent = await sendTemplatedEmailBestEffort({
+    smtp,
     to: email,
-    subject: msg.subject,
-    text: msg.text,
+    key: "PASSWORD_RESET",
+    locale,
+    vars: {
+      appName: "Maia",
+      email,
+      resetUrl,
+      expiresIn: "1 hour",
+      supportEmail: smtp.fromEmail || "",
+      requestedAt: now.toISOString(),
+      requestIp: clientIp === "unknown" ? "" : clientIp,
+      requestUserAgent: req.headers.get("user-agent") ?? "",
+    },
   })
+  if (!sent.emailSent) {
+    await revokeOpaqueEmailTokenBestEffort({
+      tokenRowId: issued.tokenRowId,
+      revoke: async (tokenRowId) => {
+        return await prisma.passwordResetToken.delete({ where: { id: tokenRowId } })
+      },
+    })
+  }
 
-  return ok({ ok: true, smtpAvailable: true })
+  return ok({ ok: true })
 })

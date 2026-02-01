@@ -74,6 +74,7 @@ export const POST = withApiObservability(async (req: Request) => {
         publicId: pub.publicId,
         publicNumber: pub.publicNumber,
         email: body.email.toLowerCase(),
+        emailVerifiedAt: new Date(),
         name: body.name?.trim() ? body.name.trim() : null,
         role: "ADMIN",
         isDisabled: false,

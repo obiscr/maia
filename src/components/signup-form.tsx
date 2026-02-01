@@ -12,15 +12,27 @@ import { apiFetchJson } from "@/lib/shared/http/api"
 import { toast } from "@/lib/client/toast"
 import { useApiErrorToast } from "@/hooks/use-api-error-toast"
 
-export function SignupForm({ className, ...props }: React.ComponentProps<"div">) {
+export function SignupForm({
+  className,
+  inviteToken,
+  initialEmail,
+  ...props
+}: React.ComponentProps<"div"> & { inviteToken?: string; initialEmail?: string }) {
   const { t } = useI18n()
   const { toastApiError } = useApiErrorToast()
   const router = useRouter()
   const [name, setName] = React.useState("")
-  const [email, setEmail] = React.useState("")
+  const [email, setEmail] = React.useState(initialEmail ?? "")
   const [password, setPassword] = React.useState("")
   const [confirmPassword, setConfirmPassword] = React.useState("")
   const [submitting, setSubmitting] = React.useState(false)
+
+  const emailLocked = Boolean(inviteToken && initialEmail)
+
+  React.useEffect(() => {
+    if (!initialEmail) return
+    setEmail(initialEmail)
+  }, [initialEmail])
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -34,9 +46,13 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
       await apiFetchJson("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, name }),
+        body: JSON.stringify({ email, password, name, inviteToken: inviteToken ?? undefined }),
       })
-      router.replace("/")
+      if (inviteToken) {
+        router.replace("/")
+      } else {
+        router.replace(`/signup/check-email?email=${encodeURIComponent(email)}`)
+      }
       router.refresh()
     } catch (err) {
       toastApiError(err, "auth.signup.errors.createAccountFailed")
@@ -77,7 +93,7 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
               value={email}
               className="font-mono text-xs"
               onChange={(e) => setEmail(e.target.value)}
-              disabled={submitting}
+              disabled={submitting || emailLocked}
             />
             <FieldDescription>{t("auth.signup.emailHint")}</FieldDescription>
           </Field>

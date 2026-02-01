@@ -1,9 +1,16 @@
+import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 
 import { AuthPageShell } from "@/components/auth/auth-page-shell"
 import { RepairForm } from "@/components/repair-form"
 import { prisma } from "@/lib/server/db"
+import { getT } from "@/lib/server/i18n/server"
 import { getInstallation } from "@/lib/server/installation"
+
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getT()
+  return { title: t("auth.repair.title") }
+}
 
 export default async function Page() {
   const [installed, userCount] = await Promise.all([

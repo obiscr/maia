@@ -7,6 +7,7 @@ import { decryptUserSecret, encryptUserSecret } from "@/lib/server/settings/cryp
 
 export const USER_SECRET_KEYS = {
   agentApiKey: "agent.apiKey",
+  authTotpSecret: "auth.totpSecret",
 } as const
 
 export type UserSecretKey = (typeof USER_SECRET_KEYS)[keyof typeof USER_SECRET_KEYS]

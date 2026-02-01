@@ -7,6 +7,7 @@ import type { Prisma } from "@prisma/client"
 
 import { prisma } from "@/lib/server/db"
 import { isCurrentDatabaseSchemaReadySync } from "@/lib/server/db/schema-ready"
+import { hashOpaqueToken } from "@/lib/server/auth/token"
 import { shouldSetSecureCookie } from "@/lib/shared/http/cookie-secure"
 
 export const SESSION_COOKIE_NAME = "maia_session"
@@ -27,10 +28,6 @@ export type AuthedUser = {
   isDisabled: boolean
 }
 
-function sha256Hex(input: string) {
-  return crypto.createHash("sha256").update(input).digest("hex")
-}
-
 export function readSessionTokenFromRequest(req: Request) {
   const cookieHeader = req.headers.get("cookie") ?? ""
   // very small cookie parser (avoid bringing deps)
@@ -47,7 +44,7 @@ export async function getAuthedUserFromRequest(req: Request): Promise<AuthedUser
   const token = readSessionTokenFromRequest(req)
   if (!token) return null
   if (!isCurrentDatabaseSchemaReadySync()) return null
-  const tokenHash = sha256Hex(token)
+  const tokenHash = hashOpaqueToken(token)
   const now = new Date()
 
   const row = await prisma.session.findUnique({
@@ -113,7 +110,7 @@ export async function createSession(params: {
   ttlDays?: number
 }) {
   const token = newSessionToken()
-  const tokenHash = sha256Hex(token)
+  const tokenHash = hashOpaqueToken(token)
   const ttl = typeof params.ttlDays === "number" ? params.ttlDays : SESSION_TTL_DAYS
   const expiresAt = new Date(Date.now() + ttl * 24 * 60 * 60 * 1000)
 

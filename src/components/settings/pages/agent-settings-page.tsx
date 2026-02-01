@@ -9,6 +9,7 @@ import { SettingsSectionContent } from "@/components/settings/settings-section-c
 import { SettingsSectionFooter } from "@/components/settings/settings-section-footer"
 import { SettingsSectionHeader } from "@/components/settings/settings-section-header"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { SecretInput } from "@/components/ui/secret-input"
@@ -19,7 +20,6 @@ import { toast } from "@/lib/client/toast"
 
 type AgentSettingsStatus = {
   apiKeyConfigured: boolean
-  apiKey?: string
   model: string
 }
 
@@ -32,6 +32,7 @@ export default function AgentSettingsPage() {
   const [initial, setInitial] = useState<AgentSettingsStatus>(DEFAULTS)
   const [apiKeyDraft, setApiKeyDraft] = useState("")
   const [lastSavedApiKeyDraft, setLastSavedApiKeyDraft] = useState("")
+  const [apiKeyClearRequested, setApiKeyClearRequested] = useState(false)
   const [model, setModel] = useState(DEFAULTS.model)
   const [showKey, setShowKey] = useState(false)
 
@@ -45,14 +46,14 @@ export default function AgentSettingsPage() {
         })
         const s: AgentSettingsStatus = {
           apiKeyConfigured: Boolean(json.settings?.apiKeyConfigured),
-          apiKey: typeof json.settings?.apiKey === "string" ? String(json.settings?.apiKey) : undefined,
           model: String(json.settings?.model ?? DEFAULTS.model),
         }
         if (cancelled) return
         setInitial(s)
-        const loadedKey = String(s.apiKey ?? "").trim()
-        setApiKeyDraft(loadedKey)
-        setLastSavedApiKeyDraft(loadedKey)
+        // Never prefill secrets into the UI.
+        setApiKeyDraft("")
+        setLastSavedApiKeyDraft("")
+        setApiKeyClearRequested(false)
         setModel(s.model)
       } catch {
         if (!cancelled) toast.error(t("common.loadFailed"))
@@ -66,7 +67,7 @@ export default function AgentSettingsPage() {
     }
   }, [t])
 
-  const dirty = model !== initial.model || apiKeyDraft.trim() !== lastSavedApiKeyDraft
+  const dirty = model !== initial.model || apiKeyClearRequested || apiKeyDraft.trim() !== lastSavedApiKeyDraft
 
   async function save() {
     if (saving) return
@@ -76,8 +77,8 @@ export default function AgentSettingsPage() {
       const nextApiKeyDraft = apiKeyDraft.trim()
       if (nextApiKeyDraft) {
         body.apiKey = nextApiKeyDraft
-      } else if (lastSavedApiKeyDraft) {
-        // User cleared a previously-saved key.
+      } else if (apiKeyClearRequested) {
+        // User explicitly cleared a previously-saved key.
         body.apiKey = null
       }
 
@@ -91,14 +92,10 @@ export default function AgentSettingsPage() {
         model: String(json.settings?.model ?? model),
       }
       setInitial(s)
-      // Keep the key visible (masked) after save if user provided one.
-      if (nextApiKeyDraft) {
-        setApiKeyDraft(nextApiKeyDraft)
-        setLastSavedApiKeyDraft(nextApiKeyDraft)
-      } else {
-        setApiKeyDraft("")
-        setLastSavedApiKeyDraft("")
-      }
+      // Never keep secrets in UI state after save.
+      setApiKeyDraft("")
+      setLastSavedApiKeyDraft("")
+      setApiKeyClearRequested(false)
       setModel(s.model)
       toast.success(t("common.saved"))
     } catch (e) {
@@ -109,7 +106,9 @@ export default function AgentSettingsPage() {
   }
 
   function reset() {
-    setApiKeyDraft(lastSavedApiKeyDraft)
+    setApiKeyDraft("")
+    setLastSavedApiKeyDraft("")
+    setApiKeyClearRequested(false)
     setModel(initial.model)
   }
 
@@ -127,7 +126,29 @@ export default function AgentSettingsPage() {
           <div className="space-y-4">
             <FieldGroup>
               <Field data-disabled={loading || saving}>
-                <FieldLabel htmlFor="agent-api-key">{t("settings.agent.apiKey")}</FieldLabel>
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                  <FieldLabel htmlFor="agent-api-key" className="min-w-0 truncate">
+                    {t("settings.agent.apiKey")}
+                  </FieldLabel>
+                  {initial.apiKeyConfigured ? (
+                    <div className="inline-flex h-4 items-center gap-2 whitespace-nowrap text-sm leading-none text-muted-foreground">
+                      <span className="select-none">{t("common.configured")}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 px-2 text-sm leading-none"
+                        onClick={() => {
+                          setApiKeyDraft("")
+                          setApiKeyClearRequested(true)
+                        }}
+                        disabled={loading || saving}
+                      >
+                        {t("common.clearSecretAction")}
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
                 <div className="relative">
                   <SecretInput
                     id="agent-api-key"
