@@ -58,6 +58,7 @@ export function useSystemSettings() {
   const [lastSavedSmtpPasswordDraft, setLastSavedSmtpPasswordDraft] = useState("")
   const [smtpPasswordClearRequested, setSmtpPasswordClearRequested] = useState(false)
   const [smtpPasswordConfigured, setSmtpPasswordConfigured] = useState(false)
+  const [smtpVerifiedAt, setSmtpVerifiedAt] = useState<string | null>(null)
   const [showSmtpPassword, setShowSmtpPassword] = useState(false)
   const [smtpTestTo, setSmtpTestTo] = useState("")
   const [sendingTest, setSendingTest] = useState(false)
@@ -105,6 +106,7 @@ export function useSystemSettings() {
         setLastSavedSmtpPasswordDraft("")
         setSmtpPasswordClearRequested(false)
         setSmtpPasswordConfigured(s.smtpPasswordConfigured)
+        setSmtpVerifiedAt(s.smtpVerifiedAt ?? null)
         setSmtpTestTo("")
         setEmailNotificationMask(s.emailNotificationMask)
 
@@ -180,6 +182,33 @@ export function useSystemSettings() {
     smtpUsername,
   ])
 
+  const smtpVerified = useMemo(() => {
+    if (!smtpVerifiedAt) return false
+
+    // Treat verification as invalid as soon as the user changes any SMTP config locally.
+    if (smtpHost !== initial.smtpHost) return false
+    if ((smtpPort.trim() ? Number(smtpPort) : null) !== initial.smtpPort) return false
+    if (smtpSecure !== initial.smtpSecure) return false
+    if (smtpUsername !== initial.smtpUsername) return false
+    if (smtpFromEmail !== initial.smtpFromEmail) return false
+    if (smtpFromName !== initial.smtpFromName) return false
+    if (smtpPasswordClearRequested) return false
+    if (smtpPasswordDraft.trim()) return false
+
+    return true
+  }, [
+    initial,
+    smtpFromEmail,
+    smtpFromName,
+    smtpHost,
+    smtpPasswordClearRequested,
+    smtpPasswordDraft,
+    smtpPort,
+    smtpSecure,
+    smtpUsername,
+    smtpVerifiedAt,
+  ])
+
   const dirtyPerformance = useMemo(() => {
     if ((globalRunConcurrency.trim() ? Number(globalRunConcurrency) : null) !== initial.globalRunConcurrency)
       return true
@@ -235,14 +264,21 @@ export function useSystemSettings() {
     setSaving(true)
     setSavingSection("smtp")
     try {
+      const smtpHostTrim = smtpHost.trim()
+      const smtpUsernameTrim = smtpUsername.trim()
+      const smtpFromEmailTrim = smtpFromEmail.trim()
+      const smtpFromNameTrim = smtpFromName.trim()
+
       const body: Record<string, unknown> = {
         smtpEnabled,
-        smtpHost,
         smtpSecure,
-        smtpUsername,
-        smtpFromEmail,
-        smtpFromName,
       }
+
+      body.smtpHost = smtpHostTrim ? smtpHostTrim : null
+      body.smtpUsername = smtpUsernameTrim ? smtpUsernameTrim : null
+      body.smtpFromEmail = smtpFromEmailTrim ? smtpFromEmailTrim : null
+      body.smtpFromName = smtpFromNameTrim ? smtpFromNameTrim : null
+
       body.smtpPort = smtpPort.trim() ? Number(smtpPort) : null
       const nextSmtpPasswordDraft = smtpPasswordDraft.trim()
       if (nextSmtpPasswordDraft) {
@@ -357,32 +393,71 @@ export function useSystemSettings() {
     }
   }
 
-  async function sendSmtpTest() {
-    if (sendingTest || saving || loading) return
+  async function sendSmtpTest(): Promise<boolean> {
+    if (sendingTest || saving || loading) return false
     const toEmail = smtpTestTo.trim()
     if (!toEmail) {
       toast.error(t("settings.system.email.testMissingTo"))
-      return
+      return false
     }
     setSendingTest(true)
     try {
-      await apiFetchJson("/api/settings/system/smtp/test", {
+      const smtpHostTrim = smtpHost.trim()
+      const smtpUsernameTrim = smtpUsername.trim()
+      const smtpFromEmailTrim = smtpFromEmail.trim()
+      const smtpFromNameTrim = smtpFromName.trim()
+
+      const json = await apiFetchJson<{
+        settings?: Partial<SystemSettings>
+      }>("/api/settings/system/smtp/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           toEmail,
-          smtpHost,
+          smtpHost: smtpHostTrim ? smtpHostTrim : null,
           smtpPort: smtpPort.trim() ? Number(smtpPort) : null,
           smtpSecure,
-          smtpUsername,
-          smtpFromEmail,
-          smtpFromName,
-          smtpPassword: smtpPasswordDraft.trim() ? smtpPasswordDraft.trim() : undefined,
+          smtpUsername: smtpUsernameTrim ? smtpUsernameTrim : null,
+          smtpFromEmail: smtpFromEmailTrim ? smtpFromEmailTrim : null,
+          smtpFromName: smtpFromNameTrim ? smtpFromNameTrim : null,
+          smtpPassword: smtpPasswordDraft.trim()
+            ? smtpPasswordDraft.trim()
+            : smtpPasswordClearRequested
+              ? null
+              : undefined,
         }),
       })
-      toast.success(t("settings.system.email.testSent"))
+
+      const next = normalizeSystemSettings({
+        ...initial,
+        ...json.settings,
+        smtpPort:
+          typeof json.settings?.smtpPort === "number"
+            ? json.settings.smtpPort
+            : smtpPort.trim()
+              ? Number(smtpPort)
+              : null,
+        smtpPasswordConfigured: Boolean(json.settings?.smtpPasswordConfigured ?? smtpPasswordConfigured),
+      })
+
+      setInitial(next)
+      setSmtpEnabled(next.smtpEnabled)
+      setSmtpHost(next.smtpHost)
+      setSmtpPort(next.smtpPort ? String(next.smtpPort) : "")
+      setSmtpSecure(next.smtpSecure)
+      setSmtpUsername(next.smtpUsername)
+      setSmtpFromEmail(next.smtpFromEmail)
+      setSmtpFromName(next.smtpFromName)
+      setSmtpVerifiedAt(next.smtpVerifiedAt ?? null)
+      setSmtpPasswordDraft("")
+      setLastSavedSmtpPasswordDraft("")
+      setSmtpPasswordClearRequested(false)
+      setSmtpPasswordConfigured(Boolean(next.smtpPasswordConfigured))
+
+      return true
     } catch (e) {
       toast.error(tApiError({ t, err: e, fallbackKey: "settings.system.email.testFailed" }))
+      return false
     } finally {
       setSendingTest(false)
     }
@@ -404,6 +479,7 @@ export function useSystemSettings() {
     setLastSavedSmtpPasswordDraft("")
     setSmtpPasswordClearRequested(false)
     setSmtpPasswordConfigured(initial.smtpPasswordConfigured)
+    setSmtpVerifiedAt(initial.smtpVerifiedAt ?? null)
     setSmtpTestTo("")
   }
 
@@ -425,6 +501,7 @@ export function useSystemSettings() {
     performanceInfo,
 
     initial,
+    initialSmtpEnabled: initial.smtpEnabled,
 
     registrationMode,
     setRegistrationMode,
@@ -448,6 +525,8 @@ export function useSystemSettings() {
     smtpPasswordClearRequested,
     setSmtpPasswordClearRequested,
     smtpPasswordConfigured,
+    smtpVerifiedAt,
+    smtpVerified,
     showSmtpPassword,
     setShowSmtpPassword,
     smtpTestTo,

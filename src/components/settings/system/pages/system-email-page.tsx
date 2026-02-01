@@ -25,6 +25,7 @@ export function SystemEmailPage() {
             saving={s.saving}
             savingSection={s.savingSection}
             dirty={s.dirtySmtp}
+            initialSmtpEnabled={s.initialSmtpEnabled}
             smtpEnabled={s.smtpEnabled}
             setSmtpEnabled={s.setSmtpEnabled}
             smtpHost={s.smtpHost}
@@ -44,6 +45,8 @@ export function SystemEmailPage() {
             smtpPasswordClearRequested={s.smtpPasswordClearRequested}
             setSmtpPasswordClearRequested={s.setSmtpPasswordClearRequested}
             smtpPasswordConfigured={s.smtpPasswordConfigured}
+            smtpVerifiedAt={s.smtpVerifiedAt}
+            smtpVerified={s.smtpVerified}
             showSmtpPassword={s.showSmtpPassword}
             setShowSmtpPassword={s.setShowSmtpPassword}
             smtpTestTo={s.smtpTestTo}
