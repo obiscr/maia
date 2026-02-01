@@ -158,6 +158,21 @@ enum RegistrationMode {
   INVITE_ONLY
 }
 
+enum EmailTemplateKey {
+  PASSWORD_RESET
+  SYSTEM_SMTP_TEST
+  SIGNUP_INVITE
+  SIGNUP_CONFIRMATION
+  ADMIN_PASSWORD_RESET_LINK
+  AUTH_EMAIL_OTP
+  AUTH_MAGIC_LINK
+  TOTP_ENABLED_NOTIFICATION
+  TOTP_DISABLED_NOTIFICATION
+  RUN_FAILED_NOTIFICATION
+  RUN_SUCCEEDED_NOTIFICATION
+  RUN_CANCELED_NOTIFICATION
+}
+
 /// Single-row installation metadata for the whole instance.
 /// This is the authoritative "is the system initialized?" flag.
 model Installation {
@@ -172,7 +187,9 @@ model Installation {
   /// Operator-friendly fingerprint of SETTINGS_ENCRYPTION_KEY (non-secret).
   encryptionKeyFingerprint String?
 
-  /// Optional SMTP config for email notifications (password is stored in SystemSecret).
+  /// Legacy SMTP config (password is stored in SystemSecret).
+  /// Kept for backward compatibility with existing installations.
+  /// Prefer `EmailSettings` for new code.
   smtpEnabled  Boolean @default(false)
   smtpHost     String?
   smtpPort     Int?
@@ -181,8 +198,41 @@ model Installation {
   smtpFromEmail String?
   smtpFromName  String?
 
+  emailSettings EmailSettings?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// Instance-wide email settings.
+/// Stored separately from Installation to keep concerns isolated and extensible.
+model EmailSettings {
+  /// Always "email_settings" (single-row semantics).
+  id String @id
+
+  installationId String @unique
+  installation   Installation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+
+  /// Optional SMTP config for email sending (password is stored in SystemSecret).
+  smtpEnabled   Boolean @default(false)
+  smtpHost      String?
+  smtpPort      Int?
+  smtpSecure    Boolean @default(false)
+  smtpUsername  String?
+  smtpFromEmail String?
+  smtpFromName  String?
+
+  /// Timestamp for the last successful SMTP test email (null => not verified yet).
+  /// Cleared whenever SMTP config/password changes.
+  smtpVerifiedAt DateTime?
+
+  /// Optional email notifications toggles as a bitmask (e.g. RUN_*_NOTIFICATION).
+  emailNotificationMask Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([updatedAt])
 }
 
 /// System-wide secrets store (sensitive). Values are encrypted at rest in the application layer.
@@ -208,12 +258,41 @@ model SystemSecret {
   @@index([updatedAt])
 }
 
+/// Configurable email templates (subject + HTML + optional text) per locale.
+/// `locale` should match the app's i18n locale conventions (e.g. "en", "zh-cn").
+model EmailTemplate {
+  id String @id
+
+  key    EmailTemplateKey
+  locale String           @default("en")
+
+  /// Template syntax is implementation-defined (recommended: Mustache-style placeholders like `{{var}}`).
+  subjectTemplate String
+  htmlTemplate    String
+
+  /// Optional; if omitted, plaintext can be derived from rendered HTML at send time.
+  textTemplate    String?
+
+  /// Optional: allowed vars + example payload for validation/UI later (JSON string).
+  schemaJson String @default("{}")
+
+  /// Template revision/version for migrations or format changes.
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([key, locale])
+  @@index([key])
+  @@index([updatedAt])
+}
+
 model User {
   id           String   @id
   publicId     String   @unique
   publicNumber Int
 
   email        String   @unique
+  emailVerifiedAt DateTime?
   name         String?
   role         UserRole @default(MEMBER)
   isDisabled   Boolean  @default(false)
@@ -231,7 +310,12 @@ model User {
 
   sessions Session[]
   authChallenges AuthChallenge[]
+  totpRecoveryCodes TotpRecoveryCode[]
   passwordResetTokens PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
+  signupInviteTokens SignupInviteToken[] @relation("InvitedByUser")
+  authMagicLinkTokens AuthMagicLinkToken[]
+  authEmailOtpTokens AuthEmailOtpToken[]
   settings UserSetting[]
   secrets  UserSecret[]
 
@@ -272,6 +356,25 @@ model User {
   agentRunsTriggered AgentRun[] @relation("AgentRunTriggeredBy")
 
   @@index([updatedAt])
+}
+
+/// TOTP recovery codes (one-time backup codes).
+/// Store only salted hashes; plaintext is shown to the user once on generation.
+model TotpRecoveryCode {
+  id String @id
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  salt     String
+  codeHash String
+
+  createdAt     DateTime @default(now())
+  usedAt        DateTime?
+  invalidatedAt DateTime?
+
+  @@index([userId, createdAt])
+  @@index([userId, usedAt, invalidatedAt])
 }
 
 /// Per-user settings store (non-secret). Values are JSON-encoded strings.
@@ -373,6 +476,102 @@ model PasswordResetToken {
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  ip        String?
+  userAgent String?
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+}
+
+/// Email verification token for confirming a user's email address.
+/// Token is stored as SHA-256 (the token itself is sent via email once).
+model EmailVerificationToken {
+  id String @id
+
+  tokenHash String @unique
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  ip        String?
+  userAgent String?
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+}
+
+/// Signup invite token (used for INVITE_ONLY registration).
+/// Token is stored as SHA-256 (the token itself is sent via email once).
+model SignupInviteToken {
+  id String @id
+
+  tokenHash String @unique
+
+  /// Invite is issued for a specific email address.
+  email String
+
+  invitedByUserId String?
+  invitedByUser   User? @relation("InvitedByUser", fields: [invitedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  /// Set when this invite is superseded by a newer invite for the same email.
+  /// This is NOT "used" — the invite was never consumed by signup.
+  invalidatedAt DateTime?
+  /// Set when an admin explicitly revokes an invite.
+  revokedAt DateTime?
+  usedAt    DateTime?
+
+  ip        String?
+  userAgent String?
+
+  @@index([email, expiresAt])
+  @@index([expiresAt])
+}
+
+/// Passwordless sign-in token delivered via email.
+/// Token is stored as SHA-256 (the token itself is sent via email once).
+model AuthMagicLinkToken {
+  id String @id
+
+  tokenHash String @unique
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  ip        String?
+  userAgent String?
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+}
+
+/// Passwordless sign-in one-time code delivered via email.
+/// Store only a salted SHA-256 hash of the code to avoid keeping OTP plaintext.
+model AuthEmailOtpToken {
+  id String @id
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  salt     String
+  codeHash String
+
+  attemptCount Int @default(0)
+  maxAttempts  Int @default(5)
 
   createdAt DateTime @default(now())
   expiresAt DateTime
