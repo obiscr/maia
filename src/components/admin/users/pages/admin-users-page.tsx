@@ -1,9 +1,10 @@
 "use client"
 
 import * as React from "react"
-import { ArrowDownNarrowWide, ArrowUpNarrowWide, Shield, User as UserIcon } from "lucide-react"
+import { ArrowDownNarrowWide, ArrowUpNarrowWide, MailPlus, Shield, User as UserIcon } from "lucide-react"
 
 import { StandardListPage } from "@/components/common/standard-list-page"
+import { HeaderActions } from "@/components/common/header-actions"
 import { NavMenuFilter, NavMenuFilters, type NavMenuFilterOption } from "@/components/common/nav-menu-filters"
 import { CommonListItemSkeleton } from "@/components/common/common-list-item-skeleton"
 import { StandardConfirmDialog } from "@/components/common/standard-confirm-dialog"
@@ -12,6 +13,7 @@ import { useLoadErrorAlert } from "@/hooks/use-load-error-alert"
 import { useStableListRows } from "@/hooks/use-stable-list-rows"
 import { AdminUsersCommonListItem } from "@/components/admin/users/list/admin-users-common-list-item"
 import { AdminUsersListPageSkeleton } from "@/components/admin/users/list/admin-users-list-page-skeleton"
+import { InviteUserSheet } from "@/components/admin/users/sheets/invite-user-sheet"
 import {
   useAdminUsersPage,
   type AdminUserRow,
@@ -24,6 +26,8 @@ export default function AdminUsersPage() {
   const { t, locale } = useI18n()
   const [filtersOpen, setFiltersOpen] = React.useState("")
   const searchInputRef = React.useRef<HTMLInputElement | null>(null)
+
+  const [inviteOpen, setInviteOpen] = React.useState(false)
 
   const {
     total,
@@ -64,6 +68,20 @@ export default function AdminUsersPage() {
   const [resetPending, setResetPending] = React.useState(false)
 
   const filtersActive = !!search.trim() || role !== "ANY" || disabled !== "ANY" || sort !== "CREATED_DESC"
+
+  const headerActions = React.useMemo(
+    () =>
+      [
+        {
+          key: "invite",
+          label: t("admin.users.invite.openAction"),
+          icon: <MailPlus aria-hidden="true" />,
+          onClick: () => setInviteOpen(true),
+          pinned: true,
+        },
+      ] as const,
+    [t],
+  )
 
   function clearFilters() {
     setFiltersOpen("")
@@ -182,6 +200,7 @@ export default function AdminUsersPage() {
       alert={loadErrorAlert}
       modals={
         <>
+          <InviteUserSheet open={inviteOpen} onOpenChange={setInviteOpen} />
           <StandardConfirmDialog
             open={!!kickUserId}
             onOpenChange={(o) => !kickPending && !o && setKickUserId(null)}
@@ -214,6 +233,7 @@ export default function AdminUsersPage() {
           setSearch("")
           setPageIndex(0)
         },
+        desktopRight: <HeaderActions sections={[{ key: "main", items: [...headerActions] }]} iconOnlyBelow="md" />,
       }}
       mobileBar={{
         left: (
@@ -221,6 +241,7 @@ export default function AdminUsersPage() {
             {t("admin.users.showingTotal", { total })}
           </div>
         ),
+        right: <HeaderActions sections={[{ key: "main", items: [...headerActions] }]} iconOnlyBelow="md" />,
       }}
       listHeader={{
         left: (

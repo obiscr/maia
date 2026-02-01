@@ -62,7 +62,31 @@
       "resetConfirmAction": "Create reset link",
       "resetLinkCopied": "Reset link copied",
       "resetLinkCreated": "Reset link created",
-      "resetFailed": "Create reset link failed"
+      "resetFailed": "Create reset link failed",
+      "invite": {
+        "openAction": "Invite user",
+        "title": "Invite user",
+        "description": "Generate an invite link for a specific email address",
+        "emailLabel": "Email",
+        "emailPlaceholder": "user@example.com",
+        "emailInvalid": "Please enter a valid email address",
+        "sendAction": "Invite",
+        "hint": "This creates an invite link (valid for 7 days)",
+        "latestTitle": "Latest invite link",
+        "latestHint": "Expires at: {expiresAt}",
+        "emailNotSent": "Email not sent (code: {code})",
+        "createdCopied": "Invite link copied",
+        "pendingTitle": "Pending invites",
+        "pendingHint": "Showing active invites (not yet joined)",
+        "none": "No active invites",
+        "expiresIn": "Expires {rel}",
+        "copyInviteLinkAction": "Copy invite link",
+        "revokeAction": "Revoke",
+        "revokedToast": "Revoked {count} invite(s)",
+        "loadFailed": "Load invites failed",
+        "createFailed": "Create invite failed",
+        "revokeFailed": "Revoke invite failed"
+      }
     }
   },
   "settings": {
