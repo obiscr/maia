@@ -1613,6 +1613,8 @@
     "INVITE_EMAIL_MISMATCH": "Invite email does not match",
     "DB_NOT_READY": "Database is not initialized yet; go back and click Initialize & continue",
     "SQLITE_MIGRATION_FAILED": "Database migration failed",
+    "MIGRATOR_REQUIRED": "Database migration is handled by the migrator service. Please restart using the updated docker-compose and ensure the migrator completed successfully",
+    "PRISMA_MIGRATE_DEPLOY_FAILED": "Database migration failed (Prisma migrate deploy)",
     "DATA_DIR_REQUIRED": "Please enter a directory path",
     "DATA_DIR_MUST_BE_ABSOLUTE": "Please enter an absolute path",
     "DATA_DIR_NOT_FOUND": "Directory does not exist. Please create it first",

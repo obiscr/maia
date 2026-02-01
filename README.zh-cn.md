@@ -58,6 +58,8 @@ RUNNER_TOKEN=your-token
 docker compose -f docker-compose.release.yml --env-file .env.production up -d
 ```
 
+首次启动时，`migrator` 会先执行数据库迁移（`prisma migrate deploy`），成功后自动退出，然后 `maia` / `runner` 才会启动对外提供服务。
+
 打开 `http://localhost:3690` 进行初始化设置。
 
 ### 本地 Dev 运行
