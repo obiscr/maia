@@ -54,6 +54,9 @@ export function InviteUserSheet(props: { open: boolean; onOpenChange: (open: boo
   const [invites, setInvites] = React.useState<InviteRow[]>([])
   const [loaded, setLoaded] = React.useState(false)
 
+  const hasInvites = invites.length > 0
+  const initialInvitesLoading = loadingInvites && !loaded && !hasInvites
+
   const emailTrim = email.trim()
   const normalizedEmail = emailTrim.toLowerCase()
   const emailValid = emailTrim.length > 0 && emailSchema.safeParse(emailTrim).success
@@ -228,13 +231,17 @@ export function InviteUserSheet(props: { open: boolean; onOpenChange: (open: boo
                   onClick={() => void loadInvitesList()}
                   disabled={!canLoad}
                 >
-                  <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                  {loadingInvites ? (
+                    <Spinner className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                  )}
                   {t("common.refreshAction")}
                 </Button>
               </div>
             </SectionCardHeader>
             <SectionCardBody>
-              {loadingInvites ? (
+              {initialInvitesLoading ? (
                 <div className="divide-y">
                   {Array.from({ length: 4 }).map((_, i) => (
                     <div key={`sk2:${i}`} className="border-b last:border-b-0">
