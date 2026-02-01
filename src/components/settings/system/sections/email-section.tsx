@@ -192,7 +192,9 @@ export function EmailSection(props: {
                 <>
                   <br />
                   <span className="font-medium text-destructive">
-                    {t("settings.system.email.enableBlockedUntilVerified")}
+                    {props.smtpEnabled
+                      ? t("settings.system.email.reverifyAfterChangeHint")
+                      : t("settings.system.email.enableBlockedUntilVerified")}
                   </span>
                 </>
               ) : null}
