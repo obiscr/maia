@@ -182,6 +182,7 @@ export const GET = withApiObservability(async (req: Request) => {
           smtpUsername: true,
           smtpFromEmail: true,
           smtpFromName: true,
+          smtpVerifiedAt: true,
           emailNotificationMask: true,
         },
       })
@@ -272,6 +273,7 @@ export const GET = withApiObservability(async (req: Request) => {
       smtpFromName: emailSettings?.smtpFromName ?? inst?.smtpFromName ?? "",
       smtpPassword: "",
       smtpPasswordConfigured: passConfigured,
+      smtpVerifiedAt: emailSettings?.smtpVerifiedAt ? emailSettings.smtpVerifiedAt.toISOString() : null,
       emailNotificationMask:
         typeof emailSettings?.emailNotificationMask === "number" ? emailSettings.emailNotificationMask : 0,
 
@@ -649,6 +651,7 @@ export const PUT = withApiObservability(async (req: Request) => {
       smtpFromName: updated.emailSettings.smtpFromName ?? "",
       smtpPasswordConfigured: updated.passConfigured,
       smtpPassword: "",
+      smtpVerifiedAt: updated.emailSettings.smtpVerifiedAt ? updated.emailSettings.smtpVerifiedAt.toISOString() : null,
       emailNotificationMask:
         typeof updated.emailSettings.emailNotificationMask === "number"
           ? updated.emailSettings.emailNotificationMask

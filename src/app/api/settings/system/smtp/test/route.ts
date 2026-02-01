@@ -7,7 +7,7 @@ import { prisma } from "@/lib/server/db"
 import { readSmtpConfig } from "@/lib/server/email/email-settings"
 import { requestLocale, requestOrigin, sendTemplatedEmail } from "@/lib/server/email/send-templated-email"
 import { EMAIL_SETTINGS_ROW_ID, INSTALLATION_ROW_ID, ensureInstallationRowTx } from "@/lib/server/installation"
-import { SYSTEM_SECRET_KEYS, upsertSystemSecretTx } from "@/lib/server/settings/system-secrets"
+import { SYSTEM_SECRET_KEYS, hasSystemSecret, upsertSystemSecretTx } from "@/lib/server/settings/system-secrets"
 import { zodIssues } from "@/lib/shared/http/zod"
 
 export const runtime = "nodejs"
@@ -165,5 +165,38 @@ export const POST = withApiObservability(async (req: Request) => {
     })
     .catch(() => {})
 
-  return ok({ ok: true, messageId: sent.messageId })
+  const [emailSettings, passConfigured] = await Promise.all([
+    prisma.emailSettings
+      .findUnique({
+        where: { id: EMAIL_SETTINGS_ROW_ID },
+        select: {
+          smtpEnabled: true,
+          smtpHost: true,
+          smtpPort: true,
+          smtpSecure: true,
+          smtpUsername: true,
+          smtpFromEmail: true,
+          smtpFromName: true,
+          smtpVerifiedAt: true,
+        },
+      })
+      .catch(() => null),
+    hasSystemSecret({ key: SYSTEM_SECRET_KEYS.smtpPassword }).catch(() => false),
+  ])
+
+  return ok({
+    ok: true,
+    messageId: sent.messageId,
+    settings: {
+      smtpEnabled: Boolean(emailSettings?.smtpEnabled ?? false),
+      smtpHost: emailSettings?.smtpHost ?? "",
+      smtpPort: typeof emailSettings?.smtpPort === "number" ? emailSettings.smtpPort : null,
+      smtpSecure: Boolean(emailSettings?.smtpSecure ?? false),
+      smtpUsername: emailSettings?.smtpUsername ?? "",
+      smtpFromEmail: emailSettings?.smtpFromEmail ?? "",
+      smtpFromName: emailSettings?.smtpFromName ?? "",
+      smtpPasswordConfigured: passConfigured,
+      smtpVerifiedAt: emailSettings?.smtpVerifiedAt ? emailSettings.smtpVerifiedAt.toISOString() : null,
+    },
+  })
 })
