@@ -260,10 +260,17 @@ export function EmailTemplatesSection(props: {
               const enabled = notifKey ? hasEmailNotification(props.emailNotificationMask, notifKey) : null
 
               const leftColumn = (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={() => openTemplate(it.key)}
-                  className="min-w-0 text-left"
+                  className={[
+                    "h-auto p-0",
+                    "block w-full min-w-0",
+                    "text-[inherit] font-[inherit]",
+                    "text-left",
+                    "hover:bg-transparent hover:text-[inherit]",
+                  ].join(" ")}
                   disabled={loading}
                 >
                   <ItemContent className="min-w-0">
@@ -272,7 +279,7 @@ export function EmailTemplatesSection(props: {
                     </ItemTitle>
                     <ItemDescription className="mt-0.5 text-xs">{t(it.descriptionKey)}</ItemDescription>
                   </ItemContent>
-                </button>
+                </Button>
               )
 
               const actions = (

@@ -1,6 +1,7 @@
 "use client"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import { useI18nOptional } from "@/components/i18n-provider"
 import { cn } from "@/lib/utils"
 import type { ApiIssue } from "@/lib/shared/http/types"
@@ -222,9 +223,20 @@ export function ApiIssuesAlert(props: {
             return (
               <li key={key}>
                 {props.onIssueClick ? (
-                  <button type="button" className="text-left cursor-pointer" onClick={() => props.onIssueClick?.(iss)}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className={[
+                      "h-auto p-0",
+                      "inline-block",
+                      "text-[inherit] font-[inherit]",
+                      "text-left cursor-pointer",
+                      "hover:bg-transparent hover:text-[inherit]",
+                    ].join(" ")}
+                    onClick={() => props.onIssueClick?.(iss)}
+                  >
                     {content}
-                  </button>
+                  </Button>
                 ) : (
                   content
                 )}

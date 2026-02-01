@@ -150,7 +150,6 @@ export function WorkflowVersionsCommonListItem(props: {
           <DropdownMenuContent align="end" className="min-w-[200px]">
             <DropdownMenuItem
               onSelect={(e) => {
-                e.preventDefault()
                 void props.onRestore(v.version)
               }}
             >
@@ -159,7 +158,6 @@ export function WorkflowVersionsCommonListItem(props: {
             </DropdownMenuItem>
             <DropdownMenuItem
               onSelect={(e) => {
-                e.preventDefault()
                 setExportOpen(true)
               }}
             >
@@ -191,7 +189,6 @@ export function WorkflowVersionsCommonListItem(props: {
           <DropdownMenuContent align="end" className="min-w-[200px]">
             <DropdownMenuItem
               onSelect={(e) => {
-                e.preventDefault()
                 setExportOpen(true)
               }}
             >
