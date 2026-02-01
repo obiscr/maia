@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## v0.2.0
 
+### Breaking
+
+- **Self-host (Docker, prebuilt images)**: the release compose now includes a one-shot `migrator` service that runs `prisma migrate deploy` **before** the app starts. If you previously downloaded `docker-compose.release.yml`, you **must** update it before upgrading, otherwise migrations won't run.
+  - Update: `curl -fsSL -o docker-compose.release.yml https://raw.githubusercontent.com/obiscr/maia/main/docker-compose.release.yml`
+  - Then upgrade as usual: `docker compose -f docker-compose.release.yml --env-file .env.production pull` and `docker compose -f docker-compose.release.yml --env-file .env.production up -d --remove-orphans`
+
 ### Added
 
 - **Email system**: SMTP configuration + test flow, email template management, and run notification emails.
@@ -29,6 +35,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Migration
 
+- **Docker (self-host, prebuilt images)**: see **Breaking** above (refresh `docker-compose.release.yml` before upgrading).
 - **Database**: includes Prisma schema changes and migrations for email templates, SMTP settings, and auth security (TOTP/recovery codes). Run migrations during upgrade.
 - **Config**: supports `MAIA_PUBLIC_ORIGIN` for generating externally reachable absolute URLs.
 
