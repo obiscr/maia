@@ -76,6 +76,15 @@ This runs:
 - `src/lib/shared/i18n/*`: i18n dictionaries + helpers (shared)
 - `docs/*`: architecture, module boundaries, terminology
 
+## Routing & auth conventions (important)
+
+- **Authenticated UI pages** must live under `src/app/(app)/**`
+  - The `(app)` route group is protected by a server-side gate in `src/app/(app)/layout.tsx` (calls `requireAuthedUser()`).
+  - If you intentionally add an authenticated page outside `src/app/(app)/**` (rare), the page/layout must call `requireAuthedUser()` explicitly.
+- **Public pages** (setup + auth flows) live outside `(app)` (e.g. `src/app/setup/**`, `src/app/signin/**`, `src/app/auth/**`).
+- **Do not treat `src/middleware.ts` as a security boundary**
+  - Middleware exists for UX (redirect + returnTo cookie). All real auth decisions must happen server-side (DB-backed session validation).
+
 ## Module boundaries (important)
 
 Some modules are server-only and are protected by `import "server-only";`.
