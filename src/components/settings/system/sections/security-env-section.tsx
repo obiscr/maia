@@ -14,6 +14,7 @@ export function SecurityEnvSection() {
     // Runtime / storage / runner
     "RUNNER_TOKEN",
     "SETTINGS_ENCRYPTION_KEY",
+    "MAIA_PUBLIC_ORIGIN",
     "MAIA_DATA_MOUNT_TYPE",
     "MAIA_HOST_DATA_DIR",
     "MAIA_DATA_DIR",
@@ -79,6 +80,23 @@ export function SecurityEnvSection() {
               description: t("settings.system.runtime.settingsEncryptionKey"),
               source: vars.SETTINGS_ENCRYPTION_KEY?.source,
               isSet: vars.SETTINGS_ENCRYPTION_KEY?.isSet,
+            },
+          ]}
+          getKey={(it) => it.name}
+          renderItem={(it) => <EnvVarListItem {...it} />}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <div className="text-sm font-medium">{t("settings.system.runtime.publicAccessTitle")}</div>
+        <ItemsList<EnvVarListItemModel>
+          items={[
+            {
+              name: "MAIA_PUBLIC_ORIGIN",
+              defaultValue: "",
+              description: t("settings.system.runtime.maiaPublicOrigin"),
+              source: vars.MAIA_PUBLIC_ORIGIN?.source,
+              effectiveValue: vars.MAIA_PUBLIC_ORIGIN?.effectiveValue,
             },
           ]}
           getKey={(it) => it.name}
