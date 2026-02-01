@@ -76,6 +76,32 @@ export const POST = withApiObservability(async (req: Request) => {
   const salt = newSalt()
   const codeHash = hashOtpCode({ code, salt })
 
+  // Write OTP token first, then send email. This avoids "email delivered but OTP missing in DB"
+  // which would make the code impossible to verify.
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
+  const created = await prisma.$transaction(async (tx) => {
+    await tx.authEmailOtpToken.updateMany({
+      where: { userId: user.id, usedAt: null, expiresAt: { gt: now } },
+      data: { usedAt: now },
+    })
+    return await tx.authEmailOtpToken.create({
+      data: {
+        id: crypto.randomUUID(),
+        userId: user.id,
+        salt,
+        codeHash,
+        attemptCount: 0,
+        maxAttempts: 5,
+        createdAt: now,
+        expiresAt,
+        usedAt: null,
+        ip: clientIp === "unknown" ? null : clientIp,
+        userAgent: req.headers.get("user-agent") ?? null,
+      },
+      select: { id: true },
+    })
+  })
+
   const locale = requestLocale(req)
   const sent = await sendTemplatedEmailBestEffort({
     smtp,
@@ -85,30 +111,10 @@ export const POST = withApiObservability(async (req: Request) => {
     vars: { appName: "Maia", code, expiresIn: "10 minutes" },
   })
 
-  if (sent.emailSent) {
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
-    await prisma.$transaction(async (tx) => {
-      await tx.authEmailOtpToken.updateMany({
-        where: { userId: user.id, usedAt: null, expiresAt: { gt: now } },
-        data: { usedAt: now },
-      })
-      await tx.authEmailOtpToken.create({
-        data: {
-          id: crypto.randomUUID(),
-          userId: user.id,
-          salt,
-          codeHash,
-          attemptCount: 0,
-          maxAttempts: 5,
-          createdAt: now,
-          expiresAt,
-          usedAt: null,
-          ip: clientIp === "unknown" ? null : clientIp,
-          userAgent: req.headers.get("user-agent") ?? null,
-        },
-        select: { id: true },
-      })
-    })
+  if (!sent.emailSent) {
+    // Best-effort cleanup: invalidate/delete the issued OTP so users won't be stuck with a code
+    // that was never delivered.
+    void prisma.authEmailOtpToken.delete({ where: { id: created.id } }).catch(() => {})
   }
 
   return ok({ ok: true })
