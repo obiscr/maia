@@ -1,5 +1,5 @@
-import { ensureCurrentSqliteSchemaReady } from "@/lib/server/db/ensure-schema"
 import { isCurrentDatabaseSchemaReadySync } from "@/lib/server/db/schema-ready"
+import { prismaMigrateDeploy } from "@/lib/server/db/prisma-migrate"
 import { fail, ok } from "@/lib/server/http/response"
 import { withApiObservability } from "@/lib/server/observability"
 
@@ -15,9 +15,11 @@ export const POST = withApiObservability(async () => {
   const alreadyReady = isCurrentDatabaseSchemaReadySync()
   if (alreadyReady) return ok({ ok: true, alreadyReady: true })
 
-  const migratedOk = await ensureCurrentSqliteSchemaReady()
-    .then(() => true)
-    .catch(() => false)
-  if (!migratedOk) return fail({ status: 500, code: "SQLITE_MIGRATION_FAILED" })
-  return ok({ ok: true, alreadyReady: false })
+  const migrated = await prismaMigrateDeploy()
+  if (!migrated.ok) {
+    const status = migrated.code === "MIGRATOR_REQUIRED" ? 409 : 500
+    return fail({ status, code: migrated.code, meta: migrated.meta })
+  }
+
+  return ok({ ok: true, alreadyReady: false, migrated: true })
 })

@@ -28,6 +28,28 @@ RUN pnpm prisma:generate
 RUN pnpm run build
 
 # -----------------------------------------------------------------------------
+# migrator: run prisma migrate deploy (production)
+# -----------------------------------------------------------------------------
+FROM base AS migrator
+WORKDIR /app
+
+# Prisma CLI is a devDependency; reuse deps stage node_modules.
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json pnpm-lock.yaml ./
+
+# Prisma schema + migrations
+COPY prisma ./prisma
+COPY prisma.config.ts ./prisma.config.ts
+
+# Prisma config depends on this core module (avoid copying full src tree).
+COPY src/lib/maia/instance-location-core.ts ./src/lib/maia/instance-location-core.ts
+
+# Migrator entrypoint (includes best-effort backward compatibility preflight)
+COPY scripts/migrate-deploy.mjs ./scripts/migrate-deploy.mjs
+
+CMD ["node", "scripts/migrate-deploy.mjs"]
+
+# -----------------------------------------------------------------------------
 # runtime: minimal image running the standalone server
 # -----------------------------------------------------------------------------
 FROM base AS runtime
