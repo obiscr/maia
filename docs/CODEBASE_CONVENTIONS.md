@@ -12,6 +12,10 @@ This document is for **contributors**. It defines the minimal set of rules for:
 - **Routes & API**: `src/app/**` (Next.js App Router)
   - Keep `page.tsx/layout.tsx/loading.tsx` thin: param parsing + composing page components
   - API routes live under `src/app/api/**`
+- **Authenticated app UI**: `src/app/(app)/**`
+  - The `(app)` route group is the authenticated surface.
+  - Server-side auth is enforced in `src/app/(app)/layout.tsx` via `requireAuthedUser()` (DB-backed session validation).
+  - Middleware is not a security boundary; it is UX only.
 - **UI (domain-oriented)**: `src/components/<domain>/**` (e.g. `runs`, `jobs`, `workflows`, `schedules`, `batches`, `operations`, `settings`)
 - **UI (cross-domain, low business semantics)**: `src/components/common/**`
 - **UI primitives (no business semantics)**: `src/components/ui/**`
