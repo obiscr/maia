@@ -49,9 +49,6 @@ export const POST = withApiObservability(async (req: Request) => {
     .catch(() => false)
   if (!installed) return fail({ status: 409, code: "NOT_INSTALLED" })
 
-  const mode = await getRegistrationMode().catch(() => "DISABLED" as const)
-  if (mode === "DISABLED") return fail({ status: 403, code: "REGISTRATION_DISABLED", meta: { mode } })
-
   let body: z.infer<typeof schema>
   try {
     body = schema.parse(await req.json())
@@ -60,8 +57,18 @@ export const POST = withApiObservability(async (req: Request) => {
     throw e
   }
 
+  const mode = await getRegistrationMode().catch(() => "DISABLED" as const)
+
   const email = body.email.toLowerCase()
   const inviteToken = String(body.inviteToken ?? "").trim()
+
+  // Registration gating:
+  // - OPEN: allow normal signup
+  // - INVITE_ONLY: require invite
+  // - DISABLED: block public signup, but allow invite-based signup as an admin-controlled path
+  if (mode === "DISABLED" && !inviteToken) return fail({ status: 403, code: "REGISTRATION_DISABLED", meta: { mode } })
+  const effectiveMode = mode === "DISABLED" ? ("INVITE_ONLY" as const) : mode
+
   // Product contract: return stable error codes (UI localizes).
   if (String(body.password ?? "").length < 8) return fail({ status: 422, code: "PASSWORD_TOO_SHORT", meta: { min: 8 } })
   const passwordHash = hashPassword(body.password)
@@ -77,7 +84,8 @@ export const POST = withApiObservability(async (req: Request) => {
           })
         : null
 
-    if (mode === "INVITE_ONLY" && !inviteToken) return { kind: "error" as const, status: 403, code: "INVITE_REQUIRED" }
+    if (effectiveMode === "INVITE_ONLY" && !inviteToken)
+      return { kind: "error" as const, status: 403, code: "INVITE_REQUIRED" }
     if (inviteToken && !invite) return { kind: "error" as const, status: 403, code: "INVITE_INVALID" }
     if (invite && invite.invalidatedAt) return { kind: "error" as const, status: 403, code: "INVITE_INVALIDATED" }
     if (invite && invite.revokedAt) return { kind: "error" as const, status: 403, code: "INVITE_REVOKED" }
