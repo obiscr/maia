@@ -5,19 +5,11 @@ import { fail, ok } from "@/lib/server/http/response"
 import { withApiObservability } from "@/lib/server/observability"
 import { isAdmin, requireRequestAuth } from "@/lib/server/authz"
 import { getClientIp } from "@/lib/server/auth/rate-limit"
+import { readSmtpConfig } from "@/lib/server/email/email-settings"
+import { hashOpaqueToken } from "@/lib/server/auth/token"
+import { requestLocale, requestOrigin, sendTemplatedEmailBestEffort } from "@/lib/server/email/send-templated-email"
 
 export const runtime = "nodejs"
-
-function sha256Hex(input: string) {
-  return crypto.createHash("sha256").update(input).digest("hex")
-}
-
-function requestOrigin(req: Request) {
-  const proto = req.headers.get("x-forwarded-proto") ?? "http"
-  const host = req.headers.get("host")
-  if (!host) return null
-  return `${proto}://${host}`
-}
 
 export const POST = withApiObservability(async (req: Request, ctx: { params: Promise<{ userId: string }> }) => {
   const auth = requireRequestAuth()
@@ -29,12 +21,12 @@ export const POST = withApiObservability(async (req: Request, ctx: { params: Pro
 
   const user = await prisma.user.findUnique({
     where: { publicId: userPublicId },
-    select: { id: true, isDisabled: true },
+    select: { id: true, email: true, isDisabled: true },
   })
   if (!user || user.isDisabled) return fail({ status: 404, code: "USER_NOT_FOUND" })
 
   const token = crypto.randomBytes(32).toString("base64url")
-  const tokenHash = sha256Hex(token)
+  const tokenHash = hashOpaqueToken(token)
   const now = new Date()
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000)
   const clientIp = getClientIp(req)
@@ -57,5 +49,27 @@ export const POST = withApiObservability(async (req: Request, ctx: { params: Pro
   const resetPath = `/reset-password?token=${encodeURIComponent(token)}`
   const resetUrl = origin ? `${origin}${resetPath}` : resetPath
 
-  return ok({ ok: true, resetUrl, expiresAt: expiresAt.toISOString() })
+  // Best-effort: try to email the user the reset link if SMTP is configured.
+  // Keep response stable even if email is not available.
+  let emailSent = false
+  let emailErrorCode: string | null = null
+  {
+    const smtp = await readSmtpConfig({ touchPasswordLastUsed: true })
+    if (smtp.ok) {
+      const locale = requestLocale(req)
+      const sent = await sendTemplatedEmailBestEffort({
+        smtp,
+        to: user.email,
+        key: "ADMIN_PASSWORD_RESET_LINK",
+        locale,
+        vars: { appName: "Maia", email: user.email, resetUrl, expiresIn: "1 hour" },
+      })
+      emailSent = sent.emailSent
+      emailErrorCode = sent.emailSent ? null : sent.emailErrorCode
+    } else {
+      emailErrorCode = smtp.code
+    }
+  }
+
+  return ok({ ok: true, resetUrl, expiresAt: expiresAt.toISOString(), emailSent, emailErrorCode })
 })

@@ -17,6 +17,7 @@ export type AdminUserRow = {
   publicId: string
   publicNumber: number
   email: string
+  emailVerifiedAt: string | null
   name: string | null
   role: string
   totpEnabled: boolean

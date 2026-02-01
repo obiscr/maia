@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils"
 export type AdminUsersListItemModel = {
   id: string
   email: string
+  emailVerifiedAt: string | null
   name: string | null
   role: string
   isDisabled: boolean
@@ -47,6 +48,7 @@ export function AdminUsersCommonListItem(props: {
   const { t } = useI18n()
   const u = props.model
   const isAdmin = String(u.role).toUpperCase() === "ADMIN"
+  const emailVerified = Boolean(u.emailVerifiedAt)
 
   const title = (u.name ?? "").trim() || u.email
   const createdRel = formatRelativeTimeFromNow(u.createdAt, { locale: props.locale })
@@ -69,6 +71,19 @@ export function AdminUsersCommonListItem(props: {
       Icon: LogOut,
       text: <span className="font-mono text-[11px]">{Math.max(0, Number(u.activeSessions) || 0)}</span>,
     })
+    items.push({
+      key: "emailVerified",
+      title: "Email verification",
+      Icon: Mail,
+      iconClassName: emailVerified ? "text-primary" : "text-muted-foreground",
+      text: (
+        <span className={cn("font-mono text-[11px]", emailVerified ? "text-primary" : "text-muted-foreground")}>
+          {emailVerified
+            ? t("admin.users.emailVerificationValues.verified")
+            : t("admin.users.emailVerificationValues.unverified")}
+        </span>
+      ),
+    })
     if (u.totpEnabled) {
       items.push({
         key: "totp",
@@ -87,7 +102,7 @@ export function AdminUsersCommonListItem(props: {
       })
     }
     return items
-  }, [BadgeIcon, isAdmin, roleLabel, u.activeSessions, u.isDisabled, u.totpEnabled])
+  }, [BadgeIcon, emailVerified, isAdmin, roleLabel, t, u.activeSessions, u.isDisabled, u.totpEnabled])
 
   const leftColumn = (
     <ItemContent className="min-w-0">
