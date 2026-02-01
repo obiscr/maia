@@ -24,6 +24,7 @@ export function SettingsSectionFooter(props: {
   saveLabel?: ReactNode
   saving?: boolean
   savingLabel?: ReactNode
+  rightExtra?: ReactNode
 }) {
   const showReset = typeof props.onReset === "function"
   const showSave = props.saveType === "submit" || typeof props.onSave === "function"
@@ -48,6 +49,7 @@ export function SettingsSectionFooter(props: {
             props.rightClassName,
           )}
         >
+          {props.rightExtra}
           {showSave ? (
             <Button
               size="sm"

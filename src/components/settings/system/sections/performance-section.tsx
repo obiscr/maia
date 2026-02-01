@@ -112,7 +112,7 @@ export function PerformanceSection(props: {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {props.locked ? (
         <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
           {t("settings.system.advanced.lockedHint")}

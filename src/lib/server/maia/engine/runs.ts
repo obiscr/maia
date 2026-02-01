@@ -18,6 +18,7 @@ import { bestEffortRunStepFailure } from "@/lib/server/maia/engine/run-step-fail
 import type { DownloadingInput, RunningProc } from "@/lib/server/maia/engine/types"
 import { emitLogLineWithMeta, emitRunStatus, emitStepStatus, emitSystem } from "@/lib/server/maia/logging"
 import { emitJobRunState } from "@/lib/server/maia/realtime"
+import { maybeSendRunTerminalNotification } from "@/lib/server/email/run-notifications"
 
 async function cleanupAfterTerminal(params: {
   runId: string
@@ -163,6 +164,8 @@ export async function finishRun(params: {
   let effectiveFailureMessage: string | null = run.failureMessage ?? null
   let effectiveFailureMetaJson: string | null = run.failureMetaJson ?? null
 
+  let didApplyTerminalUpdate = false
+
   if (!alreadyTerminal) {
     // Allow upstream components (e.g. input acquisition) to set a specific failureCode/message.
     // If already set, do NOT overwrite with generic STEP_FAILED.
@@ -198,8 +201,9 @@ export async function finishRun(params: {
     effectiveFailureMessage = run.failureMessage ?? failure?.failureMessage ?? null
     effectiveFailureMetaJson = run.failureMetaJson ?? failure?.failureMetaJson ?? null
 
-    await prisma.run.update({
-      where: { id: runId },
+    const applied = await prisma.run.updateMany({
+      // Make the terminal transition idempotent under concurrent finishRun calls.
+      where: { id: runId, status: run.status },
       data: {
         status: finalStatus,
         finishedAt: now,
@@ -209,7 +213,16 @@ export async function finishRun(params: {
         failureAt: run.failureAt ?? (failure ? now : null),
       },
     })
-    await emitRunStatus(runId, finalStatus)
+    didApplyTerminalUpdate = applied.count > 0
+    if (didApplyTerminalUpdate) {
+      await emitRunStatus(runId, finalStatus)
+    }
+  }
+
+  // Send user notifications for terminal runs (best-effort; never break engine).
+  // Only trigger on the first successful terminal transition to avoid duplicate emails.
+  if (didApplyTerminalUpdate && terminalRunStatuses.has(finalStatus)) {
+    void maybeSendRunTerminalNotification({ runId, status: finalStatus }).catch(() => {})
   }
 
   // If this run was created from a JobRun, mirror terminal state back to the JobRun.

@@ -37,6 +37,10 @@
         "admin": "管理员",
         "member": "成员"
       },
+      "emailVerificationValues": {
+        "verified": "已验证",
+        "unverified": "待验证"
+      },
       "actions": {
         "copyUserIdAction": "复制用户 ID",
         "kickSessionsAction": "踢下线",
@@ -64,6 +68,41 @@
   "settings": {
     "overview": "概览",
     "description": "偏好与应用行为配置",
+    "security": {
+      "title": "安全",
+      "description": "账号安全与两步验证",
+      "notice": "提示：开启两步验证后，请务必下载并妥善保存恢复代码",
+      "totp": {
+        "title": "两步验证（TOTP）",
+        "hint": "可使用 Google 身份验证器、Microsoft Authenticator 等应用",
+        "enabledBadge": "已开启",
+        "disabledBadge": "未开启",
+        "enableAction": "开启两步验证",
+        "setupReady": "已生成绑定信息",
+        "setupTitle": "绑定设置",
+        "qrAlt": "验证器二维码",
+        "qrUnavailable": "无法生成二维码预览",
+        "manualKeyLabel": "手动密钥",
+        "manualKeyHint": "如果无法扫码，可在验证器里手动输入此密钥",
+        "confirmCodeLabel": "验证码",
+        "confirmCodeHint": "输入验证器生成的 6 位验证码以确认开启",
+        "confirmEnableAction": "确认并开启",
+        "enabledToast": "两步验证已开启",
+        "disableAction": "关闭",
+        "disablePasswordLabel": "密码",
+        "disablePasswordHint": "关闭两步验证需要输入密码确认",
+        "disabledToast": "两步验证已关闭",
+        "recoveryCodesTitle": "恢复代码",
+        "recoveryCodesRemaining": "剩余恢复代码：{count}",
+        "regenCodeLabel": "验证器代码",
+        "regenCodeHint": "输入有效验证码后可重新生成恢复代码",
+        "regenerateAction": "重新生成恢复代码",
+        "recoveryCodesRegeneratedToast": "恢复代码已重新生成",
+        "recoveryCodesNewTitle": "新的恢复代码",
+        "downloadRecoveryCodesAction": "下载",
+        "recoveryCodesOneTimeHint": "恢复代码只会显示一次，请保存到安全的位置"
+      }
+    },
     "timezone": {
       "title": "时区",
       "description": "用于在全站显示时间"
@@ -142,11 +181,29 @@
         "recoveryTitle": "紧急恢复",
         "setupRepairToken": "生产环境设置该 token 以启用 /setup/repair 的管理员恢复能力",
         "rateLimitTitle": "限流",
+        "rateLimitMaxBuckets": "内存桶上限（限制 key 数量/基数）",
+        "rateLimitPruneEveryMs": "每 N 毫秒清理一次桶",
+        "authRateLimitSigninWindowMs": "登录限流窗口大小（毫秒）",
+        "authRateLimitSigninPerIp": "每个 IP 在窗口内最多登录请求次数",
+        "authRateLimitSigninPerIpEmail": "每个（IP,邮箱）在窗口内最多登录请求次数",
         "authRateLimitSignupWindowMs": "注册限流窗口大小（毫秒）",
         "authRateLimitSignupPerIp": "每个 IP 在窗口内最多注册次数",
         "authRateLimitPasswordForgotWindowMs": "找回密码限流窗口大小（毫秒）",
         "authRateLimitPasswordForgotPerIp": "每个 IP 在窗口内最多找回密码请求次数",
         "authRateLimitPasswordForgotPerIpEmail": "每个（IP,邮箱）在窗口内最多找回密码请求次数",
+        "authRateLimitMagicLinkRequestWindowMs": "邮箱登录链接请求窗口大小（毫秒）",
+        "authRateLimitMagicLinkRequestPerIp": "每个 IP 在窗口内最多邮箱登录链接请求次数",
+        "authRateLimitMagicLinkRequestPerIpEmail": "每个（IP,邮箱）在窗口内最多邮箱登录链接请求次数",
+        "authRateLimitEmailOtpRequestWindowMs": "邮箱验证码（OTP）请求窗口大小（毫秒）",
+        "authRateLimitEmailOtpRequestPerIp": "每个 IP 在窗口内最多邮箱验证码请求次数",
+        "authRateLimitEmailOtpRequestPerIpEmail": "每个（IP,邮箱）在窗口内最多邮箱验证码请求次数",
+        "authRateLimitEmailOtpVerifyWindowMs": "邮箱验证码（OTP）校验窗口大小（毫秒）",
+        "authRateLimitEmailOtpVerifyPerIp": "每个 IP 在窗口内最多邮箱验证码校验次数",
+        "authRateLimitEmailOtpVerifyPerIpEmail": "每个（IP,邮箱）在窗口内最多邮箱验证码校验次数",
+        "authRateLimitChallengeWindowMs": "挑战（challenge）窗口大小（毫秒）",
+        "authRateLimitChallengePerIp": "每个 IP 在窗口内最多 challenge 次数",
+        "authRateLimitSetupWindowMs": "初始化（setup）窗口大小（毫秒）",
+        "authRateLimitSetupPerIp": "每个 IP 在窗口内最多 setup 次数",
         "passwordHashTitle": "密码哈希",
         "authPasswordScryptNLog2": "Scrypt 参数 N 的 log2(N)；更高更安全但更慢",
         "authPasswordScryptR": "Scrypt 参数 r",
@@ -189,6 +246,7 @@
         "enableAction": "启用邮件发送",
         "enableActionHint": "配置 SMTP 后即可启用邮件发送，用于通知与密码重置等功能",
         "enableActionToggleHint": "开启后将启用 SMTP 邮件发送",
+        "enableBlockedHint": "请先完成 SMTP 配置后再启用",
         "host": "主机",
         "port": "端口",
         "secure": "安全连接（TLS）",
@@ -204,6 +262,74 @@
         "testMissingTo": "请填写收件人邮箱",
         "testSent": "测试邮件已发送",
         "testFailed": "发送测试邮件失败"
+      },
+      "emailTemplates": {
+        "sectionTitle": "邮件模板",
+        "sectionHint": "可自定义每种邮件的主题与 HTML 内容。变量使用 {{var}} 占位符。",
+        "groups": {
+          "authentication": "认证",
+          "notifications": "运行通知",
+          "system": "系统"
+        },
+        "locale": "语言",
+        "subjectTemplate": "主题模板",
+        "body": "正文",
+        "html": "HTML",
+        "source": "源码",
+        "preview": "预览",
+        "formatAction": "美化格式",
+        "editorSheetTitle": "编辑邮件模板",
+        "editorEmptyHint": "请选择一个模板进行编辑。",
+        "items": {
+          "SIGNUP_CONFIRMATION": {
+            "title": "确认注册",
+            "description": "注册后要求用户确认邮箱"
+          },
+          "SIGNUP_INVITE": {
+            "title": "邀请注册",
+            "description": "邀请尚未注册的用户创建账号"
+          },
+          "AUTH_MAGIC_LINK": {
+            "title": "邮箱登录链接",
+            "description": "通过邮箱一次性链接登录"
+          },
+          "AUTH_EMAIL_OTP": {
+            "title": "邮箱验证码（OTP）",
+            "description": "发送一次性验证码用于邮箱认证"
+          },
+          "TOTP_ENABLED_NOTIFICATION": {
+            "title": "启用两步验证（TOTP）",
+            "description": "当账号启用两步验证（TOTP）时通知用户"
+          },
+          "TOTP_DISABLED_NOTIFICATION": {
+            "title": "停用两步验证（TOTP）",
+            "description": "当账号停用两步验证（TOTP）时通知用户"
+          },
+          "PASSWORD_RESET": {
+            "title": "重置密码",
+            "description": "用户忘记密码时用于重置"
+          },
+          "ADMIN_PASSWORD_RESET_LINK": {
+            "title": "管理员重置链接",
+            "description": "管理员生成的密码重置链接邮件内容"
+          },
+          "RUN_FAILED_NOTIFICATION": {
+            "title": "运行失败",
+            "description": "工作流运行失败时通知用户"
+          },
+          "RUN_SUCCEEDED_NOTIFICATION": {
+            "title": "运行成功",
+            "description": "工作流运行成功时通知用户"
+          },
+          "RUN_CANCELED_NOTIFICATION": {
+            "title": "运行取消",
+            "description": "工作流运行被取消时通知用户"
+          },
+          "SYSTEM_SMTP_TEST": {
+            "title": "SMTP 测试",
+            "description": "发送测试邮件以验证 SMTP 配置"
+          }
+        }
       }
     }
   },
@@ -250,12 +376,15 @@
   },
   "auth": {
     "common": {
-      "notImplemented": "暂未实现"
+      "notImplemented": "暂未实现",
+      "or": "或者"
     },
     "signin": {
       "title": "登录",
-      "subtitle": "登录到你的账号",
+      "subtitle": "登录到你的账户",
       "forgotPasswordAction": "忘记密码？",
+      "emailOtpAction": "邮箱验证码登录",
+      "magicLinkAction": "邮件链接登录",
       "submitAction": "登录",
       "noAccount": "还没有账号？",
       "signupLinkAction": "注册",
@@ -264,8 +393,8 @@
       }
     },
     "signup": {
-      "title": "创建账号",
-      "subtitle": "创建一个新账号",
+      "title": "注册",
+      "subtitle": "创建你的账户",
       "toasts": {
         "registrationDisabled": "当前未开放注册；请联系管理员获取邀请",
         "inviteOnly": "当前为邀请制注册；请联系管理员获取邀请"
@@ -278,20 +407,61 @@
       "confirmPasswordHint": "请再次输入密码",
       "submitAction": "创建账号",
       "alreadyHave": "已有账号？",
-      "signinLinkAction": "登录"
+      "signinLinkAction": "登录",
+      "checkEmail": {
+        "title": "验证邮箱",
+        "subtitle": "请前往邮箱点击链接完成验证",
+        "sent": "验证邮件已发送，请点击邮件中的链接完成注册。",
+        "sentTo": "验证邮件已发送至 {email}，请点击邮件中的链接完成注册。",
+        "hint": "如未收到请检查垃圾箱；链接 1 小时后过期。",
+        "continueAction": "我已验证，继续",
+        "backToSigninAction": "返回登录"
+      }
     },
     "forgot": {
-      "title": "找回密码",
-      "subtitle": "获取密码重置链接",
+      "title": "忘记密码",
+      "subtitle": "发送密码重置链接到邮箱",
       "emailHint": "如果邮箱存在，你将收到一封包含重置链接的邮件",
       "submitAction": "发送重置链接",
-      "sentToast": "如果邮箱存在，重置链接已发送（请检查收件箱/垃圾箱）",
-      "sentHint": "如果邮箱存在，你会收到一封包含重置链接的邮件（请检查收件箱/垃圾箱）",
+      "sentToast": "如果邮箱存在，重置链接已发送，请检查收件箱",
+      "sentHint": "如果邮箱存在，你会收到一封包含重置链接的邮件",
       "backToSigninAction": "返回登录",
       "errors": {
         "smtpUnavailable": "无法自助找回密码；请联系管理员重置密码",
         "rateLimited": "请求过于频繁，请稍后再试",
         "requestFailed": "发送失败，请稍后重试"
+      }
+    },
+    "magicLink": {
+      "title": "邮件链接登录",
+      "subtitle": "通过邮件获取一次性登录链接",
+      "emailHint": "如果邮箱存在，你将收到一封包含登录链接的邮件",
+      "submitAction": "发送登录链接",
+      "sentToast": "如果邮箱存在，登录链接已发送，请检查收件箱",
+      "sentHint": "如果邮箱存在，你将收到一封包含登录链接的邮件",
+      "backToSigninAction": "返回登录",
+      "errors": {
+        "rateLimited": "请求过于频繁，请稍后再试",
+        "requestFailed": "发送失败，请稍后重试"
+      }
+    },
+    "emailOtp": {
+      "title": "邮箱验证码登录",
+      "subtitle": "使用邮箱收到的 6 位验证码登录",
+      "emailHint": "如果邮箱存在，你将收到一封包含验证码的邮件",
+      "codeLabel": "验证码",
+      "codeHint": "请输入 6 位验证码以继续",
+      "requestAction": "发送验证码",
+      "verifyAction": "验证并登录",
+      "resendAction": "重新发送验证码",
+      "sentToast": "如果邮箱存在，验证码已发送，请检查收件箱",
+      "backToSigninAction": "返回登录",
+      "errors": {
+        "rateLimited": "请求过于频繁，请稍后再试",
+        "requestFailed": "发送失败，请稍后重试",
+        "invalidCode": "验证码错误",
+        "tooManyAttempts": "尝试次数过多，请重新获取验证码",
+        "verifyFailed": "验证失败，请稍后重试"
       }
     },
     "reset": {
@@ -308,28 +478,43 @@
       }
     },
     "otp": {
-      "title": "验证码验证",
-      "codeLabel": "验证码",
-      "codeHint": "请输入 6 位验证码以继续",
+      "title": "两步验证",
+      "subtitle": "输入身份验证器应用中的 6 位代码",
+      "codeLabel": "验证器代码",
+      "codeHint": "请输入身份验证器应用中的 6 位代码。",
+      "recoveryCodeLabel": "恢复代码",
+      "recoveryCodePlaceholder": "例如 ABCDE-FGHIJ",
+      "recoveryCodeHint": "请输入你在开启两步验证时保存的恢复代码。",
       "submitAction": "验证",
-      "noCode": "没收到验证码？",
-      "resendAction": "重新发送",
+      "noCode": "无法使用身份验证器？",
+      "recoveryCodeAction": "使用恢复代码",
+      "noRecovery": "没有恢复代码？",
+      "authenticatorCodeAction": "使用验证器代码",
       "errors": {
         "invalidCode": "验证码错误",
         "sessionExpired": "会话已过期，请重新登录"
       }
     },
     "repair": {
-      "title": "恢复",
-      "subtitle": "恢复管理员权限",
+      "title": "恢复管理员权限",
+      "subtitle": "使用修复令牌恢复管理员访问权限",
       "token": {
         "label": "修复令牌",
         "placeholder": "开发环境可选；生产环境必填",
         "hint": "生产环境请设置 `SETUP_REPAIR_TOKEN`，并在此处输入以启用恢复"
       }
     },
+    "confirmEmail": {
+      "title": "验证邮箱",
+      "loading": "正在验证邮箱…"
+    },
+    "magicConsume": {
+      "title": "邮件链接登录",
+      "loading": "正在使用登录链接登录…"
+    },
     "redirect": {
-      "loading": "正在登录"
+      "title": "正在登录",
+      "loading": "正在检查登录状态…"
     }
   },
   "setupWizard": {
@@ -542,6 +727,7 @@
     "note": "备注",
     "configured": "已配置",
     "notConfigured": "未配置",
+    "clearSecretAction": "清除",
     "executionPolicies": "执行策略",
     "duration": "耗时",
     "inputParams": "输入参数",
@@ -1357,6 +1543,9 @@
       "parseAt": "JSON 格式不正确（第 {line} 行，第 {column} 列）"
     },
     "HTTP_ERROR": "请求失败",
+    "INVALID_LINK": "链接无效",
+    "LINK_EXPIRED": "链接已过期",
+    "UNKNOWN_ERROR": "发生未知错误",
     "INVALID_QUERY": "请求参数不正确",
     "INVALID_BODY": "请求体不正确",
     "INVALID_CREDENTIALS": "邮箱或密码错误",
@@ -1367,7 +1556,24 @@
     "FORBIDDEN": "无权限",
     "NOT_INSTALLED": "尚未安装",
     "ALREADY_INITIALIZED": "已初始化，无法修改",
-    "DB_NOT_READY": "数据库尚未初始化，请返回上一步点击“初始化并继续”",
+    "SYSTEM_SMTP_INVALID_CONFIG": "SMTP 配置不完整或不正确",
+    "SYSTEM_SMTP_NOT_VERIFIED": "请先发送测试邮件并成功后再启用 SMTP",
+    "SYSTEM_SMTP_DISABLED": "SMTP 未启用",
+    "SYSTEM_SMTP_INCOMPLETE": "SMTP 配置不完整",
+    "SYSTEM_SMTP_PASSWORD_MISSING": "SMTP 密码未配置",
+    "SYSTEM_SMTP_NOT_INSTALLED": "邮件设置尚未初始化",
+    "TOKEN_INVALID": "令牌无效",
+    "TOKEN_USED": "令牌已使用",
+    "TOKEN_EXPIRED": "令牌已过期",
+    "TOKEN_RACE": "令牌已被使用",
+    "INVITE_REQUIRED": "需要邀请链接",
+    "INVITE_INVALID": "邀请链接无效",
+    "INVITE_INVALIDATED": "邀请链接已被新邀请替换",
+    "INVITE_REVOKED": "邀请链接已被撤销",
+    "INVITE_USED": "邀请链接已被使用",
+    "INVITE_EXPIRED": "邀请链接已过期",
+    "INVITE_EMAIL_MISMATCH": "邀请邮箱不匹配",
+    "DB_NOT_READY": "数据库尚未初始化，请返回上一步点击 初始化并继续",
     "SQLITE_MIGRATION_FAILED": "数据库迁移失败",
     "DATA_DIR_REQUIRED": "请输入目录路径",
     "DATA_DIR_MUST_BE_ABSOLUTE": "请输入绝对路径",

@@ -5,10 +5,15 @@ import { getAuthedUserFromRequest } from "@/lib/server/auth/session"
 import { fail, ok } from "@/lib/server/http/response"
 import { mark, withApiObservability } from "@/lib/server/observability"
 import { prisma } from "@/lib/server/db"
-import { ensureInstallationRowTx, getInstallation } from "@/lib/server/installation"
+import {
+  EMAIL_SETTINGS_ROW_ID,
+  ensureInstallationRowTx,
+  getInstallation,
+  INSTALLATION_ROW_ID,
+} from "@/lib/server/installation"
 import {
   SYSTEM_SECRET_KEYS,
-  getSystemSecretPlaintext,
+  hasSystemSecret,
   deleteSystemSecretTx,
   hasSystemSecretTx,
   upsertSystemSecretTx,
@@ -88,6 +93,7 @@ const updateSchema = z.object({
   smtpUsername: z.union([z.string(), z.null()]).optional(),
   smtpFromEmail: z.union([z.string().email(), z.null()]).optional(),
   smtpFromName: z.union([z.string(), z.null()]).optional(),
+  emailNotificationMask: z.union([z.number().int().min(0), z.null()]).optional(),
 
   // null => clear; string => set/update; undefined => unchanged
   smtpPassword: z.union([z.string(), z.null()]).optional(),
@@ -133,16 +139,55 @@ function requireAdmin(user: { role: string }) {
   return true
 }
 
+const smtpFromEmailSchema = z.string().trim().email()
+
+function isValidSmtpHost(raw: unknown): boolean {
+  const host = String(raw ?? "").trim()
+  if (!host) return false
+  if (/\s/.test(host)) return false
+  if (host.toLowerCase() === "localhost") return true
+  const ipv4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/
+  if (ipv4.test(host)) return true
+  const hostname = /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/i
+  return hostname.test(host)
+}
+
+class SmtpConfigError extends Error {
+  status: number
+  code: string
+  meta?: Record<string, unknown>
+  constructor(params: { status: number; code: string; meta?: Record<string, unknown> }) {
+    super(params.code)
+    this.status = params.status
+    this.code = params.code
+    this.meta = params.meta
+  }
+}
+
 export const GET = withApiObservability(async (req: Request) => {
   const user = await getAuthedUserFromRequest(req).catch(() => null)
   if (!user) return fail({ status: 401, code: "UNAUTHORIZED" })
   if (!requireAdmin(user)) return fail({ status: 403, code: "FORBIDDEN" })
 
-  const [inst, smtpPassword] = await Promise.all([
+  const [inst, emailSettings, passConfigured] = await Promise.all([
     getInstallation().catch(() => null),
-    getSystemSecretPlaintext({ key: SYSTEM_SECRET_KEYS.smtpPassword }).catch(() => null),
+    prisma.emailSettings
+      .findUnique({
+        where: { id: EMAIL_SETTINGS_ROW_ID },
+        select: {
+          smtpEnabled: true,
+          smtpHost: true,
+          smtpPort: true,
+          smtpSecure: true,
+          smtpUsername: true,
+          smtpFromEmail: true,
+          smtpFromName: true,
+          emailNotificationMask: true,
+        },
+      })
+      .catch(() => null),
+    hasSystemSecret({ key: SYSTEM_SECRET_KEYS.smtpPassword }).catch(() => false),
   ])
-  const passConfigured = Boolean(smtpPassword)
   const runtime = readRuntimeSettingsSync()
   const perfLocked = isPerformanceLocked()
 
@@ -213,15 +258,22 @@ export const GET = withApiObservability(async (req: Request) => {
     },
     settings: {
       registrationMode: inst?.registrationMode ?? "DISABLED",
-      smtpEnabled: Boolean(inst?.smtpEnabled),
-      smtpHost: inst?.smtpHost ?? "",
-      smtpPort: typeof inst?.smtpPort === "number" ? inst.smtpPort : null,
-      smtpSecure: Boolean(inst?.smtpSecure),
-      smtpUsername: inst?.smtpUsername ?? "",
-      smtpFromEmail: inst?.smtpFromEmail ?? "",
-      smtpFromName: inst?.smtpFromName ?? "",
-      smtpPassword: smtpPassword ?? "",
+      smtpEnabled: Boolean(emailSettings?.smtpEnabled ?? inst?.smtpEnabled),
+      smtpHost: emailSettings?.smtpHost ?? inst?.smtpHost ?? "",
+      smtpPort:
+        typeof emailSettings?.smtpPort === "number"
+          ? emailSettings.smtpPort
+          : typeof inst?.smtpPort === "number"
+            ? inst.smtpPort
+            : null,
+      smtpSecure: Boolean(emailSettings?.smtpSecure ?? inst?.smtpSecure),
+      smtpUsername: emailSettings?.smtpUsername ?? inst?.smtpUsername ?? "",
+      smtpFromEmail: emailSettings?.smtpFromEmail ?? inst?.smtpFromEmail ?? "",
+      smtpFromName: emailSettings?.smtpFromName ?? inst?.smtpFromName ?? "",
+      smtpPassword: "",
       smtpPasswordConfigured: passConfigured,
+      emailNotificationMask:
+        typeof emailSettings?.emailNotificationMask === "number" ? emailSettings.emailNotificationMask : 0,
 
       globalRunConcurrency: typeof runtime.globalRunConcurrency === "number" ? runtime.globalRunConcurrency : null,
       perRunStepConcurrency: typeof runtime.perRunStepConcurrency === "number" ? runtime.perRunStepConcurrency : null,
@@ -268,56 +320,244 @@ export const PUT = withApiObservability(async (req: Request) => {
     }
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
-    // Ensure row exists even if installation record was not created yet (shouldn't happen in normal flow).
-    await ensureInstallationRowTx(tx, {})
-
-    if (typeof body.smtpPassword === "string") {
-      const trimmed = String(body.smtpPassword ?? "").trim()
-      if (trimmed) await upsertSystemSecretTx(tx, { key: SYSTEM_SECRET_KEYS.smtpPassword, plaintext: trimmed })
-    } else if (body.smtpPassword === null) {
-      await deleteSystemSecretTx(tx, { key: SYSTEM_SECRET_KEYS.smtpPassword })
+  let updated: {
+    inst: {
+      registrationMode: string
+      smtpEnabled: boolean
+      smtpHost: string | null
+      smtpPort: number | null
+      smtpSecure: boolean
+      smtpUsername: string | null
+      smtpFromEmail: string | null
+      smtpFromName: string | null
     }
+    emailSettings: {
+      smtpEnabled: boolean
+      smtpHost: string | null
+      smtpPort: number | null
+      smtpSecure: boolean
+      smtpUsername: string | null
+      smtpFromEmail: string | null
+      smtpFromName: string | null
+      smtpVerifiedAt: Date | null
+      emailNotificationMask: number
+    }
+    passConfigured: boolean
+  }
 
-    const data: Record<string, unknown> = {}
-    if (typeof body.registrationMode === "string") data.registrationMode = body.registrationMode
+  try {
+    updated = await prisma.$transaction(async (tx) => {
+      // Ensure row exists even if installation record was not created yet (shouldn't happen in normal flow).
+      await ensureInstallationRowTx(tx, {})
 
-    if (typeof body.smtpEnabled === "boolean") data.smtpEnabled = body.smtpEnabled
-    if (body.smtpHost === null) data.smtpHost = null
-    else if (typeof body.smtpHost === "string") data.smtpHost = body.smtpHost.trim() || null
+      const currentEmail = await tx.emailSettings
+        .findUnique({
+          where: { id: EMAIL_SETTINGS_ROW_ID },
+          select: {
+            smtpEnabled: true,
+            smtpHost: true,
+            smtpPort: true,
+            smtpSecure: true,
+            smtpUsername: true,
+            smtpFromEmail: true,
+            smtpFromName: true,
+            smtpVerifiedAt: true,
+            emailNotificationMask: true,
+          },
+        })
+        .catch(() => null)
 
-    if (body.smtpPort === null) data.smtpPort = null
-    else if (typeof body.smtpPort === "number") data.smtpPort = body.smtpPort
+      // Compute the effective SMTP config after applying this update (required for validation).
+      const nextSmtpEnabled =
+        typeof body.smtpEnabled === "boolean" ? body.smtpEnabled : Boolean(currentEmail?.smtpEnabled ?? false)
 
-    if (typeof body.smtpSecure === "boolean") data.smtpSecure = body.smtpSecure
+      const nextSmtpHost =
+        body.smtpHost === null
+          ? null
+          : typeof body.smtpHost === "string"
+            ? body.smtpHost.trim() || null
+            : (currentEmail?.smtpHost ?? null)
 
-    if (body.smtpUsername === null) data.smtpUsername = null
-    else if (typeof body.smtpUsername === "string") data.smtpUsername = body.smtpUsername.trim() || null
+      const nextSmtpPort =
+        body.smtpPort === null
+          ? null
+          : typeof body.smtpPort === "number"
+            ? body.smtpPort
+            : typeof currentEmail?.smtpPort === "number"
+              ? currentEmail.smtpPort
+              : null
 
-    if (body.smtpFromEmail === null) data.smtpFromEmail = null
-    else if (typeof body.smtpFromEmail === "string") data.smtpFromEmail = body.smtpFromEmail.trim() || null
+      const nextSmtpSecure =
+        typeof body.smtpSecure === "boolean" ? body.smtpSecure : Boolean(currentEmail?.smtpSecure ?? false)
 
-    if (body.smtpFromName === null) data.smtpFromName = null
-    else if (typeof body.smtpFromName === "string") data.smtpFromName = body.smtpFromName.trim() || null
+      const nextSmtpUsername =
+        body.smtpUsername === null
+          ? null
+          : typeof body.smtpUsername === "string"
+            ? body.smtpUsername.trim() || null
+            : (currentEmail?.smtpUsername ?? null)
 
-    const inst = await tx.installation.update({
-      where: { id: "installation" },
-      data,
-      select: {
-        registrationMode: true,
-        smtpEnabled: true,
-        smtpHost: true,
-        smtpPort: true,
-        smtpSecure: true,
-        smtpUsername: true,
-        smtpFromEmail: true,
-        smtpFromName: true,
-      },
+      const nextSmtpFromEmail =
+        body.smtpFromEmail === null
+          ? null
+          : typeof body.smtpFromEmail === "string"
+            ? body.smtpFromEmail.trim() || null
+            : (currentEmail?.smtpFromEmail ?? null)
+
+      const nextSmtpFromName =
+        body.smtpFromName === null
+          ? null
+          : typeof body.smtpFromName === "string"
+            ? body.smtpFromName.trim() || null
+            : (currentEmail?.smtpFromName ?? null)
+
+      const passwordTouched = body.smtpPassword !== undefined
+      const nextPasswordWillExist = await (async () => {
+        if (typeof body.smtpPassword === "string") return Boolean(String(body.smtpPassword).trim())
+        if (body.smtpPassword === null) return false
+        return await hasSystemSecretTx(tx, { key: SYSTEM_SECRET_KEYS.smtpPassword }).catch(() => false)
+      })()
+
+      const clearVerified =
+        passwordTouched ||
+        (body.smtpHost !== undefined && nextSmtpHost !== (currentEmail?.smtpHost ?? null)) ||
+        (body.smtpPort !== undefined &&
+          nextSmtpPort !== (typeof currentEmail?.smtpPort === "number" ? currentEmail.smtpPort : null)) ||
+        (body.smtpSecure !== undefined && nextSmtpSecure !== Boolean(currentEmail?.smtpSecure ?? false)) ||
+        (body.smtpUsername !== undefined && nextSmtpUsername !== (currentEmail?.smtpUsername ?? null)) ||
+        (body.smtpFromEmail !== undefined && nextSmtpFromEmail !== (currentEmail?.smtpFromEmail ?? null)) ||
+        (body.smtpFromName !== undefined && nextSmtpFromName !== (currentEmail?.smtpFromName ?? null))
+
+      const effectiveVerifiedAt = clearVerified ? null : (currentEmail?.smtpVerifiedAt ?? null)
+
+      // Strict SMTP validation: when enabled, the config must be complete and verified.
+      if (nextSmtpEnabled) {
+        const missing: string[] = []
+        if (!nextSmtpHost || !isValidSmtpHost(nextSmtpHost)) missing.push("smtpHost")
+        if (!nextSmtpPort) missing.push("smtpPort")
+        if (!nextSmtpFromEmail || !smtpFromEmailSchema.safeParse(nextSmtpFromEmail).success)
+          missing.push("smtpFromEmail")
+        if (!nextSmtpUsername) missing.push("smtpUsername")
+        if (!nextPasswordWillExist) missing.push("smtpPassword")
+
+        if (missing.length) {
+          throw new SmtpConfigError({ status: 422, code: "SYSTEM_SMTP_INVALID_CONFIG", meta: { missing } })
+        }
+        if (!effectiveVerifiedAt) {
+          throw new SmtpConfigError({ status: 409, code: "SYSTEM_SMTP_NOT_VERIFIED" })
+        }
+      }
+
+      if (typeof body.smtpPassword === "string") {
+        const trimmed = String(body.smtpPassword ?? "").trim()
+        if (trimmed) await upsertSystemSecretTx(tx, { key: SYSTEM_SECRET_KEYS.smtpPassword, plaintext: trimmed })
+      } else if (body.smtpPassword === null) {
+        await deleteSystemSecretTx(tx, { key: SYSTEM_SECRET_KEYS.smtpPassword })
+      }
+
+      const instData: Record<string, unknown> = {}
+      if (typeof body.registrationMode === "string") instData.registrationMode = body.registrationMode
+
+      // Keep legacy Installation SMTP fields in sync for backward compatibility.
+      if (typeof body.smtpEnabled === "boolean") instData.smtpEnabled = body.smtpEnabled
+      if (body.smtpHost === null) instData.smtpHost = null
+      else if (typeof body.smtpHost === "string") instData.smtpHost = body.smtpHost.trim() || null
+
+      if (body.smtpPort === null) instData.smtpPort = null
+      else if (typeof body.smtpPort === "number") instData.smtpPort = body.smtpPort
+
+      if (typeof body.smtpSecure === "boolean") instData.smtpSecure = body.smtpSecure
+
+      if (body.smtpUsername === null) instData.smtpUsername = null
+      else if (typeof body.smtpUsername === "string") instData.smtpUsername = body.smtpUsername.trim() || null
+
+      if (body.smtpFromEmail === null) instData.smtpFromEmail = null
+      else if (typeof body.smtpFromEmail === "string") instData.smtpFromEmail = body.smtpFromEmail.trim() || null
+
+      if (body.smtpFromName === null) instData.smtpFromName = null
+      else if (typeof body.smtpFromName === "string") instData.smtpFromName = body.smtpFromName.trim() || null
+
+      const emailSettingsData: Record<string, unknown> = {}
+      if (typeof body.smtpEnabled === "boolean") emailSettingsData.smtpEnabled = body.smtpEnabled
+      if (body.smtpHost === null) emailSettingsData.smtpHost = null
+      else if (typeof body.smtpHost === "string") emailSettingsData.smtpHost = body.smtpHost.trim() || null
+
+      if (body.smtpPort === null) emailSettingsData.smtpPort = null
+      else if (typeof body.smtpPort === "number") emailSettingsData.smtpPort = body.smtpPort
+
+      if (typeof body.smtpSecure === "boolean") emailSettingsData.smtpSecure = body.smtpSecure
+
+      if (body.smtpUsername === null) emailSettingsData.smtpUsername = null
+      else if (typeof body.smtpUsername === "string") emailSettingsData.smtpUsername = body.smtpUsername.trim() || null
+
+      if (body.smtpFromEmail === null) emailSettingsData.smtpFromEmail = null
+      else if (typeof body.smtpFromEmail === "string")
+        emailSettingsData.smtpFromEmail = body.smtpFromEmail.trim() || null
+
+      if (body.smtpFromName === null) emailSettingsData.smtpFromName = null
+      else if (typeof body.smtpFromName === "string") emailSettingsData.smtpFromName = body.smtpFromName.trim() || null
+
+      if (typeof body.emailNotificationMask === "number")
+        emailSettingsData.emailNotificationMask = body.emailNotificationMask
+      else if (body.emailNotificationMask === null) emailSettingsData.emailNotificationMask = 0
+
+      if (clearVerified) emailSettingsData.smtpVerifiedAt = null
+
+      // Persist both EmailSettings (new) and Installation (legacy).
+      const [inst, emailSettings] = await Promise.all([
+        tx.installation.update({
+          where: { id: INSTALLATION_ROW_ID },
+          data: instData,
+          select: {
+            registrationMode: true,
+            smtpEnabled: true,
+            smtpHost: true,
+            smtpPort: true,
+            smtpSecure: true,
+            smtpUsername: true,
+            smtpFromEmail: true,
+            smtpFromName: true,
+          },
+        }),
+        tx.emailSettings.upsert({
+          where: { id: EMAIL_SETTINGS_ROW_ID },
+          create: {
+            id: EMAIL_SETTINGS_ROW_ID,
+            installationId: INSTALLATION_ROW_ID,
+            smtpEnabled: nextSmtpEnabled,
+            smtpHost: nextSmtpHost,
+            smtpPort: nextSmtpPort,
+            smtpSecure: nextSmtpSecure,
+            smtpUsername: nextSmtpUsername,
+            smtpFromEmail: nextSmtpFromEmail,
+            smtpFromName: nextSmtpFromName,
+            smtpVerifiedAt: effectiveVerifiedAt,
+            emailNotificationMask: typeof body.emailNotificationMask === "number" ? body.emailNotificationMask : 0,
+          },
+          update: emailSettingsData,
+          select: {
+            smtpEnabled: true,
+            smtpHost: true,
+            smtpPort: true,
+            smtpSecure: true,
+            smtpUsername: true,
+            smtpFromEmail: true,
+            smtpFromName: true,
+            smtpVerifiedAt: true,
+            emailNotificationMask: true,
+          },
+        }),
+      ])
+
+      const passConfigured = await hasSystemSecretTx(tx, { key: SYSTEM_SECRET_KEYS.smtpPassword }).catch(() => false)
+      return { inst, emailSettings, passConfigured }
     })
-
-    const passConfigured = await hasSystemSecretTx(tx, { key: SYSTEM_SECRET_KEYS.smtpPassword }).catch(() => false)
-    return { inst, passConfigured }
-  })
+  } catch (e) {
+    if (e instanceof SmtpConfigError) {
+      return fail({ status: e.status, code: e.code, meta: e.meta })
+    }
+    throw e
+  }
 
   // Persist runtime overrides (non-DB) after successful tx.
   {
@@ -332,7 +572,6 @@ export const PUT = withApiObservability(async (req: Request) => {
   }
 
   mark("write")
-  const smtpPassword = await getSystemSecretPlaintext({ key: SYSTEM_SECRET_KEYS.smtpPassword }).catch(() => null)
   const runtime = readRuntimeSettingsSync()
   const perfMeta = {
     globalRunConcurrency: computePerfMeta({
@@ -401,15 +640,19 @@ export const PUT = withApiObservability(async (req: Request) => {
     },
     settings: {
       registrationMode: updated.inst.registrationMode,
-      smtpEnabled: Boolean(updated.inst.smtpEnabled),
-      smtpHost: updated.inst.smtpHost ?? "",
-      smtpPort: typeof updated.inst.smtpPort === "number" ? updated.inst.smtpPort : null,
-      smtpSecure: Boolean(updated.inst.smtpSecure),
-      smtpUsername: updated.inst.smtpUsername ?? "",
-      smtpFromEmail: updated.inst.smtpFromEmail ?? "",
-      smtpFromName: updated.inst.smtpFromName ?? "",
+      smtpEnabled: Boolean(updated.emailSettings.smtpEnabled),
+      smtpHost: updated.emailSettings.smtpHost ?? "",
+      smtpPort: typeof updated.emailSettings.smtpPort === "number" ? updated.emailSettings.smtpPort : null,
+      smtpSecure: Boolean(updated.emailSettings.smtpSecure),
+      smtpUsername: updated.emailSettings.smtpUsername ?? "",
+      smtpFromEmail: updated.emailSettings.smtpFromEmail ?? "",
+      smtpFromName: updated.emailSettings.smtpFromName ?? "",
       smtpPasswordConfigured: updated.passConfigured,
-      smtpPassword: smtpPassword ?? "",
+      smtpPassword: "",
+      emailNotificationMask:
+        typeof updated.emailSettings.emailNotificationMask === "number"
+          ? updated.emailSettings.emailNotificationMask
+          : 0,
 
       globalRunConcurrency: typeof runtime.globalRunConcurrency === "number" ? runtime.globalRunConcurrency : null,
       perRunStepConcurrency: typeof runtime.perRunStepConcurrency === "number" ? runtime.perRunStepConcurrency : null,

@@ -5,6 +5,7 @@ import { Eye, EyeOff, Mail } from "lucide-react"
 import { useI18n } from "@/components/i18n-provider"
 import { SettingsSectionFooter } from "@/components/settings/settings-section-footer"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Field, FieldDescription, FieldGroup, FieldLabel, FieldTitle } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { SecretInput } from "@/components/ui/secret-input"
@@ -35,6 +36,8 @@ export function EmailSection(props: {
 
   smtpPasswordDraft: string
   setSmtpPasswordDraft: (v: string) => void
+  smtpPasswordClearRequested: boolean
+  setSmtpPasswordClearRequested: (v: boolean) => void
   smtpPasswordConfigured: boolean
   showSmtpPassword: boolean
   setShowSmtpPassword: (v: boolean) => void
@@ -49,9 +52,23 @@ export function EmailSection(props: {
 }) {
   const { t } = useI18n()
 
+  const smtpPortNumber = props.smtpPort.trim() ? Number(props.smtpPort) : NaN
+  const smtpHasPort = props.smtpPort.trim() !== "" && Number.isFinite(smtpPortNumber) && smtpPortNumber > 0
+
+  const smtpHasPassword = props.smtpPasswordConfigured || props.smtpPasswordDraft.trim().length > 0
+  const smtpMinConfigOk =
+    Boolean(props.smtpHost.trim()) &&
+    smtpHasPort &&
+    Boolean(props.smtpUsername.trim()) &&
+    Boolean(props.smtpFromEmail.trim()) &&
+    smtpHasPassword
+
+  // Allow disabling even when config is incomplete, but block enabling until minimal config is present.
+  const smtpEnableSwitchDisabled = props.loading || props.saving || (!props.smtpEnabled && !smtpMinConfigOk)
+
   return (
     <form
-      className="space-y-6"
+      className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault()
         if (props.loading || props.saving) return
@@ -66,12 +83,20 @@ export function EmailSection(props: {
         >
           <div className="space-y-0.5">
             <FieldTitle>{t("settings.system.email.enableAction")}</FieldTitle>
-            <FieldDescription className="text-xs">{t("settings.system.email.enableActionToggleHint")}</FieldDescription>
+            <FieldDescription className="text-xs">
+              {t("settings.system.email.enableActionToggleHint")}
+              {!props.smtpEnabled && !smtpMinConfigOk ? (
+                <>
+                  {" "}
+                  <span className="font-medium text-destructive">{t("settings.system.email.enableBlockedHint")}</span>
+                </>
+              ) : null}
+            </FieldDescription>
           </div>
           <Switch
             checked={props.smtpEnabled}
             onCheckedChange={props.setSmtpEnabled}
-            disabled={props.loading || props.saving}
+            disabled={smtpEnableSwitchDisabled}
           />
         </Field>
 
@@ -128,7 +153,29 @@ export function EmailSection(props: {
           </Field>
 
           <Field data-disabled={props.loading || props.saving}>
-            <FieldLabel htmlFor="smtp-password">{t("settings.system.email.password")}</FieldLabel>
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+              <FieldLabel htmlFor="smtp-password" className="min-w-0 truncate">
+                {t("settings.system.email.password")}
+              </FieldLabel>
+              {props.smtpPasswordConfigured ? (
+                <div className="inline-flex h-4 items-center gap-2 whitespace-nowrap text-sm leading-none text-muted-foreground">
+                  <span className="select-none">{t("common.configured")}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-5 px-2 text-sm leading-none"
+                    onClick={() => {
+                      props.setSmtpPasswordDraft("")
+                      props.setSmtpPasswordClearRequested(true)
+                    }}
+                    disabled={props.loading || props.saving}
+                  >
+                    {t("common.clearSecretAction")}
+                  </Button>
+                </div>
+              ) : null}
+            </div>
             <div className="relative">
               <SecretInput
                 id="smtp-password"
@@ -185,18 +232,6 @@ export function EmailSection(props: {
             placeholder="you@example.com"
             disabled={props.loading || props.saving || props.sendingTest}
           />
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              onClick={props.onSendTest}
-              disabled={props.loading || props.saving || props.sendingTest}
-            >
-              {props.sendingTest ? <Spinner aria-label={t("common.loading")} /> : <Mail aria-hidden="true" />}
-              {props.sendingTest ? t("settings.system.email.testing") : t("settings.system.email.sendTestAction")}
-            </Button>
-          </div>
         </Field>
       </FieldGroup>
 
@@ -209,6 +244,19 @@ export function EmailSection(props: {
         saveLabel={t("common.saveAction")}
         saving={props.savingSection === "smtp"}
         savingLabel={t("common.saving")}
+        rightClassName="flex-row"
+        rightExtra={
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={props.onSendTest}
+            disabled={props.loading || props.saving || props.sendingTest}
+          >
+            {props.sendingTest ? <Spinner aria-label={t("common.loading")} /> : <Mail aria-hidden="true" />}
+            {props.sendingTest ? t("settings.system.email.testing") : t("settings.system.email.sendTestAction")}
+          </Button>
+        }
       />
     </form>
   )
