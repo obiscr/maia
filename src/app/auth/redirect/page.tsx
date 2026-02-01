@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { LoadingState } from "@/components/common/loading-state"
 import { MaiaLogo } from "@/components/maia-logo"
 import { useI18n } from "@/components/i18n-provider"
+import { sanitizeNext } from "@/lib/shared/http/sanitize-next"
 
 type AuthStatus = {
   installed: boolean
@@ -14,15 +15,6 @@ type AuthStatus = {
 }
 
 const RETURN_TO_COOKIE_NAME = "maia_return_to"
-
-function sanitizeNext(raw: string | null) {
-  const v = String(raw ?? "").trim()
-  if (!v) return "/"
-  // Only allow same-origin relative paths.
-  if (!v.startsWith("/")) return "/"
-  if (v.startsWith("//")) return "/"
-  return v
-}
 
 function readCookie(name: string) {
   if (typeof document === "undefined") return null

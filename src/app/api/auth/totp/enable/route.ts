@@ -5,6 +5,7 @@ import { fail, ok } from "@/lib/server/http/response"
 import { withApiObservability } from "@/lib/server/observability"
 import { getAuthedUserFromRequest } from "@/lib/server/auth/session"
 import { verifyTotp } from "@/lib/server/auth/totp"
+import { getTotpSecretBase32ForUser } from "@/lib/server/auth/totp-secret"
 import { zodIssues } from "@/lib/shared/http/zod"
 
 export const runtime = "nodejs"
@@ -26,11 +27,11 @@ export const PUT = withApiObservability(async (req: Request) => {
 
   const dbUser = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { totpEnabled: true, totpSecret: true },
+    select: { totpEnabled: true },
   })
   if (!dbUser) return fail({ status: 401, code: "UNAUTHORIZED" })
   if (dbUser.totpEnabled) return fail({ status: 409, code: "TOTP_ALREADY_ENABLED" })
-  const secret = dbUser.totpSecret
+  const secret = await getTotpSecretBase32ForUser(user.id)
   if (!secret) return fail({ status: 409, code: "TOTP_NOT_SETUP" })
 
   const okTotp = verifyTotp({ secretBase32: secret, code: body.code, window: 1 })

@@ -47,7 +47,7 @@ export default function Page() {
     } catch (e) {
       if (
         e instanceof ApiError &&
-        (e.code === "RESET_TOKEN_INVALID" || e.code === "RESET_TOKEN_USED" || e.code === "RESET_TOKEN_EXPIRED")
+        (e.code === "TOKEN_INVALID" || e.code === "TOKEN_USED" || e.code === "TOKEN_EXPIRED")
       ) {
         toast.error(t("auth.reset.errors.tokenInvalidOrExpired"))
         return

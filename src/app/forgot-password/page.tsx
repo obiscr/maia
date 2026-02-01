@@ -1,8 +1,15 @@
+import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 
 import { AuthPageShell } from "@/components/auth/auth-page-shell"
 import { ForgotPasswordForm } from "@/components/forgot-password-form"
+import { getT } from "@/lib/server/i18n/server"
 import { getInstallation } from "@/lib/server/installation"
+
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getT()
+  return { title: t("auth.forgot.title") }
+}
 
 export default async function Page() {
   const installed = await getInstallation()

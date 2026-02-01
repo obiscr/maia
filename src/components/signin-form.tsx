@@ -1,14 +1,16 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Field, FieldDescription, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { useI18n } from "@/components/i18n-provider"
 import { apiFetchJson, ApiError } from "@/lib/shared/http/api"
+import { sanitizeNext } from "@/lib/shared/http/sanitize-next"
 import { toast } from "@/lib/client/toast"
 import { useApiErrorToast } from "@/hooks/use-api-error-toast"
 
@@ -20,6 +22,8 @@ export function SigninForm({ className, ...props }: React.ComponentProps<"div">)
   const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
   const [submitting, setSubmitting] = React.useState(false)
+  const nextRaw = searchParams.get("next")
+  const nextQuery = nextRaw ? `?next=${encodeURIComponent(nextRaw)}` : ""
 
   const reason = searchParams.get("reason")
   React.useEffect(() => {
@@ -31,20 +35,6 @@ export function SigninForm({ className, ...props }: React.ComponentProps<"div">)
     const next = searchParams.get("next")
     router.replace(next ? `/signin?next=${encodeURIComponent(next)}` : "/signin")
   }, [reason, router, t])
-
-  function sanitizeNext(raw: string | null) {
-    const v = String(raw ?? "").trim()
-    if (!v) return "/"
-    if (!v.startsWith("/")) return "/"
-    if (v.startsWith("//")) return "/"
-    // Never bounce back into auth pages.
-    if (v === "/signin" || v.startsWith("/signin?")) return "/"
-    if (v === "/signup" || v.startsWith("/signup?")) return "/"
-    if (v === "/otp" || v.startsWith("/otp?")) return "/"
-    if (v === "/setup" || v.startsWith("/setup")) return "/"
-    if (v === "/auth/redirect" || v.startsWith("/auth/redirect?")) return "/"
-    return v
-  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -107,16 +97,9 @@ export function SigninForm({ className, ...props }: React.ComponentProps<"div">)
           <Field>
             <div className="flex items-center">
               <FieldLabel htmlFor="password">{t("common.fields.password")}</FieldLabel>
-              <a
-                href="#"
-                className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
-                onClick={(e) => {
-                  e.preventDefault()
-                  router.push("/forgot-password")
-                }}
-              >
+              <Link href="/forgot-password" className="ml-auto inline-block text-sm underline-offset-4 hover:underline">
                 {t("auth.signin.forgotPasswordAction")}
-              </a>
+              </Link>
             </div>
             <Input
               id="password"
@@ -134,18 +117,26 @@ export function SigninForm({ className, ...props }: React.ComponentProps<"div">)
             <Button className="w-full" type="submit" disabled={submitting}>
               {t("auth.signin.submitAction")}
             </Button>
+          </Field>
+          <FieldSeparator>{t("auth.common.or")}</FieldSeparator>
+          <Field>
+            <Button className="w-full" type="button" variant="secondary" asChild>
+              <Link href={`/email-otp${nextQuery}`}>{t("auth.signin.emailOtpAction")}</Link>
+            </Button>
+          </Field>
+          {/*
+          <Field>
+            <Button className="w-full" type="button" variant="secondary" asChild>
+              <Link href={`/magic-link${nextQuery}`}>{t("auth.signin.magicLinkAction")}</Link>
+            </Button>
+          </Field>
+          */}
+          <Field>
             <FieldDescription className="text-center">
               {t("auth.signin.noAccount")}{" "}
-              <a
-                href="#"
-                className="underline underline-offset-4 hover:no-underline"
-                onClick={(e) => {
-                  e.preventDefault()
-                  router.push("/signup")
-                }}
-              >
+              <Link href={`/signup${nextQuery}`} className="underline underline-offset-4 hover:no-underline">
                 {t("auth.signin.signupLinkAction")}
-              </a>
+              </Link>
             </FieldDescription>
           </Field>
         </FieldGroup>

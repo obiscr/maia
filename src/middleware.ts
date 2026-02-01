@@ -17,6 +17,10 @@ function isPublicPath(pathname: string) {
   if (pathname.startsWith("/otp")) return true
   if (pathname.startsWith("/forgot-password")) return true
   if (pathname.startsWith("/reset-password")) return true
+  if (pathname.startsWith("/email-otp")) return true
+  if (pathname.startsWith("/magic-link")) return true
+  if (pathname.startsWith("/confirm-email")) return true
+  if (pathname.startsWith("/auth/magic")) return true
   if (pathname.startsWith("/auth/redirect")) return true
 
   // Static assets (e.g. anything from /public with a file extension) should not be auth-gated.

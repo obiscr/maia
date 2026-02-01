@@ -1,7 +1,14 @@
+import type { Metadata } from "next"
 import { SigninForm } from "@/components/signin-form"
 import { AuthPageShell } from "@/components/auth/auth-page-shell"
+import { getT } from "@/lib/server/i18n/server"
 import { getInstallation } from "@/lib/server/installation"
 import { redirect } from "next/navigation"
+
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getT()
+  return { title: t("auth.signin.title") }
+}
 
 export default async function Page() {
   const installed = await getInstallation()

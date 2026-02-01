@@ -3,6 +3,7 @@ import { withApiObservability } from "@/lib/server/observability"
 import { getAuthedUserFromRequest } from "@/lib/server/auth/session"
 import { prisma } from "@/lib/server/db"
 import { buildOtpauthUrl, generateTotpSecretBase32 } from "@/lib/server/auth/totp"
+import { upsertUserSecret, USER_SECRET_KEYS } from "@/lib/server/settings/user-secrets"
 
 export const runtime = "nodejs"
 
@@ -22,9 +23,10 @@ export const POST = withApiObservability(async (req: Request) => {
 
   // Generate a new secret and store it (not enabled until verified).
   const secretBase32 = generateTotpSecretBase32()
+  await upsertUserSecret({ userId: user.id, key: USER_SECRET_KEYS.authTotpSecret, plaintext: secretBase32 })
   await prisma.user.update({
     where: { id: user.id },
-    data: { totpSecret: secretBase32, totpEnabled: false, totpVerifiedAt: null },
+    data: { totpEnabled: false, totpVerifiedAt: null },
     select: { id: true },
   })
 
