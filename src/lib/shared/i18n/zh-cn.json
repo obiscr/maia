@@ -1613,6 +1613,8 @@
     "INVITE_EMAIL_MISMATCH": "邀请邮箱不匹配",
     "DB_NOT_READY": "数据库尚未初始化，请返回上一步点击 初始化并继续",
     "SQLITE_MIGRATION_FAILED": "数据库迁移失败",
+    "MIGRATOR_REQUIRED": "数据库迁移由 migrator 服务负责。请使用更新后的 docker-compose 重启，并确认 migrator 已成功执行",
+    "PRISMA_MIGRATE_DEPLOY_FAILED": "数据库迁移失败（Prisma migrate deploy）",
     "DATA_DIR_REQUIRED": "请输入目录路径",
     "DATA_DIR_MUST_BE_ABSOLUTE": "请输入绝对路径",
     "DATA_DIR_NOT_FOUND": "目录不存在，请先创建",

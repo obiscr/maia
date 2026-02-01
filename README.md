@@ -57,7 +57,9 @@ RUNNER_TOKEN=your-token
 docker compose -f docker-compose.release.yml --env-file .env.production up -d
 ```
 
-Open `http://localhost:3690` to setup。
+On the first startup, `migrator` runs the database migrations (`prisma migrate deploy`) first. After it completes successfully, it exits automatically, and only then will `maia` / `runner` start and begin serving requests.
+
+Open `http://localhost:3690` to set up.
 
 ### Run locally with Dev
 

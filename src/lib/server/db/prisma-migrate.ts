@@ -10,11 +10,7 @@ function hasLocalPrismaCli(): boolean {
   // In local/dev installs, Prisma CLI is a devDependency.
   // In production runtime image, it is intentionally absent.
   const bin = path.join(process.cwd(), "node_modules", ".bin")
-  const candidates = [
-    path.join(bin, "prisma"),
-    path.join(bin, "prisma.cmd"),
-    path.join(bin, "prisma.ps1"),
-  ]
+  const candidates = [path.join(bin, "prisma"), path.join(bin, "prisma.cmd"), path.join(bin, "prisma.ps1")]
   try {
     return candidates.some((p) => fs.existsSync(p))
   } catch {
@@ -51,4 +47,3 @@ export async function prismaMigrateDeploy(): Promise<PrismaMigrateDeployResult> 
   if (!res.ok) return { ok: false, code: "PRISMA_MIGRATE_DEPLOY_FAILED", meta: { exitCode: res.exitCode } }
   return { ok: true }
 }
-

@@ -8,6 +8,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
+## v0.2.0
+
+### Added
+
+- **Email system**: SMTP configuration + test flow, email template management, and run notification emails.
+- **Auth & security**: Magic Link sign-in, Email OTP, email confirmation, and TOTP 2FA (with recovery codes).
+- **Admin**: user invites (list/create/revoke) and admin-triggered password reset via email.
+
+### Changed
+
+- **Signup policy**: allow invited users to sign up even when open registration is disabled.
+- **Workflow editor UX**: unsaved-changes dialog for Output Spec; improved editor/canvas interactions and localized docs links.
+- **Retry behavior**: normalized retry policy handling across workflow and batch routes.
+
+### Fixed
+
+- **Email OTP robustness**: persist token before sending; cleanup on failure.
+- **Public URLs**: prefer configured public origin for absolute links.
+
+### Migration
+
+- **Database**: includes Prisma schema changes and migrations for email templates, SMTP settings, and auth security (TOTP/recovery codes). Run migrations during upgrade.
+- **Config**: supports `MAIA_PUBLIC_ORIGIN` for generating externally reachable absolute URLs.
+
 ## v0.1.3
 
 ### Fixed
