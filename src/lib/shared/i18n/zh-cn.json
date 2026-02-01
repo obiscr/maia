@@ -62,7 +62,31 @@
       "resetConfirmAction": "生成重置链接",
       "resetLinkCopied": "重置链接已复制",
       "resetLinkCreated": "重置链接已生成",
-      "resetFailed": "生成重置链接失败"
+      "resetFailed": "生成重置链接失败",
+      "invite": {
+        "openAction": "邀请用户",
+        "title": "邀请用户",
+        "description": "为指定邮箱生成邀请链接",
+        "emailLabel": "邮箱",
+        "emailPlaceholder": "user@example.com",
+        "emailInvalid": "请输入有效的邮箱地址",
+        "sendAction": "发送邀请",
+        "hint": "将生成邀请链接（有效期 7 天）",
+        "latestTitle": "最新邀请链接",
+        "latestHint": "过期时间：{expiresAt}",
+        "emailNotSent": "邮件未发送（code：{code}）",
+        "createdCopied": "邀请链接已复制",
+        "pendingTitle": "待加入邀请",
+        "pendingHint": "展示未加入的有效邀请",
+        "none": "暂无有效邀请",
+        "expiresIn": "将于 {rel} 过期",
+        "copyInviteLinkAction": "复制邀请链接",
+        "revokeAction": "取消邀请",
+        "revokedToast": "已取消 {count} 个邀请",
+        "loadFailed": "加载邀请失败",
+        "createFailed": "生成邀请失败",
+        "revokeFailed": "取消邀请失败"
+      }
     }
   },
   "settings": {
