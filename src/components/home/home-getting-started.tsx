@@ -2,19 +2,18 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Download, Package } from "lucide-react"
 
 import { SectionCard, SectionCardBody, SectionCardHeader } from "@/components/common/section-card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Spinner } from "@/components/ui/spinner"
 import { useI18n } from "@/components/i18n-provider"
 import { toast } from "@/lib/client/toast"
 import { tApiError } from "@/lib/shared/i18n/error"
-import { HomeTemplatesSheet, type HomeWorkflowTemplateMeta } from "@/components/home/sheets/home-templates-sheet"
-import { importWorkflowTemplate } from "@/lib/client/templates"
+import { HomeTemplatesSheet } from "@/components/home/sheets/home-templates-sheet"
+import { importWorkflowTemplate, type WorkflowTemplateMeta } from "@/lib/client/templates"
+import { ItemsList } from "@/components/common/items-list"
+import { WorkflowTemplateRow } from "@/components/home/workflow-template-row"
 
-export function HomeGettingStarted(props: { templates: HomeWorkflowTemplateMeta[] }) {
+export function HomeGettingStarted(props: { templates: WorkflowTemplateMeta[] }) {
   const { t } = useI18n()
   const router = useRouter()
   const [importingId, setImportingId] = React.useState<string | null>(null)
@@ -64,46 +63,19 @@ export function HomeGettingStarted(props: { templates: HomeWorkflowTemplateMeta[
         {props.templates.length === 0 ? (
           <div className="px-4 py-6 text-center text-sm text-muted-foreground">{t("home.templatesEmpty")}</div>
         ) : (
-          <div className="divide-y">
-            {preview.map((ex) => {
-              const isImporting = importingId === ex.id
-              return (
-                <div key={ex.id} className="flex items-start justify-between gap-4 px-4 py-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="font-medium text-sm truncate">{ex.name}</div>
-                      <Badge variant="secondary">{t("workflows.versions.stepsCount", { n: ex.stepCount })}</Badge>
-                      {ex.depsCount > 0 ? (
-                        <Badge variant="outline" className="gap-1">
-                          <Package className="size-3.5" aria-hidden="true" />
-                          <span>{t("workflows.versions.depsCount", { n: ex.depsCount })}</span>
-                        </Badge>
-                      ) : null}
-                    </div>
-                    {ex.description ? (
-                      <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{ex.description}</div>
-                    ) : null}
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="default"
-                    onClick={() => importExample(ex.id)}
-                    disabled={!!importingId}
-                    className="shrink-0"
-                  >
-                    {isImporting ? (
-                      <Spinner className="mr-2" />
-                    ) : (
-                      <Download className="mr-2 size-4" aria-hidden="true" />
-                    )}
-                    {isImporting
-                      ? t("workflows.importExport.import.importing")
-                      : t("workflows.importExport.import.importAction")}
-                  </Button>
-                </div>
-              )
-            })}
-          </div>
+          <ItemsList<WorkflowTemplateMeta>
+            items={preview}
+            getKey={(it) => it.id}
+            className="border-0 rounded-none"
+            renderItem={(it) => (
+              <WorkflowTemplateRow
+                template={it}
+                importing={importingId === it.id}
+                importDisabled={!!importingId}
+                onImport={importExample}
+              />
+            )}
+          />
         )}
       </SectionCardBody>
 
