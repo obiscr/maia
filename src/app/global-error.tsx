@@ -3,6 +3,7 @@
 // NOTE: `global-error.tsx` must render its own <html>/<body> and cannot rely on RootLayout providers.
 
 import Link from "next/link"
+import { Button } from "@/components/ui/button"
 
 export default function GlobalError(props: { error: Error & { digest?: string }; reset: () => void }) {
   return (
@@ -22,7 +23,8 @@ export default function GlobalError(props: { error: Error & { digest?: string };
             An unexpected error occurred. You can try again or go back to the home page.
           </p>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            <button
+            <Button
+              type="button"
               onClick={() => props.reset()}
               style={{
                 padding: "8px 12px",
@@ -34,7 +36,7 @@ export default function GlobalError(props: { error: Error & { digest?: string };
               }}
             >
               Try again
-            </button>
+            </Button>
             <Link href="/" style={{ padding: "8px 12px", borderRadius: "8px", border: "1px solid #ddd" }}>
               Home
             </Link>

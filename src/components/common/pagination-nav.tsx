@@ -69,23 +69,23 @@ export function PaginationNav({
       <PaginationContent className={cn(compactOnMobile ? "sm:gap-1" : "")}>
         <PaginationItem>
           <PaginationLink
-            href="#"
+            asChild
             size="default"
-            className={cn("gap-1 px-2.5", !canPrev ? "pointer-events-none opacity-50" : "")}
-            onClick={(e) => {
-              e.preventDefault()
-              if (canPrev) goto(page - 1)
-            }}
+            className={cn("gap-1 px-2.5", !canPrev ? "opacity-50" : "")}
             aria-label="Go to previous page"
           >
-            <ChevronLeft className="size-4" aria-hidden="true" />
-            <span>{previousLabel}</span>
+            <button type="button" disabled={!canPrev} onClick={() => goto(page - 1)}>
+              <ChevronLeft className="size-4" aria-hidden="true" />
+              <span>{previousLabel}</span>
+            </button>
           </PaginationLink>
         </PaginationItem>
 
         <PaginationItem className={cn(compactOnMobile ? "sm:hidden" : "hidden")}>
-          <PaginationLink href="#" isActive>
-            {page}
+          <PaginationLink asChild isActive>
+            <button type="button" disabled>
+              {page}
+            </button>
           </PaginationLink>
         </PaginationItem>
 
@@ -96,16 +96,10 @@ export function PaginationNav({
             </PaginationItem>
           ) : (
             <PaginationItem key={`p:${it}`} className={cn(compactOnMobile ? "hidden sm:list-item" : "")}>
-              <PaginationLink
-                href="#"
-                size="sm"
-                isActive={it === page}
-                onClick={(e) => {
-                  e.preventDefault()
-                  goto(it)
-                }}
-              >
-                {it}
+              <PaginationLink asChild size="sm" isActive={it === page}>
+                <button type="button" onClick={() => goto(it)} aria-label={`Go to page ${it}`}>
+                  {it}
+                </button>
               </PaginationLink>
             </PaginationItem>
           ),
@@ -113,17 +107,15 @@ export function PaginationNav({
 
         <PaginationItem>
           <PaginationLink
-            href="#"
+            asChild
             size="default"
-            className={cn("gap-1 px-2.5", !canNext ? "pointer-events-none opacity-50" : "")}
-            onClick={(e) => {
-              e.preventDefault()
-              if (canNext) goto(page + 1)
-            }}
+            className={cn("gap-1 px-2.5", !canNext ? "opacity-50" : "")}
             aria-label="Go to next page"
           >
-            <span>{nextLabel}</span>
-            <ChevronRight className="size-4" aria-hidden="true" />
+            <button type="button" disabled={!canNext} onClick={() => goto(page + 1)}>
+              <span>{nextLabel}</span>
+              <ChevronRight className="size-4" aria-hidden="true" />
+            </button>
           </PaginationLink>
         </PaginationItem>
       </PaginationContent>

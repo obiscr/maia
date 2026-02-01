@@ -293,7 +293,6 @@ export function OperationsCommonListItem(props: {
           {props.actions?.copyId ? (
             <DropdownMenuItem
               onSelect={(e) => {
-                e.preventDefault()
                 void props.actions?.copyId?.()
               }}
             >

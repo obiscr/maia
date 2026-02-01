@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
@@ -86,16 +87,9 @@ export function ForgotPasswordForm({ className, ...props }: React.ComponentProps
             </Button>
           </Field>
           <FieldDescription className="text-center">
-            <a
-              href="#"
-              className="underline underline-offset-4 hover:no-underline"
-              onClick={(e) => {
-                e.preventDefault()
-                router.push("/signin")
-              }}
-            >
+            <Link href="/signin" className="underline underline-offset-4 hover:no-underline">
               {t("auth.forgot.backToSigninAction")}
-            </a>
+            </Link>
           </FieldDescription>
         </FieldGroup>
       </form>

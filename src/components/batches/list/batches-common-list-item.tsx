@@ -302,7 +302,6 @@ export function BatchesCommonListItem(props: {
                 {canPause ? (
                   <DropdownMenuItem
                     onSelect={(e) => {
-                      e.preventDefault()
                       void props.actions?.pause?.()
                     }}
                   >
@@ -313,7 +312,6 @@ export function BatchesCommonListItem(props: {
                 {canResume ? (
                   <DropdownMenuItem
                     onSelect={(e) => {
-                      e.preventDefault()
                       void props.actions?.resume?.()
                     }}
                   >
@@ -325,7 +323,6 @@ export function BatchesCommonListItem(props: {
                   <DropdownMenuItem
                     variant="destructive"
                     onSelect={(e) => {
-                      e.preventDefault()
                       void props.actions?.cancel?.()
                     }}
                   >
@@ -340,7 +337,6 @@ export function BatchesCommonListItem(props: {
           {props.actions?.copyId ? (
             <DropdownMenuItem
               onSelect={(e) => {
-                e.preventDefault()
                 void props.actions?.copyId?.()
               }}
             >
@@ -351,7 +347,6 @@ export function BatchesCommonListItem(props: {
           {props.actions?.copyLink ? (
             <DropdownMenuItem
               onSelect={(e) => {
-                e.preventDefault()
                 void props.actions?.copyLink?.()
               }}
             >

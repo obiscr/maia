@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { ArrowRight, CheckCircle2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -14,10 +15,10 @@ export function DoneStep({ active = true }: { active?: boolean }) {
     () => (
       <div className="flex items-center justify-end">
         <Button size="sm" asChild>
-          <a href="/" className="inline-flex items-center gap-2">
+          <Link href="/" className="inline-flex items-center gap-2">
             <span>{t("setupWizard.done.enterAppAction")}</span>
             <ArrowRight className="size-4" aria-hidden="true" />
-          </a>
+          </Link>
         </Button>
       </div>
     ),

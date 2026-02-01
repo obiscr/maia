@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 
 import { cn } from "@/lib/utils"
@@ -134,16 +135,9 @@ export function SignupForm({
               </Button>
               <FieldDescription className="px-6 text-center">
                 {t("auth.signup.alreadyHave")}{" "}
-                <a
-                  href="#"
-                  className="underline underline-offset-4 hover:no-underline"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    router.push("/signin")
-                  }}
-                >
+                <Link href="/signin" className="underline underline-offset-4 hover:no-underline">
                   {t("auth.signup.signinLinkAction")}
-                </a>
+                </Link>
               </FieldDescription>
             </Field>
           </FieldGroup>

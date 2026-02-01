@@ -328,7 +328,6 @@ export function WorkflowCommonListItem(props: {
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onSelect={(e) => {
-              e.preventDefault()
               setExportOpen(true)
             }}
           >
@@ -339,7 +338,6 @@ export function WorkflowCommonListItem(props: {
           {props.actions?.copyId ? (
             <DropdownMenuItem
               onSelect={(e) => {
-                e.preventDefault()
                 void props.actions?.copyId?.()
               }}
             >
@@ -350,7 +348,6 @@ export function WorkflowCommonListItem(props: {
           {props.actions?.copyLink ? (
             <DropdownMenuItem
               onSelect={(e) => {
-                e.preventDefault()
                 void props.actions?.copyLink?.()
               }}
             >

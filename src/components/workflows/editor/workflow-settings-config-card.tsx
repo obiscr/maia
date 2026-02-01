@@ -4,6 +4,7 @@ import * as React from "react"
 import { ChevronRight } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 
 export function WorkflowSettingsConfigCard(props: {
   title: string
@@ -14,10 +15,15 @@ export function WorkflowSettingsConfigCard(props: {
   onClick?: () => void
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
       onClick={props.onClick}
       className={cn(
+        "block",
+        "h-auto",
+        "p-3",
+        "text-[inherit] font-[inherit]",
         "w-full rounded-md border bg-muted/10 p-3 text-left transition-colors",
         "hover:bg-muted/10",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
@@ -35,6 +41,6 @@ export function WorkflowSettingsConfigCard(props: {
         <div className={cn("text-lg font-semibold leading-none", props.valueClassName)}>{props.value}</div>
         {props.footer ? <div className="shrink-0 leading-none">{props.footer}</div> : null}
       </div>
-    </button>
+    </Button>
   )
 }

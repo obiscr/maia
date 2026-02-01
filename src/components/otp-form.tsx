@@ -139,18 +139,24 @@ export function OTPForm({ className, ...props }: React.ComponentProps<"div">) {
             </Button>
             <FieldDescription className="text-center">
               {mode === "totp" ? t("auth.otp.noCode") : t("auth.otp.noRecovery")}{" "}
-              <a
-                href="#"
-                className="underline underline-offset-4 hover:no-underline"
-                onClick={(e) => {
-                  e.preventDefault()
+              <Button
+                type="button"
+                variant="ghost"
+                className={[
+                  "h-auto p-0",
+                  "inline-block",
+                  "text-[inherit] font-[inherit]",
+                  "underline underline-offset-4 hover:no-underline",
+                  "hover:bg-transparent hover:text-[inherit]",
+                ].join(" ")}
+                onClick={() => {
                   setOtp("")
                   setRecovery("")
                   setMode((m) => (m === "totp" ? "recovery" : "totp"))
                 }}
               >
                 {mode === "totp" ? t("auth.otp.recoveryCodeAction") : t("auth.otp.authenticatorCodeAction")}
-              </a>
+              </Button>
             </FieldDescription>
           </FieldGroup>
         </FieldGroup>

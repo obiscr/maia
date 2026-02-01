@@ -173,7 +173,6 @@ export function SchedulesCommonListItem(props: {
           {props.actions?.toggleEnabled ? (
             <DropdownMenuItem
               onSelect={(e) => {
-                e.preventDefault()
                 void props.actions?.toggleEnabled?.(toggleSpec.nextEnabled)
               }}
             >
@@ -184,7 +183,6 @@ export function SchedulesCommonListItem(props: {
           {props.actions?.runNow ? (
             <DropdownMenuItem
               onSelect={(e) => {
-                e.preventDefault()
                 void props.actions?.runNow?.()
               }}
             >
@@ -195,7 +193,6 @@ export function SchedulesCommonListItem(props: {
           {props.actions?.edit ? (
             <DropdownMenuItem
               onSelect={(e) => {
-                e.preventDefault()
                 void props.actions?.edit?.()
               }}
             >
@@ -213,7 +210,6 @@ export function SchedulesCommonListItem(props: {
               {props.actions?.copyId ? (
                 <DropdownMenuItem
                   onSelect={(e) => {
-                    e.preventDefault()
                     void props.actions?.copyId?.()
                   }}
                 >
@@ -224,7 +220,6 @@ export function SchedulesCommonListItem(props: {
               {props.actions?.copyLink ? (
                 <DropdownMenuItem
                   onSelect={(e) => {
-                    e.preventDefault()
                     void props.actions?.copyLink?.()
                   }}
                 >

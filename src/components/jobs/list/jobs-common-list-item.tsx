@@ -429,7 +429,6 @@ export function JobsCommonListItem(props: {
           {canResume ? (
             <DropdownMenuItem
               onSelect={(e) => {
-                e.preventDefault()
                 void props.actions?.resume?.()
               }}
             >
@@ -441,7 +440,6 @@ export function JobsCommonListItem(props: {
             <DropdownMenuItem
               variant="destructive"
               onSelect={(e) => {
-                e.preventDefault()
                 void props.actions?.cancel?.()
               }}
             >
@@ -472,7 +470,6 @@ export function JobsCommonListItem(props: {
           {props.actions?.copyId ? (
             <DropdownMenuItem
               onSelect={(e) => {
-                e.preventDefault()
                 void props.actions?.copyId?.()
               }}
             >
@@ -483,7 +480,6 @@ export function JobsCommonListItem(props: {
           {props.actions?.copyLink ? (
             <DropdownMenuItem
               onSelect={(e) => {
-                e.preventDefault()
                 void props.actions?.copyLink?.()
               }}
             >

@@ -6,6 +6,7 @@ import { Wand2, Circle, CircleDot, Zap } from "lucide-react"
 
 import { useI18n } from "@/components/i18n-provider"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { getWorkflowExamplePrompt, type WorkflowExampleId } from "@/lib/shared/workflow-example-prompts"
 
@@ -254,14 +255,16 @@ export function WorkflowQuickExamples(props: {
         const prompt = getWorkflowExamplePrompt(locale, ex.id)
         const diffLabel = t(ex.difficultyKey)
         return (
-          <button
+          <Button
             key={ex.id}
             type="button"
+            variant="ghost"
             onClick={() => onPick(prompt)}
             className={cn(
               // On small screens, make each item full width to avoid horizontal overflow.
               // Also force flex items to be shrinkable (min-w-0) so truncation can work.
               "inline-flex w-full sm:w-auto min-w-0 max-w-full overflow-hidden items-center justify-start gap-2 rounded-full border bg-background px-3 py-1.5 text-sm text-left",
+              "h-auto font-[inherit] text-[inherit] hover:text-[inherit]",
               "transition-colors hover:bg-accent active:scale-[0.99]",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
             )}
@@ -280,7 +283,7 @@ export function WorkflowQuickExamples(props: {
               })}
               <span>{diffLabel}</span>
             </Badge>
-          </button>
+          </Button>
         )
       })}
     </div>

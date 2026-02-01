@@ -180,7 +180,6 @@ export function AdminUsersCommonListItem(props: {
           {props.actions?.copyId ? (
             <DropdownMenuItem
               onSelect={(e) => {
-                e.preventDefault()
                 void props.actions?.copyId?.()
               }}
             >
@@ -192,7 +191,6 @@ export function AdminUsersCommonListItem(props: {
           {props.actions?.kick ? (
             <DropdownMenuItem
               onSelect={(e) => {
-                e.preventDefault()
                 void props.actions?.kick?.()
               }}
             >
@@ -206,7 +204,6 @@ export function AdminUsersCommonListItem(props: {
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onSelect={(e) => {
-                  e.preventDefault()
                   void props.actions?.resetPassword?.()
                 }}
               >

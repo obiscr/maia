@@ -372,7 +372,6 @@ export function RunsCommonListItem(props: {
             <DropdownMenuItem
               variant="destructive"
               onSelect={(e) => {
-                e.preventDefault()
                 void props.actions?.cancel?.()
               }}
             >
@@ -384,7 +383,6 @@ export function RunsCommonListItem(props: {
             <DropdownMenuItem
               variant="destructive"
               onSelect={(e) => {
-                e.preventDefault()
                 void props.actions?.forceStop?.()
               }}
             >
@@ -397,7 +395,6 @@ export function RunsCommonListItem(props: {
           {props.actions?.copyId ? (
             <DropdownMenuItem
               onSelect={(e) => {
-                e.preventDefault()
                 void props.actions?.copyId?.()
               }}
             >
@@ -408,7 +405,6 @@ export function RunsCommonListItem(props: {
           {props.actions?.copyLink ? (
             <DropdownMenuItem
               onSelect={(e) => {
-                e.preventDefault()
                 void props.actions?.copyLink?.()
               }}
             >
