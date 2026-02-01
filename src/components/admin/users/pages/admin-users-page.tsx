@@ -254,6 +254,7 @@ export default function AdminUsersPage() {
             model={{
               id: it.publicId,
               email: it.email,
+              emailVerifiedAt: it.emailVerifiedAt ?? null,
               name: it.name ?? null,
               role: it.role,
               isDisabled: !!it.isDisabled,
