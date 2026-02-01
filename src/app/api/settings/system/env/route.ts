@@ -74,6 +74,16 @@ export const GET = withApiObservability(async (req: Request) => {
   })
 
   {
+    const v = readStringEnv({ name: "MAIA_PUBLIC_ORIGIN", fallback: "" })
+    vars.push({
+      name: "MAIA_PUBLIC_ORIGIN",
+      defaultValue: "",
+      source: v.source,
+      effectiveValue: String(v.value),
+    })
+  }
+
+  {
     const v = readStringEnv({ name: "MAIA_DATA_MOUNT_TYPE", fallback: "volume" })
     vars.push({
       name: "MAIA_DATA_MOUNT_TYPE",
