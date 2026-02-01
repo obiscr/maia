@@ -26,7 +26,7 @@ export default async function Page({ searchParams }: { searchParams?: SearchPara
   const mode = await getRegistrationMode().catch(() => "DISABLED" as const)
   if (mode !== "OPEN") {
     // Allow invite-only registration when a valid invite link is present.
-    if (!(mode === "INVITE_ONLY" && inviteToken)) {
+    if (!((mode === "INVITE_ONLY" && inviteToken) || (mode === "DISABLED" && inviteToken))) {
       const reason = mode === "INVITE_ONLY" ? "invite_only" : "registration_disabled"
       redirect(`/signin?reason=${reason}`)
     }
