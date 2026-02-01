@@ -274,6 +274,7 @@
         "enableActionToggleHint": "开启后将启用 SMTP 邮件发送",
         "enableBlockedHint": "请先完成 SMTP 配置后再启用",
         "enableBlockedUntilVerified": "请先填写 SMTP 配置并发送测试邮件成功后再启用",
+        "reverifyAfterChangeHint": "配置已变更，需重新发送测试邮件验证",
         "host": "主机",
         "hostRequired": "请填写主机",
         "hostInvalid": "主机格式不正确",

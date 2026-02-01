@@ -274,6 +274,7 @@
         "enableActionToggleHint": "Turn on to enable SMTP email sending",
         "enableBlockedHint": "Complete SMTP settings first to enable",
         "enableBlockedUntilVerified": "Fill SMTP settings and send a successful test email first",
+        "reverifyAfterChangeHint": "SMTP settings changed, resend a successful test email to verify",
         "host": "Host",
         "hostRequired": "Host is required",
         "hostInvalid": "Host looks invalid",
