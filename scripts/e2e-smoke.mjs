@@ -29,6 +29,21 @@ function die(msg) {
   process.exit(1)
 }
 
+/**
+ * When running the Next.js standalone server, the runtime cwd may not be the repo root,
+ * so the API route `/api/setup/initialize-db` may not be able to locate Prisma CLI.
+ *
+ * To keep this smoke test self-contained, we can run migrations from the script itself
+ * (still using the project-pinned Prisma version via pnpm), then retry the API call.
+ */
+function runCmd(cmd, args, opts = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, { stdio: "inherit", ...opts })
+    child.on("exit", (code) => resolve(typeof code === "number" ? code : 1))
+    child.on("error", () => resolve(1))
+  })
+}
+
 class CookieJar {
   constructor() {
     /** @type {Map<string, string>} */
@@ -65,6 +80,9 @@ class CookieJar {
 
 /** @type {CookieJar | null} */
 let cookieJar = null
+
+/** @type {string} */
+let e2eDataDir = ""
 
 async function fetchJson(path, init) {
   const headers = new Headers(init?.headers ?? {})
@@ -104,9 +122,22 @@ async function waitForReady() {
   die(`server not ready in time (${lastErr})`)
 }
 
+async function ensureSchemaInitialized() {
+  if (!e2eDataDir) throw new Error("internal error: e2eDataDir not set")
+
+  // In production, migrations are run by the dedicated `migrator` container/job.
+  // For this local smoke test, we run migrations directly against the ephemeral MAIA_DATA_DIR
+  // so the test does not depend on docker-compose orchestration.
+  console.log("[e2e] running pnpm prisma:migrate for ephemeral instance")
+  const code = await runCmd("pnpm", ["prisma:migrate"], {
+    env: { ...process.env, MAIA_DATA_DIR: e2eDataDir, MAIA_IN_CONTAINER: "0" },
+  })
+  if (code !== 0) throw new Error(`pnpm prisma:migrate failed with exit code ${code}`)
+}
+
 async function ensureAuthed() {
-  // Always ensure schema exists for the (temp) instance.
-  await fetchJson("/api/setup/initialize-db", { method: "POST" })
+  // Ensure schema exists for the (temp) instance before any auth/db calls.
+  await ensureSchemaInitialized()
 
   const email = String(process.env.E2E_EMAIL ?? "e2e-admin@example.com")
   const password = String(process.env.E2E_PASSWORD ?? "e2e-password-please-change")
@@ -212,7 +243,7 @@ async function main() {
   cookieJar = new CookieJar()
 
   // Use an isolated instance dir so e2e doesn't depend on (or mutate) a developer's local data dir.
-  const e2eDataDir = await fs.mkdtemp(path.join(os.tmpdir(), "maia-e2e-"))
+  e2eDataDir = await fs.mkdtemp(path.join(os.tmpdir(), "maia-e2e-"))
 
   // Prefer standalone output when `output: "standalone"` is enabled.
   const standaloneServer = path.join(process.cwd(), ".next", "standalone", "server.js")
