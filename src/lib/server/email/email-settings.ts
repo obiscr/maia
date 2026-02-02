@@ -23,6 +23,33 @@ export type SmtpConfigErrCode =
 
 export type SmtpConfigResult = SmtpConfigOk | { ok: false; code: SmtpConfigErrCode }
 
+/**
+ * Returns whether the system email sending toggle is enabled.
+ *
+ * Notes:
+ * - This does NOT validate SMTP completeness/verification; it's only the on/off switch.
+ * - If the instance hasn't been installed/configured yet, it returns false.
+ */
+export async function getSystemSmtpEnabled(): Promise<boolean> {
+  const [emailSettings, legacyInst] = await Promise.all([
+    prisma.emailSettings
+      .findUnique({
+        where: { id: EMAIL_SETTINGS_ROW_ID },
+        select: { smtpEnabled: true },
+      })
+      .catch(() => null),
+    prisma.installation
+      .findUnique({
+        where: { id: "installation" },
+        select: { smtpEnabled: true },
+      })
+      .catch(() => null),
+  ])
+
+  const source = emailSettings ?? legacyInst
+  return Boolean(source?.smtpEnabled)
+}
+
 export async function readSmtpConfig(params?: {
   touchPasswordLastUsed?: boolean
   ignoreEnabled?: boolean

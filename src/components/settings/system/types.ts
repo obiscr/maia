@@ -3,6 +3,8 @@ export type RegistrationMode = "DISABLED" | "OPEN" | "INVITE_ONLY"
 export type SystemSettings = {
   registrationMode: RegistrationMode
 
+  publicBaseUrl: string
+
   smtpEnabled: boolean
   smtpHost: string
   smtpPort: number | null
@@ -25,6 +27,7 @@ export type SystemSettings = {
 
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   registrationMode: "DISABLED",
+  publicBaseUrl: "",
 
   smtpEnabled: false,
   smtpHost: "",
@@ -55,6 +58,7 @@ export function normalizeSystemSettings(input: Partial<SystemSettings> | null | 
 
   return {
     registrationMode,
+    publicBaseUrl: String(s.publicBaseUrl ?? ""),
 
     smtpEnabled: Boolean(s.smtpEnabled),
     smtpHost: String(s.smtpHost ?? ""),

@@ -5,9 +5,12 @@ import { RunStatus } from "@prisma/client"
 import { prisma } from "@/lib/server/db"
 import { readSmtpConfig } from "@/lib/server/email/email-settings"
 import { sendTemplatedEmail } from "@/lib/server/email/send-templated-email"
+import { getEmailNotificationMaskOverrideForUser } from "@/lib/server/email/user-email-notification-settings"
 import { EMAIL_SETTINGS_ROW_ID } from "@/lib/server/installation"
-import { DEFAULT_LOCALE } from "@/lib/shared/i18n/constants"
 import { hasEmailNotification, type EmailNotificationKey } from "@/lib/shared/email/notification-mask"
+import { getSystemPublicBaseUrl } from "@/lib/server/settings/system-settings"
+import { joinPublicBaseUrl } from "@/lib/shared/http/public-base-url"
+import { getOutboundLocaleForUser } from "@/lib/server/settings/outbound-language-settings"
 
 type RunNotificationTemplateKey = "RUN_FAILED_NOTIFICATION" | "RUN_SUCCEEDED_NOTIFICATION" | "RUN_CANCELED_NOTIFICATION"
 
@@ -26,43 +29,9 @@ function preferredRecipientUserId(run: {
   return run.ownerUserId ?? run.triggeredByUserId ?? run.createdByUserId ?? null
 }
 
-function normalizeOrigin(raw: unknown): string | null {
-  const s = String(raw ?? "").trim()
-  if (!s) return null
-  if (s.startsWith("http://") || s.startsWith("https://")) return s.replace(/\/+$/, "")
-  return null
-}
-
-function guessInstanceOrigin(): string | null {
-  const candidates = [
-    process.env.MAIA_PUBLIC_ORIGIN,
-    process.env.PUBLIC_ORIGIN,
-    process.env.APP_ORIGIN,
-    process.env.NEXT_PUBLIC_APP_ORIGIN,
-    process.env.NEXT_PUBLIC_SITE_URL,
-    process.env.SITE_URL,
-  ]
-  for (const c of candidates) {
-    const o = normalizeOrigin(c)
-    if (o) return o
-  }
-  return null
-}
-
 export async function maybeSendRunTerminalNotification(params: { runId: string; status: RunStatus }) {
   const key = templateKeyForStatus(params.status)
   if (!key) return
-
-  const settings = await prisma.emailSettings
-    .findUnique({ where: { id: EMAIL_SETTINGS_ROW_ID }, select: { emailNotificationMask: true } })
-    .catch(() => null)
-  const mask = typeof settings?.emailNotificationMask === "number" ? settings.emailNotificationMask : 0
-
-  const notifKey = key as EmailNotificationKey
-  if (!hasEmailNotification(mask, notifKey)) return
-
-  const smtp = await readSmtpConfig({ touchPasswordLastUsed: true })
-  if (!smtp.ok) return
 
   const run = await prisma.run.findUnique({
     where: { id: params.runId },
@@ -83,23 +52,49 @@ export async function maybeSendRunTerminalNotification(params: { runId: string; 
   })
   if (!userId) return
 
+  const [userMaskOverride, systemSettings] = await Promise.all([
+    getEmailNotificationMaskOverrideForUser(userId).catch(() => null),
+    prisma.emailSettings
+      .findUnique({ where: { id: EMAIL_SETTINGS_ROW_ID }, select: { emailNotificationMask: true } })
+      .catch(() => null),
+  ])
+
+  const systemMask =
+    typeof systemSettings?.emailNotificationMask === "number" ? systemSettings.emailNotificationMask : 0
+  const mask = typeof userMaskOverride === "number" ? userMaskOverride : systemMask
+
+  const notifKey = key as EmailNotificationKey
+  if (!hasEmailNotification(mask, notifKey)) return
+
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, isDisabled: true } })
   if (!user || user.isDisabled) return
   const toEmail = String(user.email ?? "").trim()
   if (!toEmail) return
 
-  const origin = guessInstanceOrigin()
-  const runUrl = origin ? `${origin}/runs/${encodeURIComponent(String(run.publicId))}` : ""
+  const smtp = await readSmtpConfig({ touchPasswordLastUsed: true })
+  if (!smtp.ok) return
 
+  const baseUrl = await getSystemPublicBaseUrl().catch(() => null)
+  if (!baseUrl) {
+    console.warn(
+      `[email] skipped run notification (missing Public Base URL): key=${key} runId=${String(params.runId)} runPublicId=${String(run.publicId ?? "")}`,
+    )
+    return
+  }
+  const runPath = `/runs/${encodeURIComponent(String(run.publicId))}`
+  const runUrl = joinPublicBaseUrl(baseUrl, runPath)
+
+  const locale = await getOutboundLocaleForUser(userId)
   const sent = await sendTemplatedEmail({
     smtp,
     to: toEmail,
     key,
-    locale: DEFAULT_LOCALE,
+    locale,
     vars: {
       appName: "Maia",
       workflowName: String(run.workflowName ?? ""),
       runUrl,
+      runPublicId: String(run.publicId ?? ""),
     },
   })
   if (!sent.ok) return

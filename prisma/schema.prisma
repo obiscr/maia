@@ -398,6 +398,22 @@ model UserSetting {
   @@index([userId, updatedAt])
 }
 
+/// System-wide settings store (non-secret).
+/// Key/value semantics similar to UserSetting, but global (not per-user).
+model SystemSetting {
+  /// Stable key name (e.g. "system.publicBaseUrl")
+  key String @id
+  /// JSON-encoded value (string). Stored as string for SQLite compatibility; validate in application layer.
+  valueJson String @default("{}")
+  /// Optional schema/version for per-key migrations.
+  version Int @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+
 /// Per-user secrets store (sensitive). Values are encrypted at rest in the application layer.
 model UserSecret {
   id        String   @id

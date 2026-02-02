@@ -103,6 +103,7 @@
     "reactflow": "^11.11.4",
     "recharts": "^2.15.4",
     "rehype-highlight": "^7.0.2",
+    "rehype-parse": "^9.0.1",
     "rehype-stringify": "^10.0.1",
     "remark-gfm": "^4.0.1",
     "remark-parse": "^11.0.0",

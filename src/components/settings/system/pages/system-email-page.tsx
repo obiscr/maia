@@ -1,6 +1,9 @@
 "use client"
 
+import Link from "next/link"
+
 import { useI18n } from "@/components/i18n-provider"
+import { InfoAlert } from "@/components/common/info-alert"
 import { SettingsSection } from "@/components/settings/settings-section"
 import { SettingsSectionContent } from "@/components/settings/settings-section-content"
 import { SettingsSectionHeader } from "@/components/settings/settings-section-header"
@@ -11,9 +14,24 @@ import { SettingsSectionGroup } from "../../settings-section-group"
 export function SystemEmailPage() {
   const { t } = useI18n()
   const s = useSystemSettings()
+  const missingPublicBaseUrl = !s.publicBaseUrl.trim()
 
   return (
     <SettingsSectionGroup>
+      {missingPublicBaseUrl ? (
+        <InfoAlert
+          titleKey="settings.system.email.missingPublicBaseUrlAlertTitle"
+          description={
+            <div className="flex flex-col gap-2">
+              {t("settings.system.email.missingPublicBaseUrlAlertDescription")}{" "}
+              <Link href="/preference/system/general" className="underline underline-offset-4 w-fit">
+                {t("settings.system.email.missingPublicBaseUrlAlertAction")}
+              </Link>
+            </div>
+          }
+        />
+      ) : null}
+
       <SettingsSection>
         <SettingsSectionHeader
           title={t("settings.system.email.sectionTitle")}

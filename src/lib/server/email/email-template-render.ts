@@ -2,6 +2,10 @@ import "server-only"
 
 import type { EmailTemplateKey } from "@prisma/client"
 import { convert } from "html-to-text"
+import { unified } from "unified"
+import rehypeParse from "rehype-parse"
+import rehypeStringify from "rehype-stringify"
+import { visit } from "unist-util-visit"
 
 import { prisma } from "@/lib/server/db"
 import { renderTemplateString } from "@/lib/shared/email/template-string"
@@ -10,6 +14,34 @@ export type RenderedEmailTemplate = {
   subject: string
   html: string
   text: string | null
+}
+
+function stripEmptyHrefAnchors(html: string): string {
+  const input = String(html ?? "")
+  if (!input.trim()) return input
+  try {
+    const processor = unified().use(rehypeParse, { fragment: true })
+    const tree = processor.parse(input)
+
+    visit(tree as any, "element", (node: any, index?: number, parent?: any) => {
+      if (!parent || typeof index !== "number") return
+      if (node?.tagName !== "a") return
+      const hrefRaw = node?.properties?.href
+      const href = typeof hrefRaw === "string" ? hrefRaw : Array.isArray(hrefRaw) ? String(hrefRaw[0] ?? "") : ""
+      if (String(href ?? "").trim() !== "") return
+
+      // Replace <a href="">...</a> with its children (keep readable text; avoid dead links).
+      const kids = Array.isArray(node.children) ? node.children : []
+      if (Array.isArray(parent.children)) parent.children.splice(index, 1, ...kids)
+    })
+
+    return unified()
+      .use(rehypeStringify)
+      .stringify(tree as any)
+  } catch {
+    // Best-effort: if parsing fails, keep original HTML.
+    return input
+  }
 }
 
 function htmlToText(html: string): string {
@@ -61,11 +93,14 @@ export async function renderEmailTemplate(params: {
   if (!row) return null
 
   const subject = renderTemplateString(row.subjectTemplate, params.vars)
-  const html = renderTemplateString(row.htmlTemplate, params.vars)
-  const text =
+  const renderedHtml = renderTemplateString(row.htmlTemplate, params.vars)
+  const renderedText =
     typeof row.textTemplate === "string" && row.textTemplate.trim().length
       ? renderTemplateString(row.textTemplate, params.vars)
-      : htmlToText(html)
+      : null
+
+  const html = stripEmptyHrefAnchors(renderedHtml)
+  const text = renderedText ?? htmlToText(html)
 
   return { subject, html, text: text.trim().length ? text : null }
 }

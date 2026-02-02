@@ -5,9 +5,10 @@ import { fail, ok } from "@/lib/server/http/response"
 import { withApiObservability } from "@/lib/server/observability"
 import { prisma } from "@/lib/server/db"
 import { readSmtpConfig } from "@/lib/server/email/email-settings"
-import { requestLocale, requestOrigin, sendTemplatedEmail } from "@/lib/server/email/send-templated-email"
+import { preferredPublicBaseUrl, sendTemplatedEmail } from "@/lib/server/email/send-templated-email"
 import { EMAIL_SETTINGS_ROW_ID, INSTALLATION_ROW_ID, ensureInstallationRowTx } from "@/lib/server/installation"
 import { SYSTEM_SECRET_KEYS, hasSystemSecret, upsertSystemSecretTx } from "@/lib/server/settings/system-secrets"
+import { getOutboundLocaleForUser } from "@/lib/server/settings/outbound-language-settings"
 import { zodIssues } from "@/lib/shared/http/zod"
 
 export const runtime = "nodejs"
@@ -141,13 +142,18 @@ export const POST = withApiObservability(async (req: Request) => {
     return fail({ status: codeToStatus[smtp.code] ?? 422, code: smtp.code })
   }
 
-  const locale = requestLocale(req)
+  const locale = await getOutboundLocaleForUser(user.id)
+  const origin = await preferredPublicBaseUrl(req)
+  if (!origin) {
+    console.warn(`[email] skipped smtp test email (missing Public Base URL): userId=${user.id}`)
+    return fail({ status: 409, code: "SYSTEM_PUBLIC_BASE_URL_REQUIRED" })
+  }
   const sent = await sendTemplatedEmail({
     smtp,
     to: body.toEmail,
     key: "SYSTEM_SMTP_TEST",
     locale,
-    vars: { appName: "Maia", instanceOrigin: requestOrigin(req) ?? "" },
+    vars: { appName: "Maia", instanceOrigin: origin },
   })
   if (!sent.ok) return fail({ status: 500, code: sent.code })
 

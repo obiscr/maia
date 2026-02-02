@@ -47,7 +47,7 @@ export function RegistrationSection(props: {
         resetDisabled={!props.dirty || props.saving || props.loading}
         resetLabel={t("common.resetAction")}
         onSave={props.onSave}
-        saveDisabled={props.saving || props.loading}
+        saveDisabled={!props.dirty || props.saving || props.loading}
         saveLabel={t("common.saveAction")}
         saving={props.savingSection === "registration"}
         savingLabel={t("common.saving")}

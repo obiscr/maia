@@ -37,7 +37,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - **Docker (self-host, prebuilt images)**: see **Breaking** above (refresh `docker-compose.release.yml` before upgrading).
 - **Database**: includes Prisma schema changes and migrations for email templates, SMTP settings, and auth security (TOTP/recovery codes). Run migrations during upgrade.
-- **Config**: supports `MAIA_PUBLIC_ORIGIN` for generating externally reachable absolute URLs.
 
 ## v0.1.3
 

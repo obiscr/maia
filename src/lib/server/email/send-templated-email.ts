@@ -5,47 +5,19 @@ import type { EmailTemplateKey } from "@prisma/client"
 
 import type { SmtpConfigOk } from "@/lib/server/email/email-settings"
 import { renderEmailTemplate } from "@/lib/server/email/email-template-render"
+import { getSystemPublicBaseUrl } from "@/lib/server/settings/system-settings"
 
 export type RequestLocale = "en" | "zh-cn"
 export type EmailSendResult =
   | { emailSent: true; emailErrorCode: null; messageId: string }
   | { emailSent: false; emailErrorCode: string }
 
-function normalizeOrigin(raw: unknown): string | null {
-  const s = String(raw ?? "").trim()
-  if (!s) return null
-  if (s.startsWith("http://") || s.startsWith("https://")) return s.replace(/\/+$/, "")
-  return null
-}
-
-function configuredPublicOrigin(): string | null {
-  const candidates = [
-    process.env.MAIA_PUBLIC_ORIGIN,
-    process.env.PUBLIC_ORIGIN,
-    process.env.APP_ORIGIN,
-    process.env.NEXT_PUBLIC_APP_ORIGIN,
-    process.env.NEXT_PUBLIC_SITE_URL,
-    process.env.SITE_URL,
-  ]
-  for (const c of candidates) {
-    const o = normalizeOrigin(c)
-    if (o) return o
-  }
-  return null
-}
-
-export function requestOrigin(req: Request): string | null {
-  // Prefer explicit operator configuration over request headers (reverse proxy / multi-domain safe).
-  const configured = configuredPublicOrigin()
-  if (configured) return configured
-
-  const proto = req.headers.get("x-forwarded-proto") ?? "http"
-  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host")
-  if (!host) return null
-  const protoFirst = String(proto).split(",")[0]?.trim() || "http"
-  const hostFirst = String(host).split(",")[0]?.trim()
-  if (!hostFirst) return null
-  return `${protoFirst}://${hostFirst}`
+/**
+ * Only use the operator-configured Public Base URL (DB).
+ * We intentionally do NOT derive origin from request headers for email links.
+ */
+export async function preferredPublicBaseUrl(_req?: Request | null): Promise<string | null> {
+  return await getSystemPublicBaseUrl().catch(() => null)
 }
 
 export function requestLocale(req: Request): RequestLocale {

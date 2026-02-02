@@ -11,6 +11,7 @@ import {
   getInstallation,
   INSTALLATION_ROW_ID,
 } from "@/lib/server/installation"
+import { normalizePublicBaseUrl } from "@/lib/shared/http/public-base-url"
 import {
   SYSTEM_SECRET_KEYS,
   hasSystemSecret,
@@ -19,7 +20,9 @@ import {
   upsertSystemSecretTx,
 } from "@/lib/server/settings/system-secrets"
 import { readRuntimeSettingsSync, writeRuntimeSettings, type RuntimeSettings } from "@/lib/server/maia/runtime-settings"
+import { parsePublicBaseUrlSettingValueJson, SYSTEM_SETTING_KEYS } from "@/lib/server/settings/system-settings"
 import { zodIssues } from "@/lib/shared/http/zod"
+import { isValidEmailNotificationMask, normalizeEmailNotificationMask } from "@/lib/shared/email/notification-mask"
 
 export const runtime = "nodejs"
 
@@ -86,6 +89,10 @@ const registrationModeSchema = z.enum(["DISABLED", "OPEN", "INVITE_ONLY"])
 const updateSchema = z.object({
   registrationMode: registrationModeSchema.optional(),
 
+  // Public base URL used for generating absolute URLs in emails/webhooks (supports optional subpath).
+  // null => clear; string => set/update; undefined => unchanged
+  publicBaseUrl: z.union([z.string().trim().min(1), z.null()]).optional(),
+
   smtpEnabled: z.boolean().optional(),
   smtpHost: z.union([z.string(), z.null()]).optional(),
   smtpPort: z.union([z.number().int().min(1).max(65535), z.null()]).optional(),
@@ -93,7 +100,10 @@ const updateSchema = z.object({
   smtpUsername: z.union([z.string(), z.null()]).optional(),
   smtpFromEmail: z.union([z.string().email(), z.null()]).optional(),
   smtpFromName: z.union([z.string(), z.null()]).optional(),
-  emailNotificationMask: z.union([z.number().int().min(0), z.null()]).optional(),
+  emailNotificationMask: z
+    .union([z.number().int(), z.null()])
+    .refine((v) => v === null || isValidEmailNotificationMask(v), "emailNotificationMask contains unknown bits")
+    .optional(),
 
   // null => clear; string => set/update; undefined => unchanged
   smtpPassword: z.union([z.string(), z.null()]).optional(),
@@ -164,12 +174,30 @@ class SmtpConfigError extends Error {
   }
 }
 
+class SystemConfigError extends Error {
+  status: number
+  code: string
+  meta?: Record<string, unknown>
+  constructor(params: { status: number; code: string; meta?: Record<string, unknown> }) {
+    super(params.code)
+    this.status = params.status
+    this.code = params.code
+    this.meta = params.meta
+  }
+}
+
+function requiresPublicBaseUrl(mask: number): boolean {
+  const m = Number.isFinite(mask) ? Math.max(0, Math.floor(mask)) : 0
+  // Current: all email notifications are RUN_* notifications which include a link.
+  return m !== 0
+}
+
 export const GET = withApiObservability(async (req: Request) => {
   const user = await getAuthedUserFromRequest(req).catch(() => null)
   if (!user) return fail({ status: 401, code: "UNAUTHORIZED" })
   if (!requireAdmin(user)) return fail({ status: 403, code: "FORBIDDEN" })
 
-  const [inst, emailSettings, passConfigured] = await Promise.all([
+  const [inst, emailSettings, passConfigured, publicBaseUrlRow] = await Promise.all([
     getInstallation().catch(() => null),
     prisma.emailSettings
       .findUnique({
@@ -188,7 +216,11 @@ export const GET = withApiObservability(async (req: Request) => {
       })
       .catch(() => null),
     hasSystemSecret({ key: SYSTEM_SECRET_KEYS.smtpPassword }).catch(() => false),
+    prisma.systemSetting
+      .findUnique({ where: { key: SYSTEM_SETTING_KEYS.publicBaseUrl }, select: { valueJson: true } })
+      .catch(() => null),
   ])
+  const publicBaseUrl = parsePublicBaseUrlSettingValueJson(publicBaseUrlRow?.valueJson) ?? ""
   const runtime = readRuntimeSettingsSync()
   const perfLocked = isPerformanceLocked()
 
@@ -259,6 +291,7 @@ export const GET = withApiObservability(async (req: Request) => {
     },
     settings: {
       registrationMode: inst?.registrationMode ?? "DISABLED",
+      publicBaseUrl,
       smtpEnabled: Boolean(emailSettings?.smtpEnabled ?? inst?.smtpEnabled),
       smtpHost: emailSettings?.smtpHost ?? inst?.smtpHost ?? "",
       smtpPort:
@@ -275,7 +308,9 @@ export const GET = withApiObservability(async (req: Request) => {
       smtpPasswordConfigured: passConfigured,
       smtpVerifiedAt: emailSettings?.smtpVerifiedAt ? emailSettings.smtpVerifiedAt.toISOString() : null,
       emailNotificationMask:
-        typeof emailSettings?.emailNotificationMask === "number" ? emailSettings.emailNotificationMask : 0,
+        typeof emailSettings?.emailNotificationMask === "number"
+          ? normalizeEmailNotificationMask(emailSettings.emailNotificationMask)
+          : 0,
 
       globalRunConcurrency: typeof runtime.globalRunConcurrency === "number" ? runtime.globalRunConcurrency : null,
       perRunStepConcurrency: typeof runtime.perRunStepConcurrency === "number" ? runtime.perRunStepConcurrency : null,
@@ -302,6 +337,19 @@ export const PUT = withApiObservability(async (req: Request) => {
     throw e
   }
 
+  // Only enforce strict SMTP validation when the request actually touches SMTP config.
+  // Otherwise, unrelated settings (e.g. Public Base URL / registration / performance) should remain editable
+  // even if SMTP is currently enabled but not yet verified.
+  const touchingSmtp =
+    body.smtpEnabled !== undefined ||
+    body.smtpHost !== undefined ||
+    body.smtpPort !== undefined ||
+    body.smtpSecure !== undefined ||
+    body.smtpUsername !== undefined ||
+    body.smtpFromEmail !== undefined ||
+    body.smtpFromName !== undefined ||
+    body.smtpPassword !== undefined
+
   const perfLocked = isPerformanceLocked()
   if (perfLocked) {
     const perfKeys = [
@@ -325,6 +373,7 @@ export const PUT = withApiObservability(async (req: Request) => {
   let updated: {
     inst: {
       registrationMode: string
+      publicBaseUrl: string | null
       smtpEnabled: boolean
       smtpHost: string | null
       smtpPort: number | null
@@ -352,6 +401,15 @@ export const PUT = withApiObservability(async (req: Request) => {
       // Ensure row exists even if installation record was not created yet (shouldn't happen in normal flow).
       await ensureInstallationRowTx(tx, {})
 
+      const currentPublicBaseUrl = await tx.systemSetting
+        .findUnique({
+          where: { key: SYSTEM_SETTING_KEYS.publicBaseUrl },
+          select: { valueJson: true },
+        })
+        .catch(() => null)
+
+      const currentPublicBaseUrlNormalized = parsePublicBaseUrlSettingValueJson(currentPublicBaseUrl?.valueJson)
+
       const currentEmail = await tx.emailSettings
         .findUnique({
           where: { id: EMAIL_SETTINGS_ROW_ID },
@@ -368,6 +426,14 @@ export const PUT = withApiObservability(async (req: Request) => {
           },
         })
         .catch(() => null)
+
+      const nextPublicBaseUrlNormalized = (() => {
+        if (body.publicBaseUrl === undefined) return currentPublicBaseUrlNormalized
+        if (body.publicBaseUrl === null) return null
+        const normalized = normalizePublicBaseUrl(body.publicBaseUrl)
+        if (!normalized) throw new SystemConfigError({ status: 422, code: "SYSTEM_PUBLIC_BASE_URL_INVALID" })
+        return normalized
+      })()
 
       // Compute the effective SMTP config after applying this update (required for validation).
       const nextSmtpEnabled =
@@ -432,8 +498,24 @@ export const PUT = withApiObservability(async (req: Request) => {
 
       const effectiveVerifiedAt = clearVerified ? null : (currentEmail?.smtpVerifiedAt ?? null)
 
-      // Strict SMTP validation: when enabled, the config must be complete and verified.
-      if (nextSmtpEnabled) {
+      // Compute the effective email notification mask after applying this update.
+      const nextEmailNotificationMask =
+        typeof body.emailNotificationMask === "number"
+          ? normalizeEmailNotificationMask(body.emailNotificationMask)
+          : body.emailNotificationMask === null
+            ? 0
+            : typeof currentEmail?.emailNotificationMask === "number"
+              ? normalizeEmailNotificationMask(currentEmail.emailNotificationMask)
+              : 0
+
+      // Hard block: notifications that generate absolute URLs require a configured Public Base URL.
+      if (requiresPublicBaseUrl(nextEmailNotificationMask) && !nextPublicBaseUrlNormalized) {
+        throw new SystemConfigError({ status: 409, code: "SYSTEM_PUBLIC_BASE_URL_REQUIRED" })
+      }
+
+      // Strict SMTP validation: only when SMTP config is being modified in this request.
+      // When enabled, the config must be complete and verified.
+      if (touchingSmtp && nextSmtpEnabled) {
         const missing: string[] = []
         if (!nextSmtpHost || !isValidSmtpHost(nextSmtpHost)) missing.push("smtpHost")
         if (!nextSmtpPort) missing.push("smtpPort")
@@ -500,13 +582,13 @@ export const PUT = withApiObservability(async (req: Request) => {
       else if (typeof body.smtpFromName === "string") emailSettingsData.smtpFromName = body.smtpFromName.trim() || null
 
       if (typeof body.emailNotificationMask === "number")
-        emailSettingsData.emailNotificationMask = body.emailNotificationMask
+        emailSettingsData.emailNotificationMask = nextEmailNotificationMask
       else if (body.emailNotificationMask === null) emailSettingsData.emailNotificationMask = 0
 
       if (clearVerified) emailSettingsData.smtpVerifiedAt = null
 
       // Persist both EmailSettings (new) and Installation (legacy).
-      const [inst, emailSettings] = await Promise.all([
+      const [inst, publicBaseUrlSetting, emailSettings] = await Promise.all([
         tx.installation.update({
           where: { id: INSTALLATION_ROW_ID },
           data: instData,
@@ -521,6 +603,24 @@ export const PUT = withApiObservability(async (req: Request) => {
             smtpFromName: true,
           },
         }),
+        (async () => {
+          if (body.publicBaseUrl === undefined) return { publicBaseUrl: currentPublicBaseUrlNormalized }
+          if (nextPublicBaseUrlNormalized === null) {
+            await tx.systemSetting.delete({ where: { key: SYSTEM_SETTING_KEYS.publicBaseUrl } }).catch(() => {})
+            return { publicBaseUrl: null }
+          }
+          await tx.systemSetting.upsert({
+            where: { key: SYSTEM_SETTING_KEYS.publicBaseUrl },
+            create: {
+              key: SYSTEM_SETTING_KEYS.publicBaseUrl,
+              valueJson: JSON.stringify(nextPublicBaseUrlNormalized),
+              version: 1,
+            },
+            update: { valueJson: JSON.stringify(nextPublicBaseUrlNormalized), version: 1 },
+            select: { key: true },
+          })
+          return { publicBaseUrl: nextPublicBaseUrlNormalized }
+        })(),
         tx.emailSettings.upsert({
           where: { id: EMAIL_SETTINGS_ROW_ID },
           create: {
@@ -534,7 +634,7 @@ export const PUT = withApiObservability(async (req: Request) => {
             smtpFromEmail: nextSmtpFromEmail,
             smtpFromName: nextSmtpFromName,
             smtpVerifiedAt: effectiveVerifiedAt,
-            emailNotificationMask: typeof body.emailNotificationMask === "number" ? body.emailNotificationMask : 0,
+            emailNotificationMask: nextEmailNotificationMask,
           },
           update: emailSettingsData,
           select: {
@@ -552,10 +652,13 @@ export const PUT = withApiObservability(async (req: Request) => {
       ])
 
       const passConfigured = await hasSystemSecretTx(tx, { key: SYSTEM_SECRET_KEYS.smtpPassword }).catch(() => false)
-      return { inst, emailSettings, passConfigured }
+      return { inst: { ...inst, publicBaseUrl: publicBaseUrlSetting.publicBaseUrl }, emailSettings, passConfigured }
     })
   } catch (e) {
     if (e instanceof SmtpConfigError) {
+      return fail({ status: e.status, code: e.code, meta: e.meta })
+    }
+    if (e instanceof SystemConfigError) {
       return fail({ status: e.status, code: e.code, meta: e.meta })
     }
     throw e
@@ -642,6 +745,7 @@ export const PUT = withApiObservability(async (req: Request) => {
     },
     settings: {
       registrationMode: updated.inst.registrationMode,
+      publicBaseUrl: updated.inst.publicBaseUrl ?? "",
       smtpEnabled: Boolean(updated.emailSettings.smtpEnabled),
       smtpHost: updated.emailSettings.smtpHost ?? "",
       smtpPort: typeof updated.emailSettings.smtpPort === "number" ? updated.emailSettings.smtpPort : null,
@@ -654,7 +758,7 @@ export const PUT = withApiObservability(async (req: Request) => {
       smtpVerifiedAt: updated.emailSettings.smtpVerifiedAt ? updated.emailSettings.smtpVerifiedAt.toISOString() : null,
       emailNotificationMask:
         typeof updated.emailSettings.emailNotificationMask === "number"
-          ? updated.emailSettings.emailNotificationMask
+          ? normalizeEmailNotificationMask(updated.emailSettings.emailNotificationMask)
           : 0,
 
       globalRunConcurrency: typeof runtime.globalRunConcurrency === "number" ? runtime.globalRunConcurrency : null,

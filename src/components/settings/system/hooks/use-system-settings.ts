@@ -9,7 +9,7 @@ import { tApiError } from "@/lib/shared/i18n/error"
 import { toast } from "@/lib/client/toast"
 import { useI18n } from "@/components/i18n-provider"
 
-export type SavingSection = null | "registration" | "smtp" | "emailNotifications" | "performance"
+export type SavingSection = null | "registration" | "publicBaseUrl" | "smtp" | "emailNotifications" | "performance"
 
 type PerfSource = "override" | "env" | "default" | "invalid_env"
 type PerfInfo = {
@@ -45,6 +45,8 @@ export function useSystemSettings() {
   const [registrationMode, setRegistrationMode] = useState<SystemSettings["registrationMode"]>(
     DEFAULT_SYSTEM_SETTINGS.registrationMode,
   )
+
+  const [publicBaseUrl, setPublicBaseUrl] = useState(DEFAULT_SYSTEM_SETTINGS.publicBaseUrl)
 
   const [smtpEnabled, setSmtpEnabled] = useState(DEFAULT_SYSTEM_SETTINGS.smtpEnabled)
   const [smtpHost, setSmtpHost] = useState(DEFAULT_SYSTEM_SETTINGS.smtpHost)
@@ -93,6 +95,7 @@ export function useSystemSettings() {
         setPerformanceInfo(json.performance ?? null)
 
         setRegistrationMode(s.registrationMode)
+        setPublicBaseUrl(s.publicBaseUrl)
 
         setSmtpEnabled(s.smtpEnabled)
         setSmtpHost(s.smtpHost)
@@ -156,6 +159,7 @@ export function useSystemSettings() {
   }, [])
 
   const dirtyRegistration = registrationMode !== initial.registrationMode
+  const dirtyPublicBaseUrl = publicBaseUrl !== initial.publicBaseUrl
 
   const dirtySmtp = useMemo(() => {
     if (smtpEnabled !== initial.smtpEnabled) return true
@@ -234,6 +238,34 @@ export function useSystemSettings() {
     inputDownloadTimeoutMs,
     perRunStepConcurrency,
   ])
+
+  async function savePublicBaseUrl() {
+    if (saving || savingSection) return
+    setSaving(true)
+    setSavingSection("publicBaseUrl")
+    try {
+      const trimmed = publicBaseUrl.trim()
+      const json = await apiFetchJson<{ settings?: Partial<SystemSettings> }>("/api/settings/system", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ publicBaseUrl: trimmed ? trimmed : null }),
+      })
+
+      const next = normalizeSystemSettings({
+        ...initial,
+        ...json.settings,
+        publicBaseUrl: json.settings?.publicBaseUrl ?? publicBaseUrl,
+      })
+      setInitial(next)
+      setPublicBaseUrl(next.publicBaseUrl)
+      toast.success(t("common.saved"))
+    } catch (e) {
+      toast.error(tApiError({ t, err: e, fallbackKey: "settings.system.saveFailed" }))
+    } finally {
+      setSaving(false)
+      setSavingSection(null)
+    }
+  }
 
   async function saveRegistration() {
     if (saving || savingSection) return
@@ -467,6 +499,10 @@ export function useSystemSettings() {
     setRegistrationMode(initial.registrationMode)
   }
 
+  function resetPublicBaseUrl() {
+    setPublicBaseUrl(initial.publicBaseUrl)
+  }
+
   function resetSmtp() {
     setSmtpEnabled(initial.smtpEnabled)
     setSmtpHost(initial.smtpHost)
@@ -505,6 +541,9 @@ export function useSystemSettings() {
 
     registrationMode,
     setRegistrationMode,
+
+    publicBaseUrl,
+    setPublicBaseUrl,
 
     smtpEnabled,
     setSmtpEnabled,
@@ -553,9 +592,11 @@ export function useSystemSettings() {
     hardwareSummary,
 
     dirtyRegistration,
+    dirtyPublicBaseUrl,
     dirtySmtp,
     dirtyPerformance,
 
+    savePublicBaseUrl,
     saveRegistration,
     saveSmtp,
     updateEmailNotificationMask,
@@ -563,6 +604,7 @@ export function useSystemSettings() {
     sendSmtpTest,
 
     resetRegistration,
+    resetPublicBaseUrl,
     resetSmtp,
     resetPerformance,
   }
