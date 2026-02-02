@@ -7,7 +7,8 @@ import { withApiObservability } from "@/lib/server/observability"
 import { checkRateLimit, getClientIp, RATE_LIMIT_CONFIG } from "@/lib/server/auth/rate-limit"
 import { readSmtpConfig } from "@/lib/server/email/email-settings"
 import { hashOtpCode, newOtpCode6, newSalt } from "@/lib/server/auth/token"
-import { requestLocale, sendTemplatedEmailBestEffort } from "@/lib/server/email/send-templated-email"
+import { sendTemplatedEmailBestEffort } from "@/lib/server/email/send-templated-email"
+import { getOutboundLocaleForUser } from "@/lib/server/settings/outbound-language-settings"
 import { zodIssues } from "@/lib/shared/http/zod"
 
 export const runtime = "nodejs"
@@ -102,7 +103,7 @@ export const POST = withApiObservability(async (req: Request) => {
     })
   })
 
-  const locale = requestLocale(req)
+  const locale = await getOutboundLocaleForUser(user.id)
   const sent = await sendTemplatedEmailBestEffort({
     smtp,
     to: email,

@@ -7,7 +7,9 @@ import { withApiObservability } from "@/lib/server/observability"
 import { checkRateLimit, getClientIp, RATE_LIMIT_CONFIG } from "@/lib/server/auth/rate-limit"
 import { readSmtpConfig } from "@/lib/server/email/email-settings"
 import { issueOpaqueEmailToken, revokeOpaqueEmailTokenBestEffort } from "@/lib/server/auth/email-token-flow"
-import { requestLocale, requestOrigin, sendTemplatedEmailBestEffort } from "@/lib/server/email/send-templated-email"
+import { preferredPublicBaseUrl, sendTemplatedEmailBestEffort } from "@/lib/server/email/send-templated-email"
+import { getOutboundLocaleForUser } from "@/lib/server/settings/outbound-language-settings"
+import { joinPublicBaseUrl } from "@/lib/shared/http/public-base-url"
 import { zodIssues } from "@/lib/shared/http/zod"
 
 export const runtime = "nodejs"
@@ -66,8 +68,11 @@ export const POST = withApiObservability(async (req: Request) => {
   const smtp = await readSmtpConfig({ touchPasswordLastUsed: true })
   if (!smtp.ok) return ok({ ok: true })
 
-  const origin = requestOrigin(req)
-  if (!origin) return ok({ ok: true })
+  const origin = await preferredPublicBaseUrl(req)
+  if (!origin) {
+    console.warn(`[email] skipped magic link email (missing Public Base URL): email=${email}`)
+    return ok({ ok: true })
+  }
 
   const user = await prisma.user
     .findUnique({ where: { email }, select: { id: true, isDisabled: true } })
@@ -96,8 +101,9 @@ export const POST = withApiObservability(async (req: Request) => {
   })
   if (!issued.ok) return ok({ ok: true })
 
-  const magicLinkUrl = `${origin}/auth/magic?token=${encodeURIComponent(issued.token)}`
-  const locale = requestLocale(req)
+  const magicPath = `/auth/magic?token=${encodeURIComponent(issued.token)}`
+  const magicLinkUrl = joinPublicBaseUrl(origin, magicPath)
+  const locale = await getOutboundLocaleForUser(user.id)
   const sent = await sendTemplatedEmailBestEffort({
     smtp,
     to: email,

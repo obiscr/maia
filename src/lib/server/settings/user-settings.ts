@@ -9,6 +9,15 @@ export type UserSettingKey = string
 export const USER_SETTING_KEYS = {
   agentModel: "agent.model",
   uiTimezone: "ui.timezone",
+  /**
+   * Outbound language for emails/notifications.
+   * - "auto": use last-seen UI locale (falls back to DEFAULT_LOCALE)
+   * - "en" | "zh-cn": fixed locale
+   */
+  outboundLanguage: "outbound.language",
+  /** Last-seen UI locale for this user (used by outboundLanguage="auto"). */
+  uiLocaleLastSeen: "ui.localeLastSeen",
+  emailNotificationMask: "email.notificationMask",
 } as const
 
 export async function getUserSettingJson(params: { userId: string; key: UserSettingKey }) {

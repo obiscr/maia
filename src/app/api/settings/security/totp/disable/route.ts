@@ -7,7 +7,8 @@ import { getAuthedUserFromRequest } from "@/lib/server/auth/session"
 import { verifyPassword } from "@/lib/server/auth/password"
 import { clearTotpSecretForUser } from "@/lib/server/auth/totp-secret"
 import { readSmtpConfig } from "@/lib/server/email/email-settings"
-import { requestLocale, requestOrigin, sendTemplatedEmailBestEffort } from "@/lib/server/email/send-templated-email"
+import { preferredPublicBaseUrl, sendTemplatedEmailBestEffort } from "@/lib/server/email/send-templated-email"
+import { getOutboundLocaleForUser } from "@/lib/server/settings/outbound-language-settings"
 import { zodIssues } from "@/lib/shared/http/zod"
 
 export const runtime = "nodejs"
@@ -53,15 +54,24 @@ export const PUT = withApiObservability(async (req: Request) => {
   // Best-effort email notification (do not block disabling 2FA).
   const smtp = await readSmtpConfig({ touchPasswordLastUsed: true })
   if (smtp.ok) {
-    const origin = requestOrigin(req) ?? ""
-    const locale = requestLocale(req)
-    await sendTemplatedEmailBestEffort({
-      smtp,
-      to: String(user.email ?? ""),
-      key: "TOTP_DISABLED_NOTIFICATION",
-      locale,
-      vars: { appName: "Maia", instanceOrigin: origin },
-    })
+    const origin = await preferredPublicBaseUrl(req)
+    if (!origin) {
+      console.warn(`[email] skipped TOTP disabled notification (missing Public Base URL): userId=${user.id}`)
+    } else {
+      const locale = await getOutboundLocaleForUser(user.id)
+      await sendTemplatedEmailBestEffort({
+        smtp,
+        to: String(user.email ?? ""),
+        key: "TOTP_DISABLED_NOTIFICATION",
+        locale,
+        vars: {
+          appName: "Maia",
+          email: String(user.email ?? ""),
+          time: now.toISOString(),
+          instanceOrigin: origin,
+        },
+      })
+    }
   }
 
   mark("write")

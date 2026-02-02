@@ -140,12 +140,32 @@ export function InviteUserSheet(props: { open: boolean; onOpenChange: (open: boo
   const canLoad = !uiPending && !loadingInvites
   const canInvite = emailValid && !uiPending
 
-  async function copyInviteLink(inviteId: string) {
+  async function copyInviteLink(invite: InviteRow) {
     const origin = typeof window !== "undefined" ? window.location.origin : ""
-    const url = `${origin}/signup?invite=${encodeURIComponent(inviteId)}`
     try {
-      await copyTextToClipboard(url)
-      toast.success(t("common.copied"))
+      const res = await apiFetchJson<{
+        invite?: { id: string; email: string; inviteUrl: string; expiresAt: string }
+      }>("/api/admin/users/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: String(invite.email ?? "")
+            .trim()
+            .toLowerCase(),
+        }),
+      })
+      if (!res.invite?.inviteUrl) throw new Error("Missing inviteUrl")
+
+      // If Public Base URL isn't configured, backend may return a relative path.
+      // Best-effort: make it absolute using the current origin.
+      const url =
+        res.invite.inviteUrl.startsWith("/") && origin ? `${origin}${res.invite.inviteUrl}` : res.invite.inviteUrl
+
+      await copyTextToClipboard(String(url))
+      toast.success(t("admin.users.invite.createdCopied"))
+
+      // Invites are invalidated per-email when issuing a new one; refresh the list to reflect that.
+      await loadInvitesList()
     } catch {
       toast.error(t("common.copyActionFailed"))
     }
@@ -294,7 +314,7 @@ export function InviteUserSheet(props: { open: boolean; onOpenChange: (open: boo
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
                               onSelect={(e) => {
-                                void copyInviteLink(it.id)
+                                void copyInviteLink(it)
                               }}
                             >
                               <Copy className="size-4" aria-hidden="true" />

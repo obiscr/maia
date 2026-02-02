@@ -92,6 +92,19 @@
   "settings": {
     "overview": "Overview",
     "description": "Personal preferences and app behavior",
+    "general": {
+      "title": "General",
+      "description": "Language preferences and time display",
+      "preferredLanguage": {
+        "sectionTitle": "Preferred language",
+        "sectionHint": "Used for outbound emails and notifications",
+        "followUiLabel": "Same as UI",
+        "followUiHint": "When enabled, preferred language follows your UI language",
+        "label": "Preferred language",
+        "placeholder": "Select a language",
+        "followUi": "Same as UI"
+      }
+    },
     "security": {
       "title": "Security",
       "description": "Account security and two-factor authentication",
@@ -130,6 +143,26 @@
     "timezone": {
       "title": "Timezone",
       "description": "Used to display timestamps across the app"
+    },
+    "notifications": {
+      "title": "Notifications",
+      "description": "Configure which emails you receive for workflow runs",
+      "useSystemDefaultAction": "Use system default",
+      "useSystemDefaultHint": "When enabled, your notification preferences follow the instance default set by the administrator",
+      "items": {
+        "RUN_FAILED_NOTIFICATION": {
+          "title": "Run failed",
+          "description": "Email me when a workflow run fails"
+        },
+        "RUN_SUCCEEDED_NOTIFICATION": {
+          "title": "Run succeeded",
+          "description": "Email me when a workflow run succeeds"
+        },
+        "RUN_CANCELED_NOTIFICATION": {
+          "title": "Run canceled",
+          "description": "Email me when a workflow run is canceled"
+        }
+      }
     },
     "agent": {
       "title": "Agent",
@@ -177,7 +210,6 @@
         "publicAccessTitle": "Public access & reverse proxy",
         "runnerToken": "Runner auth token (App ↔ Runner); must match between maia and runner services",
         "settingsEncryptionKey": "Encryption key for secrets-at-rest (user API keys, SMTP password, etc)",
-        "maiaPublicOrigin": "Public origin used to generate absolute URLs in emails (reverse proxy / multi-domain friendly)",
         "maiaDataMountType": "Maia data mount mode for Docker Compose (volume or bind)",
         "maiaHostDataDir": "Host path used when MAIA_DATA_MOUNT_TYPE=bind (absolute path on host)",
         "maiaDataDir": "Lock the instance data directory via environment variables (advanced)",
@@ -189,7 +221,11 @@
         "systemPerformanceLocked": "Lock Performance settings UI (GitOps-friendly)"
       },
       "performance": {
-        "sectionTitle": "Performance & limits"
+        "sectionTitle": "Advanced"
+      },
+      "ops": {
+        "sectionTitle": "Operations",
+        "hint": "Operational settings and environment-based configuration (read-only)"
       },
       "retention": {
         "sectionTitle": "Retention & cleanup",
@@ -237,7 +273,7 @@
         "authPasswordScryptMaxmemMb": "Scrypt max memory (MB)"
       },
       "advanced": {
-        "hint": "These settings are persisted to the data directory and override env defaults; restart is recommended after changes",
+        "hint": "These settings are persisted to the data directory and override env defaults, restart is recommended after changes",
         "applyRecommendedAction": "Apply recommended",
         "sources": {
           "override": "UI override (data dir)"
@@ -267,6 +303,10 @@
           "inviteOnly": "Invite only"
         }
       },
+      "general": {
+        "sectionTitle": "General",
+        "hint": "Instance-wide basics like public URL and registration mode"
+      },
       "email": {
         "sectionTitle": "Email",
         "enableAction": "Enable email sending",
@@ -275,6 +315,9 @@
         "enableBlockedHint": "Complete SMTP settings first to enable",
         "enableBlockedUntilVerified": "Fill SMTP settings and send a successful test email first",
         "reverifyAfterChangeHint": "SMTP settings changed, resend a successful test email to verify",
+        "missingPublicBaseUrlAlertTitle": "Public base URL is not configured",
+        "missingPublicBaseUrlAlertDescription": "Run notification emails require a public, clickable link. To avoid sending dead links, run notification emails will be skipped until this is configured.",
+        "missingPublicBaseUrlAlertAction": "Configure Public base URL",
         "host": "Host",
         "hostRequired": "Host is required",
         "hostInvalid": "Host looks invalid",
@@ -300,6 +343,12 @@
         "testMissingTo": "Please enter a recipient email",
         "testSent": "Test email sent successfully",
         "testFailed": "Send test email failed"
+      },
+      "publicBaseUrl": {
+        "sectionTitle": "Public base URL",
+        "sectionHint": "Used to generate absolute links in emails, required for system notification links",
+        "label": "Public base URL",
+        "placeholder": "https://example.com"
       },
       "emailTemplates": {
         "sectionTitle": "Email templates",
@@ -1600,6 +1649,61 @@
     "SYSTEM_SMTP_INCOMPLETE": "SMTP configuration is incomplete",
     "SYSTEM_SMTP_PASSWORD_MISSING": "SMTP password is missing",
     "SYSTEM_SMTP_NOT_INSTALLED": "Email settings are not initialized yet",
+    "SYSTEM_PUBLIC_BASE_URL_REQUIRED": "Please configure the Public base URL",
+    "SYSTEM_PUBLIC_BASE_URL_INVALID": "Public base URL is invalid",
+    "INTERNAL_SERVER_ERROR": "Internal server error",
+    "NOT_FOUND": "Not found",
+    "RATE_LIMITED": "Too many requests; try again later",
+    "USER_NOT_FOUND": "User not found",
+    "USERS_EXIST": "Users already exist",
+    "REGISTRATION_DISABLED": "Registration is disabled",
+    "SIGNUP_FAILED": "Sign up failed",
+    "REPAIR_DISABLED": "Repair is disabled",
+    "INVALID_REPAIR_TOKEN": "Invalid repair token",
+    "TOTP_ALREADY_ENABLED": "Two-factor authentication is already enabled",
+    "TOTP_NOT_ENABLED": "Two-factor authentication is not enabled",
+    "TOTP_NOT_SETUP": "Two-factor authentication is not set up",
+    "OTP_REQUIRED": "Code is required",
+    "OTP_INVALID": "Invalid code",
+    "OTP_TOO_MANY_ATTEMPTS": "Too many attempts; try again later",
+    "OTP_RACE": "Code was already consumed",
+    "TEMPLATE_MISSING": "Email template is missing",
+    "SUBJECT_REQUIRED": "Subject is required",
+    "HTML_REQUIRED": "HTML is required",
+    "TOKEN_PERSIST_FAILED": "Failed to persist token",
+    "IDEMPOTENCY_KEY_REUSED": "This request was already processed",
+    "OPERATION_EXPIRED": "Operation expired",
+    "DELETE_FAILED": "Delete failed",
+    "EMPTY_ITEMS": "No items provided",
+    "ARTIFACT_ID_REQUIRED": "Artifact ID is required",
+    "OUTPUT_MISSING": "Missing output",
+    "OUTPUT_INVALID": "Invalid output",
+    "OUTPUTS_SPEC_GENERATION_FAILED": "Failed to generate outputs spec",
+    "INVALID_PINNED_WORKFLOW_VERSION": "Invalid pinned workflow version",
+    "INVALID_CATCH_UP_LIMIT": "Invalid catch-up limit",
+    "INVALID_SHARD": "Invalid shard",
+    "BATCH_LOCKED": "Batch is locked",
+    "BATCH_JOBS_CREATE_FAILED": "Create batch jobs failed",
+    "FANOUT_FAILED": "Fanout failed",
+    "JOB_FAILED": "Job failed",
+    "RUNNER_EXEC_FAILED": "Runner execution failed",
+    "PNPM_SPAWN_FAILED": "Failed to start dependency install",
+    "PNPM_INSTALL_EXIT_NONZERO": "Dependency install failed (pnpm exited with an error)",
+    "PNPM_INSTALL_SIGNAL": "Dependency install was terminated",
+    "DEPS_INSTALL_DETAIL": "Dependency installation failed",
+    "DOCKER_CREATE_FAILED": "Failed to create Docker container",
+    "DOCKER_START_FAILED": "Failed to start Docker container",
+    "STEP_KEY_REQUIRED": "Step key is required",
+    "DUP_STEP_KEY": "Duplicate step key",
+    "STEP_TIMEOUT": "Step timed out",
+    "STEP_EXIT_CODE": "Step failed (exit code)",
+    "STEP_SIGNAL": "Step was terminated",
+    "UNKNOWN_DEP": "Unknown dependency",
+    "SELF_DEP": "A step cannot depend on itself",
+    "CYCLE": "Dependency cycle detected",
+    "CANCELED": "Canceled",
+    "DETAIL": "Details",
+    "SYSTEM_PERFORMANCE_LOCKED": "Performance settings are locked",
     "TOKEN_INVALID": "Token is invalid",
     "TOKEN_USED": "Token has already been used",
     "TOKEN_EXPIRED": "Token has expired",

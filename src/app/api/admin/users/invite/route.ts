@@ -8,7 +8,9 @@ import { isAdmin, requireRequestAuth } from "@/lib/server/authz"
 import { getClientIp } from "@/lib/server/auth/rate-limit"
 import { readSmtpConfig } from "@/lib/server/email/email-settings"
 import { hashOpaqueToken, newOpaqueToken } from "@/lib/server/auth/token"
-import { requestLocale, requestOrigin, sendTemplatedEmailBestEffort } from "@/lib/server/email/send-templated-email"
+import { preferredPublicBaseUrl, sendTemplatedEmailBestEffort } from "@/lib/server/email/send-templated-email"
+import { getOutboundLocaleForUser } from "@/lib/server/settings/outbound-language-settings"
+import { joinPublicBaseUrl } from "@/lib/shared/http/public-base-url"
 import { zodIssues } from "@/lib/shared/http/zod"
 
 export const runtime = "nodejs"
@@ -108,9 +110,9 @@ export const POST = withApiObservability(async (req: Request) => {
     })
   })
 
-  const origin = requestOrigin(req)
+  const origin = await preferredPublicBaseUrl(req)
   const invitePath = `/signup?invite=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`
-  const inviteUrl = origin ? `${origin}${invitePath}` : invitePath
+  const inviteUrl = origin ? joinPublicBaseUrl(origin, invitePath) : invitePath
 
   // Best-effort send: keep response useful even if SMTP is not configured.
   let emailSent = false
@@ -118,16 +120,25 @@ export const POST = withApiObservability(async (req: Request) => {
   {
     const smtp = await readSmtpConfig({ touchPasswordLastUsed: true })
     if (smtp.ok) {
-      const locale = requestLocale(req)
-      const sent = await sendTemplatedEmailBestEffort({
-        smtp,
-        to: email,
-        key: "SIGNUP_INVITE",
-        locale,
-        vars: { appName: "Maia", inviteUrl, expiresIn: "7 days" },
-      })
-      emailSent = sent.emailSent
-      emailErrorCode = sent.emailSent ? null : sent.emailErrorCode
+      if (!origin) {
+        console.warn(`[email] skipped invite email (missing Public Base URL): email=${email}`)
+        emailSent = false
+        emailErrorCode = "SYSTEM_PUBLIC_BASE_URL_REQUIRED"
+      } else {
+        const existingUserId =
+          (await prisma.user.findUnique({ where: { email }, select: { id: true, isDisabled: true } }).catch(() => null))
+            ?.id ?? null
+        const locale = existingUserId ? await getOutboundLocaleForUser(existingUserId) : "en"
+        const sent = await sendTemplatedEmailBestEffort({
+          smtp,
+          to: email,
+          key: "SIGNUP_INVITE",
+          locale,
+          vars: { appName: "Maia", inviteUrl, expiresIn: "7 days" },
+        })
+        emailSent = sent.emailSent
+        emailErrorCode = sent.emailSent ? null : sent.emailErrorCode
+      }
     } else {
       emailErrorCode = smtp.code
     }

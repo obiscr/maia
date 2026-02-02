@@ -92,6 +92,19 @@
   "settings": {
     "overview": "概览",
     "description": "偏好与应用行为配置",
+    "general": {
+      "title": "常规",
+      "description": "语言偏好与时间显示",
+      "preferredLanguage": {
+        "sectionTitle": "首选语言",
+        "sectionHint": "用于站内的邮件与通知发送",
+        "followUiLabel": "跟随界面语言",
+        "followUiHint": "开启后，首选语言会随界面语言自动同步",
+        "label": "首选语言",
+        "placeholder": "选择语言",
+        "followUi": "跟随界面语言"
+      }
+    },
     "security": {
       "title": "安全",
       "description": "账号安全与两步验证",
@@ -130,6 +143,26 @@
     "timezone": {
       "title": "时区",
       "description": "用于在全站显示时间"
+    },
+    "notifications": {
+      "title": "通知",
+      "description": "配置你希望接收的工作流运行邮件通知",
+      "useSystemDefaultAction": "使用系统默认值",
+      "useSystemDefaultHint": "开启后，你的通知偏好将跟随管理员设置的实例默认值",
+      "items": {
+        "RUN_FAILED_NOTIFICATION": {
+          "title": "运行失败",
+          "description": "工作流运行失败时给我发邮件"
+        },
+        "RUN_SUCCEEDED_NOTIFICATION": {
+          "title": "运行成功",
+          "description": "工作流运行成功时给我发邮件"
+        },
+        "RUN_CANCELED_NOTIFICATION": {
+          "title": "运行取消",
+          "description": "工作流运行被取消时给我发邮件"
+        }
+      }
     },
     "agent": {
       "title": "智能体",
@@ -177,7 +210,6 @@
         "publicAccessTitle": "公开访问与反向代理",
         "runnerToken": "Runner 鉴权 token（App ↔ Runner）；`maia` 与 `runner` 服务必须一致",
         "settingsEncryptionKey": "用于 secrets-at-rest 的加密 key（用户 API Key、SMTP 密码等）",
-        "maiaPublicOrigin": "用于生成邮件中的绝对链接的公开域名（反向代理/多域名部署建议配置）",
         "maiaDataMountType": "Docker Compose 数据挂载模式（volume 或 bind）",
         "maiaHostDataDir": "当 MAIA_DATA_MOUNT_TYPE=bind 时使用的宿主机目录（绝对路径）",
         "maiaDataDir": "通过环境变量锁定实例数据目录（高级）",
@@ -189,7 +221,11 @@
         "systemPerformanceLocked": "锁定“性能与限制”页面（GitOps 友好）"
       },
       "performance": {
-        "sectionTitle": "性能与限制"
+        "sectionTitle": "高级"
+      },
+      "ops": {
+        "sectionTitle": "运维",
+        "hint": "运维配置与基于环境变量的参数（只读）"
       },
       "retention": {
         "sectionTitle": "保留与清理",
@@ -237,7 +273,7 @@
         "authPasswordScryptMaxmemMb": "Scrypt 最大内存（MB）"
       },
       "advanced": {
-        "hint": "这些设置会持久化到数据目录，并覆盖 env 默认值；修改后建议重启生效",
+        "hint": "这些设置会持久化到数据目录并覆盖 env 默认值，修改后建议重启生效",
         "applyRecommendedAction": "应用推荐值",
         "sources": {
           "override": "平台覆盖值（数据目录）"
@@ -267,6 +303,10 @@
           "inviteOnly": "邀请制"
         }
       },
+      "general": {
+        "sectionTitle": "常规",
+        "hint": "实例级基础配置：公开访问地址与注册模式"
+      },
       "email": {
         "sectionTitle": "邮件",
         "enableAction": "启用邮件发送",
@@ -275,6 +315,9 @@
         "enableBlockedHint": "请先完成 SMTP 配置后再启用",
         "enableBlockedUntilVerified": "请先填写 SMTP 配置并发送测试邮件成功后再启用",
         "reverifyAfterChangeHint": "配置已变更，需重新发送测试邮件验证",
+        "missingPublicBaseUrlAlertTitle": "未配置公开访问地址",
+        "missingPublicBaseUrlAlertDescription": "运行通知邮件需要在邮件中提供可点击的公开链接。为避免向用户发送无法访问的链接，未配置前将跳过发送运行通知邮件。",
+        "missingPublicBaseUrlAlertAction": "去配置公开访问地址",
         "host": "主机",
         "hostRequired": "请填写主机",
         "hostInvalid": "主机格式不正确",
@@ -300,6 +343,12 @@
         "testMissingTo": "请填写收件人邮箱",
         "testSent": "测试邮件发送成功",
         "testFailed": "发送测试邮件失败"
+      },
+      "publicBaseUrl": {
+        "sectionTitle": "公开访问地址",
+        "sectionHint": "用于在邮件中生成可点击的绝对链接，系统内通知需要该配置",
+        "label": "公开访问地址",
+        "placeholder": "https://example.com"
       },
       "emailTemplates": {
         "sectionTitle": "邮件模板",
@@ -1600,6 +1649,61 @@
     "SYSTEM_SMTP_INCOMPLETE": "SMTP 配置不完整",
     "SYSTEM_SMTP_PASSWORD_MISSING": "SMTP 密码未配置",
     "SYSTEM_SMTP_NOT_INSTALLED": "邮件设置尚未初始化",
+    "SYSTEM_PUBLIC_BASE_URL_REQUIRED": "请先配置公开访问地址",
+    "SYSTEM_PUBLIC_BASE_URL_INVALID": "公开访问地址不正确",
+    "INTERNAL_SERVER_ERROR": "服务器内部错误",
+    "NOT_FOUND": "未找到",
+    "RATE_LIMITED": "请求过于频繁，请稍后再试",
+    "USER_NOT_FOUND": "用户不存在",
+    "USERS_EXIST": "已存在用户",
+    "REGISTRATION_DISABLED": "注册已关闭",
+    "SIGNUP_FAILED": "注册失败",
+    "REPAIR_DISABLED": "修复功能已关闭",
+    "INVALID_REPAIR_TOKEN": "修复令牌无效",
+    "TOTP_ALREADY_ENABLED": "两步验证已开启",
+    "TOTP_NOT_ENABLED": "两步验证未开启",
+    "TOTP_NOT_SETUP": "两步验证尚未设置",
+    "OTP_REQUIRED": "请输入验证码",
+    "OTP_INVALID": "验证码错误",
+    "OTP_TOO_MANY_ATTEMPTS": "尝试次数过多，请稍后再试",
+    "OTP_RACE": "验证码已被使用",
+    "TEMPLATE_MISSING": "邮件模板不存在",
+    "SUBJECT_REQUIRED": "主题不能为空",
+    "HTML_REQUIRED": "HTML 内容不能为空",
+    "TOKEN_PERSIST_FAILED": "保存令牌失败",
+    "IDEMPOTENCY_KEY_REUSED": "请求已处理，请勿重复提交",
+    "OPERATION_EXPIRED": "操作已过期",
+    "DELETE_FAILED": "删除失败",
+    "EMPTY_ITEMS": "未提供任何条目",
+    "ARTIFACT_ID_REQUIRED": "需要 artifact ID",
+    "OUTPUT_MISSING": "缺少输出",
+    "OUTPUT_INVALID": "输出不正确",
+    "OUTPUTS_SPEC_GENERATION_FAILED": "生成输出规范失败",
+    "INVALID_PINNED_WORKFLOW_VERSION": "固定的工作流版本无效",
+    "INVALID_CATCH_UP_LIMIT": "追赶（catch-up）数量不合法",
+    "INVALID_SHARD": "分片参数无效",
+    "BATCH_LOCKED": "批次已锁定",
+    "BATCH_JOBS_CREATE_FAILED": "创建批次任务失败",
+    "FANOUT_FAILED": "分发失败",
+    "JOB_FAILED": "任务失败",
+    "RUNNER_EXEC_FAILED": "Runner 执行失败",
+    "PNPM_SPAWN_FAILED": "启动依赖安装失败",
+    "PNPM_INSTALL_EXIT_NONZERO": "依赖安装失败（pnpm 退出码非 0）",
+    "PNPM_INSTALL_SIGNAL": "依赖安装被终止",
+    "DEPS_INSTALL_DETAIL": "依赖安装失败",
+    "DOCKER_CREATE_FAILED": "创建 Docker 容器失败",
+    "DOCKER_START_FAILED": "启动 Docker 容器失败",
+    "STEP_KEY_REQUIRED": "步骤 key 不能为空",
+    "DUP_STEP_KEY": "步骤 key 重复",
+    "STEP_TIMEOUT": "步骤超时",
+    "STEP_EXIT_CODE": "步骤执行失败（退出码）",
+    "STEP_SIGNAL": "步骤被终止",
+    "UNKNOWN_DEP": "未知依赖",
+    "SELF_DEP": "步骤不能依赖自身",
+    "CYCLE": "检测到依赖循环",
+    "CANCELED": "已取消",
+    "DETAIL": "详情",
+    "SYSTEM_PERFORMANCE_LOCKED": "性能设置已锁定",
     "TOKEN_INVALID": "令牌无效",
     "TOKEN_USED": "令牌已使用",
     "TOKEN_EXPIRED": "令牌已过期",

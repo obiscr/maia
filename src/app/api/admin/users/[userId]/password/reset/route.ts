@@ -7,7 +7,9 @@ import { isAdmin, requireRequestAuth } from "@/lib/server/authz"
 import { getClientIp } from "@/lib/server/auth/rate-limit"
 import { readSmtpConfig } from "@/lib/server/email/email-settings"
 import { hashOpaqueToken } from "@/lib/server/auth/token"
-import { requestLocale, requestOrigin, sendTemplatedEmailBestEffort } from "@/lib/server/email/send-templated-email"
+import { preferredPublicBaseUrl, sendTemplatedEmailBestEffort } from "@/lib/server/email/send-templated-email"
+import { getOutboundLocaleForUser } from "@/lib/server/settings/outbound-language-settings"
+import { joinPublicBaseUrl } from "@/lib/shared/http/public-base-url"
 
 export const runtime = "nodejs"
 
@@ -45,9 +47,9 @@ export const POST = withApiObservability(async (req: Request, ctx: { params: Pro
     select: { id: true },
   })
 
-  const origin = requestOrigin(req)
+  const origin = await preferredPublicBaseUrl(req)
   const resetPath = `/reset-password?token=${encodeURIComponent(token)}`
-  const resetUrl = origin ? `${origin}${resetPath}` : resetPath
+  const resetUrl = origin ? joinPublicBaseUrl(origin, resetPath) : resetPath
 
   // Best-effort: try to email the user the reset link if SMTP is configured.
   // Keep response stable even if email is not available.
@@ -56,16 +58,22 @@ export const POST = withApiObservability(async (req: Request, ctx: { params: Pro
   {
     const smtp = await readSmtpConfig({ touchPasswordLastUsed: true })
     if (smtp.ok) {
-      const locale = requestLocale(req)
-      const sent = await sendTemplatedEmailBestEffort({
-        smtp,
-        to: user.email,
-        key: "ADMIN_PASSWORD_RESET_LINK",
-        locale,
-        vars: { appName: "Maia", email: user.email, resetUrl, expiresIn: "1 hour" },
-      })
-      emailSent = sent.emailSent
-      emailErrorCode = sent.emailSent ? null : sent.emailErrorCode
+      if (!origin) {
+        console.warn(`[email] skipped admin password reset email (missing Public Base URL): userId=${user.id}`)
+        emailSent = false
+        emailErrorCode = "SYSTEM_PUBLIC_BASE_URL_REQUIRED"
+      } else {
+        const locale = await getOutboundLocaleForUser(user.id)
+        const sent = await sendTemplatedEmailBestEffort({
+          smtp,
+          to: user.email,
+          key: "ADMIN_PASSWORD_RESET_LINK",
+          locale,
+          vars: { appName: "Maia", email: user.email, resetUrl, expiresIn: "1 hour" },
+        })
+        emailSent = sent.emailSent
+        emailErrorCode = sent.emailSent ? null : sent.emailErrorCode
+      }
     } else {
       emailErrorCode = smtp.code
     }

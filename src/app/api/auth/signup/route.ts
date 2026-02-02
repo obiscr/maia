@@ -11,7 +11,9 @@ import { checkRateLimit, getClientIp, RATE_LIMIT_CONFIG } from "@/lib/server/aut
 import { readSmtpConfig } from "@/lib/server/email/email-settings"
 import { issueOpaqueEmailToken, revokeOpaqueEmailTokenBestEffort } from "@/lib/server/auth/email-token-flow"
 import { hashOpaqueToken } from "@/lib/server/auth/token"
-import { requestLocale, requestOrigin, sendTemplatedEmailBestEffort } from "@/lib/server/email/send-templated-email"
+import { preferredPublicBaseUrl, sendTemplatedEmailBestEffort } from "@/lib/server/email/send-templated-email"
+import { getOutboundLocaleForUser } from "@/lib/server/settings/outbound-language-settings"
+import { joinPublicBaseUrl } from "@/lib/shared/http/public-base-url"
 import { getRegistrationMode, getInstallation } from "@/lib/server/installation"
 import { zodIssues } from "@/lib/shared/http/zod"
 
@@ -133,11 +135,13 @@ export const POST = withApiObservability(async (req: Request) => {
   // Best-effort: send signup confirmation email (if not already verified via invite).
   // Keep signup success path stable even if email is not available.
   if (!created.user.emailVerifiedAt) {
-    const origin = requestOrigin(req)
-    if (origin) {
+    const origin = await preferredPublicBaseUrl(req)
+    if (!origin) {
+      console.warn(`[email] skipped signup confirmation email (missing Public Base URL): userId=${created.user.id}`)
+    } else {
       const smtp = await readSmtpConfig({ touchPasswordLastUsed: true })
       if (smtp.ok) {
-        const locale = requestLocale(req)
+        const locale = await getOutboundLocaleForUser(created.user.id)
         const expiresAt = new Date(Date.now() + 60 * 60 * 1000)
         const issued = await issueOpaqueEmailToken({
           create: async (tokenHash) => {
@@ -160,7 +164,8 @@ export const POST = withApiObservability(async (req: Request) => {
           // Best-effort email; do not affect signup success response.
           // Just skip sending if token can't be persisted.
         } else {
-          const confirmationUrl = `${origin}/confirm-email?token=${encodeURIComponent(issued.token)}`
+          const confirmationPath = `/confirm-email?token=${encodeURIComponent(issued.token)}`
+          const confirmationUrl = joinPublicBaseUrl(origin, confirmationPath)
           const sent = await sendTemplatedEmailBestEffort({
             smtp,
             to: created.user.email,
