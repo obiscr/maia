@@ -3,10 +3,11 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import type { ComponentType } from "react"
-import { Bot, Clock, Mail, Settings, Shield } from "lucide-react"
+import { Bell, Bot, Server, Settings, Shield } from "lucide-react"
 
 import { useI18n } from "@/components/i18n-provider"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 
 type NavItem = {
@@ -15,26 +16,31 @@ type NavItem = {
   Icon?: ComponentType<{ className?: string }>
 }
 
+type NavSeparatorItem = {
+  type: "separator"
+  key: string
+}
+
+type NavEntry = NavItem | NavSeparatorItem
+
+function isSeparator(it: NavEntry): it is NavSeparatorItem {
+  return (it as NavSeparatorItem).type === "separator"
+}
+
 export function SettingsNav({ showSystem = false }: { showSystem?: boolean }) {
   const pathname = usePathname()
   const { t } = useI18n()
 
   function isActive(href: string) {
     if (!pathname) return false
-    if (href === "/preference") return pathname === "/preference"
     return pathname === href || pathname.startsWith(href + "/")
   }
 
-  const items: NavItem[] = [
+  const items: NavEntry[] = [
     {
-      href: "/preference",
-      label: t("settings.overview"),
+      href: "/preference/general",
+      label: t("settings.general.title"),
       Icon: Settings,
-    },
-    {
-      href: "/preference/security",
-      label: t("settings.security.title"),
-      Icon: Shield,
     },
     {
       href: "/preference/agent",
@@ -42,25 +48,32 @@ export function SettingsNav({ showSystem = false }: { showSystem?: boolean }) {
       Icon: Bot,
     },
     {
-      href: "/preference/timezone",
-      label: t("settings.timezone.title"),
-      Icon: Clock,
+      href: "/preference/notifications",
+      label: t("settings.notifications.title"),
+      Icon: Bell,
+    },
+    {
+      href: "/preference/security",
+      label: t("settings.security.title"),
+      Icon: Shield,
     },
   ]
 
   const systemOpen = Boolean(pathname?.startsWith("/preference/system"))
   const systemChildren: NavItem[] = [
-    { href: "/preference/system/registration", label: t("settings.system.registration.sectionTitle") },
+    { href: "/preference/system/general", label: t("settings.system.general.sectionTitle") },
     { href: "/preference/system/email", label: t("settings.system.email.sectionTitle") },
-    { href: "/preference/system/performance", label: t("settings.system.performance.sectionTitle") },
-    { href: "/preference/system/retention", label: t("settings.system.retention.sectionTitle") },
-    { href: "/preference/system/security", label: t("settings.system.security.sectionTitle") },
+    { href: "/preference/system/advanced", label: t("settings.system.performance.sectionTitle") },
+    { href: "/preference/system/ops", label: t("settings.system.ops.sectionTitle") },
   ]
   const systemChildActive = systemChildren.some((it) => isActive(it.href))
 
   return (
     <nav>
       {items.map((it) => {
+        if (isSeparator(it)) {
+          return <Separator key={it.key} className="my-2" />
+        }
         const active = isActive(it.href)
         return (
           <div key={it.href} className="relative">
@@ -101,7 +114,7 @@ export function SettingsNav({ showSystem = false }: { showSystem?: boolean }) {
               )}
             >
               <span className="inline-flex items-center gap-2">
-                <Mail className={cn("size-4", systemChildActive ? "text-foreground" : "text-muted-foreground")} />
+                <Server className={cn("size-4", systemChildActive ? "text-foreground" : "text-muted-foreground")} />
                 <span>{t("sidebar.systemSettings")}</span>
               </span>
             </AccordionTrigger>

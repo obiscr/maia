@@ -1,16 +1,16 @@
 import type { Metadata } from "next"
 
 import { getT } from "@/lib/server/i18n/server"
-import TimezoneSettingsPage from "@/components/settings/pages/timezone-settings-page"
+import GeneralSettingsPage from "../../../../components/settings/pages/general-settings-page"
 
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getT()
   return {
-    title: t("settings.timezone.title"),
-    description: t("settings.timezone.description"),
+    title: t("settings.general.title"),
+    description: t("settings.general.description"),
   }
 }
 
 export default async function Page() {
-  return <TimezoneSettingsPage />
+  return <GeneralSettingsPage />
 }

@@ -9,6 +9,7 @@ import { SettingsSectionHeader } from "@/components/settings/settings-section-he
 import { SettingsSectionFooter } from "@/components/settings/settings-section-footer"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Spinner } from "@/components/ui/spinner"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp"
@@ -243,6 +244,7 @@ export default function SecuritySettingsPage() {
                           type="button"
                           size="sm"
                           variant="secondary"
+                          disabled={loading || saving}
                           onClick={() =>
                             downloadRecoveryCodes({
                               codes: generatedCodes,
@@ -250,6 +252,9 @@ export default function SecuritySettingsPage() {
                             })
                           }
                         >
+                          {loading || saving ? (
+                            <Spinner className="mr-2 h-4 w-4" aria-label={t("common.loading")} />
+                          ) : null}
                           {t("settings.security.totp.downloadRecoveryCodesAction")}
                         </Button>
                         <Button type="button" size="sm" variant="ghost" onClick={() => setGeneratedCodes(null)}>
@@ -358,6 +363,7 @@ export default function SecuritySettingsPage() {
               <>
                 <Button
                   type="button"
+                  size="sm"
                   variant="secondary"
                   onClick={() => void startSetup()}
                   disabled={loading || setupLoading}
