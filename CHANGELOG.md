@@ -8,9 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
-### Added
-
 ## v0.2.1
+
+### Added
 
 - **Settings**: per-user outbound language and notification preferences.
 - **System settings**: persisted system settings including **Public Base URL** (used for generating absolute links in emails).
