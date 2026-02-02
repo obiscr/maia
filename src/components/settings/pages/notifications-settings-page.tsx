@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch"
 import { toast } from "@/lib/client/toast"
 import { apiFetchJson } from "@/lib/shared/http/api"
 import { tApiError } from "@/lib/shared/i18n/error"
+import { SettingsToggleListSkeleton } from "@/components/settings/settings-skeletons"
 import {
   hasEmailNotification,
   setEmailNotification,
@@ -142,70 +143,74 @@ export default function NotificationsSettingsPage() {
         title={t("settings.notifications.title")}
         description={t("settings.notifications.description")}
       />
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          if (saving || loading || !dirty) return
-          void save()
-        }}
-      >
-        <SettingsSectionContent>
-          <div className="space-y-4">
-            <FieldGroup className="gap-6">
-              <Field
-                orientation="horizontal"
-                className="items-center justify-between gap-4"
-                data-disabled={loading || saving}
-              >
-                <div className="space-y-0.5">
-                  <FieldTitle>{t("settings.notifications.useSystemDefaultAction")}</FieldTitle>
-                  <FieldDescription className="text-xs">
-                    {t("settings.notifications.useSystemDefaultHint")}
-                  </FieldDescription>
-                </div>
-                <Switch
-                  checked={mask === null}
-                  onCheckedChange={(v) => {
-                    if (v) setMask(null)
-                    else setMask(systemMask)
-                  }}
-                  disabled={loading || saving}
-                />
-              </Field>
+      <SettingsSectionContent>
+        {loading ? (
+          <SettingsToggleListSkeleton rows={1 + RUN_KEYS.length} />
+        ) : (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (saving || loading || !dirty) return
+              void save()
+            }}
+          >
+            <div className="space-y-4">
+              <FieldGroup className="gap-6">
+                <Field
+                  orientation="horizontal"
+                  className="items-center justify-between gap-4"
+                  data-disabled={loading || saving}
+                >
+                  <div className="space-y-0.5">
+                    <FieldTitle>{t("settings.notifications.useSystemDefaultAction")}</FieldTitle>
+                    <FieldDescription className="text-xs">
+                      {t("settings.notifications.useSystemDefaultHint")}
+                    </FieldDescription>
+                  </div>
+                  <Switch
+                    checked={mask === null}
+                    onCheckedChange={(v) => {
+                      if (v) setMask(null)
+                      else setMask(systemMask)
+                    }}
+                    disabled={loading || saving}
+                  />
+                </Field>
 
-              {RUN_KEYS.map((it) => {
-                const enabled = hasEmailNotification(effectiveMask, it.key)
-                const disabled = loading || saving || mask === null
-                return (
-                  <Field
-                    key={it.key}
-                    orientation="horizontal"
-                    className="items-center justify-between gap-4"
-                    data-disabled={disabled}
-                  >
-                    <div className="space-y-0.5">
-                      <FieldTitle>{t(it.titleKey)}</FieldTitle>
-                      <FieldDescription className="text-xs">{t(it.descriptionKey)}</FieldDescription>
-                    </div>
-                    <Switch checked={enabled} onCheckedChange={(v) => setEnabled(it.key, v)} disabled={disabled} />
-                  </Field>
-                )
-              })}
-            </FieldGroup>
+                {RUN_KEYS.map((it) => {
+                  const enabled = hasEmailNotification(effectiveMask, it.key)
+                  const disabled = loading || saving || mask === null
+                  return (
+                    <Field
+                      key={it.key}
+                      orientation="horizontal"
+                      className="items-center justify-between gap-4"
+                      data-disabled={disabled}
+                    >
+                      <div className="space-y-0.5">
+                        <FieldTitle>{t(it.titleKey)}</FieldTitle>
+                        <FieldDescription className="text-xs">{t(it.descriptionKey)}</FieldDescription>
+                      </div>
+                      <Switch checked={enabled} onCheckedChange={(v) => setEnabled(it.key, v)} disabled={disabled} />
+                    </Field>
+                  )
+                })}
+              </FieldGroup>
 
-            <SettingsSectionFooter
-              onReset={resetLocal}
-              resetDisabled={!dirty || saving || loading}
-              resetLabel={t("common.resetAction")}
-              saveType="submit"
-              saveDisabled={saving || loading || !dirty}
-              saveLabel={t("common.saveAction")}
-              saving={saving}
-              savingLabel={t("common.saving")}
-            />
-          </div>
-        </SettingsSectionContent>
-      </form>
+              <SettingsSectionFooter
+                onReset={resetLocal}
+                resetDisabled={!dirty || saving || loading}
+                resetLabel={t("common.resetAction")}
+                saveType="submit"
+                saveDisabled={saving || loading || !dirty}
+                saveLabel={t("common.saveAction")}
+                saving={saving}
+                savingLabel={t("common.saving")}
+              />
+            </div>
+          </form>
+        )}
+      </SettingsSectionContent>
     </SettingsSection>
   )
 }

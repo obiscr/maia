@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { apiFetchJson } from "@/lib/shared/http/api"
 import { tApiError } from "@/lib/shared/i18n/error"
 import { toast } from "@/lib/client/toast"
+import { SettingsFormSkeleton } from "@/components/settings/settings-skeletons"
 
 type AgentSettingsStatus = {
   apiKeyConfigured: boolean
@@ -115,91 +116,95 @@ export default function AgentSettingsPage() {
   return (
     <SettingsSection>
       <SettingsSectionHeader title={t("settings.agent.title")} description={t("settings.agent.description")} />
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          if (saving || loading || !dirty) return
-          void save()
-        }}
-      >
-        <SettingsSectionContent>
-          <div className="space-y-4">
-            <FieldGroup>
-              <Field data-disabled={loading || saving}>
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-                  <FieldLabel htmlFor="agent-api-key" className="min-w-0 truncate">
-                    {t("settings.agent.apiKey")}
-                  </FieldLabel>
-                  {initial.apiKeyConfigured ? (
-                    <div className="inline-flex h-4 items-center gap-2 whitespace-nowrap text-sm leading-none text-muted-foreground">
-                      <span className="select-none">{t("common.configured")}</span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-5 px-2 text-sm leading-none"
-                        onClick={() => {
-                          setApiKeyDraft("")
-                          setApiKeyClearRequested(true)
-                        }}
-                        disabled={loading || saving}
-                      >
-                        {t("common.clearSecretAction")}
-                      </Button>
-                    </div>
-                  ) : null}
-                </div>
-                <div className="relative">
-                  <SecretInput
-                    id="agent-api-key"
-                    value={apiKeyDraft}
-                    onChange={(e) => setApiKeyDraft(e.target.value)}
-                    masked={!showKey}
-                    placeholder={t("settings.agent.apiKeyPlaceholder")}
-                    className="w-full pr-10 font-mono text-xs"
-                    disabled={loading || saving}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => setShowKey((v) => !v)}
-                    disabled={loading || saving}
-                    aria-label={showKey ? t("settings.agent.hideAction") : t("settings.agent.showAction")}
-                    className="absolute right-1 top-1/2 -translate-y-1/2 bg-transparent hover:bg-transparent focus-visible:ring-0 focus-visible:border-transparent"
-                  >
-                    {showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                  </Button>
-                </div>
-              </Field>
+      <SettingsSectionContent>
+        {loading ? (
+          <SettingsFormSkeleton rows={2} />
+        ) : (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (saving || loading || !dirty) return
+              void save()
+            }}
+          >
+            <div className="space-y-4">
+              <FieldGroup>
+                <Field data-disabled={loading || saving}>
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                    <FieldLabel htmlFor="agent-api-key" className="min-w-0 truncate">
+                      {t("settings.agent.apiKey")}
+                    </FieldLabel>
+                    {initial.apiKeyConfigured ? (
+                      <div className="inline-flex h-4 items-center gap-2 whitespace-nowrap text-sm leading-none text-muted-foreground">
+                        <span className="select-none">{t("common.configured")}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 px-2 text-sm leading-none"
+                          onClick={() => {
+                            setApiKeyDraft("")
+                            setApiKeyClearRequested(true)
+                          }}
+                          disabled={loading || saving}
+                        >
+                          {t("common.clearSecretAction")}
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="relative">
+                    <SecretInput
+                      id="agent-api-key"
+                      value={apiKeyDraft}
+                      onChange={(e) => setApiKeyDraft(e.target.value)}
+                      masked={!showKey}
+                      placeholder={t("settings.agent.apiKeyPlaceholder")}
+                      className="w-full pr-10 font-mono text-xs"
+                      disabled={loading || saving}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setShowKey((v) => !v)}
+                      disabled={loading || saving}
+                      aria-label={showKey ? t("settings.agent.hideAction") : t("settings.agent.showAction")}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 bg-transparent hover:bg-transparent focus-visible:ring-0 focus-visible:border-transparent"
+                    >
+                      {showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </Button>
+                  </div>
+                </Field>
 
-              <Field data-disabled={loading || saving}>
-                <FieldLabel htmlFor="agent-model">{t("settings.agent.model")}</FieldLabel>
-                <Select value={model} onValueChange={setModel} disabled={loading || saving}>
-                  <SelectTrigger id="agent-model">
-                    <SelectValue placeholder={t("settings.agent.modelPlaceholder")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="deepseek-chat">{t("settings.agent.models.deepseekChat")}</SelectItem>
-                    <SelectItem value="deepseek-reasoner">{t("settings.agent.models.deepseekReasoner")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-            </FieldGroup>
+                <Field data-disabled={loading || saving}>
+                  <FieldLabel htmlFor="agent-model">{t("settings.agent.model")}</FieldLabel>
+                  <Select value={model} onValueChange={setModel} disabled={loading || saving}>
+                    <SelectTrigger id="agent-model">
+                      <SelectValue placeholder={t("settings.agent.modelPlaceholder")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="deepseek-chat">{t("settings.agent.models.deepseekChat")}</SelectItem>
+                      <SelectItem value="deepseek-reasoner">{t("settings.agent.models.deepseekReasoner")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </FieldGroup>
 
-            <SettingsSectionFooter
-              onReset={reset}
-              resetDisabled={!dirty || saving || loading}
-              resetLabel={t("common.resetAction")}
-              saveType="submit"
-              saveDisabled={saving || loading || !dirty}
-              saveLabel={t("common.saveAction")}
-              saving={saving}
-              savingLabel={t("common.saving")}
-            />
-          </div>
-        </SettingsSectionContent>
-      </form>
+              <SettingsSectionFooter
+                onReset={reset}
+                resetDisabled={!dirty || saving || loading}
+                resetLabel={t("common.resetAction")}
+                saveType="submit"
+                saveDisabled={saving || loading || !dirty}
+                saveLabel={t("common.saveAction")}
+                saving={saving}
+                savingLabel={t("common.saving")}
+              />
+            </div>
+          </form>
+        )}
+      </SettingsSectionContent>
     </SettingsSection>
   )
 }

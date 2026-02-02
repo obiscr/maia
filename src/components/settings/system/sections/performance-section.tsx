@@ -6,6 +6,7 @@ import { Info } from "lucide-react"
 import { OptionalTooltip } from "@/components/common/optional-tooltip"
 import { useI18n } from "@/components/i18n-provider"
 import { SettingsSectionFooter } from "@/components/settings/settings-section-footer"
+import { SystemPerformanceSectionSkeleton } from "@/components/settings/settings-skeletons"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
@@ -61,6 +62,8 @@ export function PerformanceSection(props: {
   onSave: () => void
 }) {
   const { t } = useI18n()
+
+  if (props.loading) return <SystemPerformanceSectionSkeleton />
   const disabled = props.loading || props.saving || props.locked
   const canApplyRecommended =
     !!props.recommendedGlobalRunConcurrency &&

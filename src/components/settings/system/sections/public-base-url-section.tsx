@@ -3,6 +3,7 @@
 import { useI18n } from "@/components/i18n-provider"
 import { InfoAlert } from "@/components/common/info-alert"
 import { SettingsSectionFooter } from "@/components/settings/settings-section-footer"
+import { SettingsFormSkeleton } from "@/components/settings/settings-skeletons"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import type { SavingSection } from "@/components/settings/system/hooks/use-system-settings"
@@ -20,6 +21,8 @@ export function PublicBaseUrlSection(props: {
 }) {
   const { t } = useI18n()
   const missing = !props.value.trim()
+
+  if (props.loading) return <SettingsFormSkeleton rows={1} />
 
   return (
     <div className="space-y-4">

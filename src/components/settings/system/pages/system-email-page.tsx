@@ -14,7 +14,7 @@ import { SettingsSectionGroup } from "../../settings-section-group"
 export function SystemEmailPage() {
   const { t } = useI18n()
   const s = useSystemSettings()
-  const missingPublicBaseUrl = !s.publicBaseUrl.trim()
+  const missingPublicBaseUrl = !s.loading && !s.publicBaseUrl.trim()
 
   return (
     <SettingsSectionGroup>

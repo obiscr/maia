@@ -2,6 +2,7 @@
 
 import { useI18n } from "@/components/i18n-provider"
 import { SettingsSectionFooter } from "@/components/settings/settings-section-footer"
+import { SettingsFormSkeleton } from "@/components/settings/settings-skeletons"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { RegistrationMode } from "@/components/settings/system/types"
@@ -19,6 +20,8 @@ export function RegistrationSection(props: {
   onSave: () => void
 }) {
   const { t } = useI18n()
+
+  if (props.loading) return <SettingsFormSkeleton rows={1} />
 
   return (
     <div className="space-y-4">

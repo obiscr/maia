@@ -14,6 +14,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import { toast } from "@/lib/client/toast"
 import type { SavingSection } from "@/components/settings/system/hooks/use-system-settings"
+import { SystemSmtpSectionSkeleton } from "@/components/settings/settings-skeletons"
 
 type SmtpFormErrors = Partial<
   Record<"smtpHost" | "smtpPort" | "smtpUsername" | "smtpFromEmail" | "smtpPassword" | "smtpTestTo", string>
@@ -165,7 +166,9 @@ export function EmailSection(props: {
 
   const isValid = !validatedOnce || Object.keys(errors).length === 0
 
-  return (
+  return props.loading ? (
+    <SystemSmtpSectionSkeleton />
+  ) : (
     <form
       className="space-y-4"
       onSubmit={(e) => {
