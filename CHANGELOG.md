@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
+### Added
+
+## v0.2.1
+
+- **Settings**: per-user outbound language and notification preferences.
+- **System settings**: persisted system settings including **Public Base URL** (used for generating absolute links in emails).
+- **Settings UX**: loading skeletons for settings pages.
+
+### Changed
+
+- **Preferences/Settings**: reorganized preference pages (general/notifications + system subpages) and refreshed navigation.
+
+### Removed
+
+- **Preferences**: removed timezone preference page.
+
 ## v0.2.0
 
 ### Breaking
