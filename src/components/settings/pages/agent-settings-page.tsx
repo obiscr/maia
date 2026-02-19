@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Eye, EyeOff } from "lucide-react"
 
 import { useI18n } from "@/components/i18n-provider"
@@ -9,11 +9,18 @@ import { SettingsSectionContent } from "@/components/settings/settings-section-c
 import { SettingsSectionFooter } from "@/components/settings/settings-section-footer"
 import { SettingsSectionHeader } from "@/components/settings/settings-section-header"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
 import { SecretInput } from "@/components/ui/secret-input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { apiFetchJson } from "@/lib/shared/http/api"
 import { tApiError } from "@/lib/shared/i18n/error"
 import { toast } from "@/lib/client/toast"
@@ -24,7 +31,14 @@ type AgentSettingsStatus = {
   model: string
 }
 
-const DEFAULTS: AgentSettingsStatus = { apiKeyConfigured: false, model: "deepseek-chat" }
+type ModelInfo = { id: string; name: string; provider: string }
+
+type AgentSettingsResponse = {
+  settings: AgentSettingsStatus
+  models: ModelInfo[]
+}
+
+const DEFAULTS: AgentSettingsStatus = { apiKeyConfigured: false, model: "openai/gpt-5.2-codex" }
 
 export default function AgentSettingsPage() {
   const { t } = useI18n()
@@ -36,13 +50,14 @@ export default function AgentSettingsPage() {
   const [apiKeyClearRequested, setApiKeyClearRequested] = useState(false)
   const [model, setModel] = useState(DEFAULTS.model)
   const [showKey, setShowKey] = useState(false)
+  const [availableModels, setAvailableModels] = useState<ModelInfo[]>([])
 
   useEffect(() => {
     let cancelled = false
     async function load() {
       setLoading(true)
       try {
-        const json = await apiFetchJson<{ settings?: Partial<AgentSettingsStatus> }>("/api/settings/agent", {
+        const json = await apiFetchJson<AgentSettingsResponse>("/api/settings/agent", {
           method: "GET",
         })
         const s: AgentSettingsStatus = {
@@ -56,6 +71,7 @@ export default function AgentSettingsPage() {
         setLastSavedApiKeyDraft("")
         setApiKeyClearRequested(false)
         setModel(s.model)
+        setAvailableModels(json.models ?? [])
       } catch {
         if (!cancelled) toast.error(t("common.loadFailed"))
       } finally {
@@ -70,6 +86,31 @@ export default function AgentSettingsPage() {
 
   const dirty = model !== initial.model || apiKeyClearRequested || apiKeyDraft.trim() !== lastSavedApiKeyDraft
 
+  const groupedModels = useMemo(() => {
+    const currentModel = String(model ?? "").trim()
+    const models = availableModels.slice()
+
+    if (currentModel && !models.some((m) => m.id === currentModel)) {
+      models.unshift({ id: currentModel, name: currentModel, provider: "Custom" })
+    }
+
+    const byProvider = new Map<string, ModelInfo[]>()
+    const providerOrder: string[] = []
+    for (const m of models) {
+      const provider = String(m.provider ?? "").trim() || "Other"
+      if (!byProvider.has(provider)) {
+        byProvider.set(provider, [])
+        providerOrder.push(provider)
+      }
+      byProvider.get(provider)!.push(m)
+    }
+
+    return providerOrder.map((provider) => ({
+      provider,
+      models: byProvider.get(provider)!,
+    }))
+  }, [availableModels, model])
+
   async function save() {
     if (saving) return
     setSaving(true)
@@ -83,7 +124,7 @@ export default function AgentSettingsPage() {
         body.apiKey = null
       }
 
-      const json = await apiFetchJson<{ settings?: Partial<AgentSettingsStatus> }>("/api/settings/agent", {
+      const json = await apiFetchJson<AgentSettingsResponse>("/api/settings/agent", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -98,6 +139,7 @@ export default function AgentSettingsPage() {
       setLastSavedApiKeyDraft("")
       setApiKeyClearRequested(false)
       setModel(s.model)
+      setAvailableModels(json.models ?? availableModels)
       toast.success(t("common.saved"))
     } catch (e) {
       toast.error(tApiError({ t, err: e, fallbackKey: "settings.agent.saveFailed" }))
@@ -184,8 +226,17 @@ export default function AgentSettingsPage() {
                       <SelectValue placeholder={t("settings.agent.modelPlaceholder")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="deepseek-chat">{t("settings.agent.models.deepseekChat")}</SelectItem>
-                      <SelectItem value="deepseek-reasoner">{t("settings.agent.models.deepseekReasoner")}</SelectItem>
+                      {groupedModels.map((g, idx) => (
+                        <SelectGroup key={g.provider}>
+                          <SelectLabel>{g.provider}</SelectLabel>
+                          {g.models.map((m) => (
+                            <SelectItem key={m.id} value={m.id}>
+                              {m.name}
+                            </SelectItem>
+                          ))}
+                          {idx < groupedModels.length - 1 ? <SelectSeparator /> : null}
+                        </SelectGroup>
+                      ))}
                     </SelectContent>
                   </Select>
                 </Field>

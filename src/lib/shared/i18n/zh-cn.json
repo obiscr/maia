@@ -168,15 +168,11 @@
       "title": "智能体",
       "description": "配置 API Key 和模型，用于智能体辅助编排工作流",
       "apiKey": "API Key",
-      "apiKeyPlaceholder": "DeepSeek API Key",
+      "apiKeyPlaceholder": "OpenRouter API Key",
       "model": "模型",
       "modelPlaceholder": "选择模型",
       "showAction": "显示",
       "hideAction": "隐藏",
-      "models": {
-        "deepseekChat": "deepseek-chat",
-        "deepseekReasoner": "deepseek-reasoner"
-      },
       "saveFailed": "保存失败"
     },
     "system": {
@@ -1779,7 +1775,7 @@
     "NO_SUCCESSFUL_ATTEMPTS": "暂无成功的运行记录",
     "DEPS_INSTALL_FAILED": "依赖安装失败（请查看安装日志）",
     "AGENT_API_KEY_MISSING": "未配置智能体 API Key（请到 偏好 → 智能体 中配置）",
-    "DEEPSEEK_HTTP_ERROR": "智能体请求失败（上游服务错误）",
+    "OPENROUTER_HTTP_ERROR": "智能体请求失败（上游服务错误）",
     "AGENT_STREAM_FAILED": "智能体流式请求失败",
     "AGENT_UPSTREAM_TIMEOUT": "智能体超时（上游响应过慢）",
     "AGENT_IDLE_TIMEOUT": "智能体超时（上游长时间无输出）",

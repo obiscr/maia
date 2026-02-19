@@ -2,9 +2,9 @@ import "server-only"
 
 import { z } from "zod"
 
-import { deepseekStreamOnce, type DeepseekUpstreamChunk } from "@/lib/server/agent/deepseek"
+import { openrouterStreamOnce } from "@/lib/server/agent/openrouter"
+import { readOpenRouterStreamTurn } from "@/lib/server/agent/openrouter-stream-turn"
 import type { AgentDefinition, AgentSend, ChatMessage } from "@/lib/shared/agent/types"
-import { parseUpstreamSseLines } from "@/lib/shared/agent/sse"
 import { isPlainObject } from "@/lib/shared/lang/is-plain-object"
 import type { PlainObject } from "@/lib/shared/types/plain-object"
 import { CreateInputSchemaAgent } from "@/lib/server/agent/agents/create-input-schema-agent"
@@ -49,7 +49,7 @@ async function runAgentToTerminal<TBody>(params: {
     const tools = params.agent.getTools ? params.agent.getTools({ phase: "plan" }) : params.agent.tools
     let upstream: ReadableStream<Uint8Array>
     try {
-      upstream = await deepseekStreamOnce({
+      upstream = await openrouterStreamOnce({
         apiKey: params.settings.apiKey,
         model: params.settings.model,
         messages: history,
@@ -67,67 +67,17 @@ async function runAgentToTerminal<TBody>(params: {
       throw e
     }
 
-    const reader = upstream.getReader()
-    const decoder = new TextDecoder()
-    let carry = ""
-
-    const toolCallsByIndex = new Map<number, { id: string; name: string; args: string }>()
-    let finishReason: string | null | undefined = null
-    let assistantContent = ""
-    let lastUpstreamAt = Date.now()
-
-    const idleCheck = setInterval(() => {
-      if (upstreamAbort.signal.aborted) return
-      const idleFor = Date.now() - lastUpstreamAt
-      if (idleFor > params.idleTimeoutMs) {
-        upstreamAbortCode = "AGENT_IDLE_TIMEOUT"
-        upstreamAbortMeta = { round, idleTimeoutMs: params.idleTimeoutMs, idleForMs: idleFor }
-        try {
-          upstreamAbort.abort()
-        } catch {}
-      }
-    }, 250)
-
+    let turn: Awaited<ReturnType<typeof readOpenRouterStreamTurn>>
     try {
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) break
-        lastUpstreamAt = Date.now()
-        carry += decoder.decode(value, { stream: true })
-        const parsed = parseUpstreamSseLines(carry)
-        carry = parsed.rest
-
-        for (const ev of parsed.events) {
-          if (ev.data === "[DONE]") {
-            finishReason = finishReason ?? "stop"
-            continue
-          }
-          let chunk: DeepseekUpstreamChunk | null = null
-          try {
-            chunk = JSON.parse(ev.data) as DeepseekUpstreamChunk
-          } catch {
-            continue
-          }
-          const choice = chunk.choices?.[0]
-          if (!choice) continue
-          finishReason = choice.finish_reason ?? finishReason
-          const delta = choice.delta
-          if (!delta) continue
-          if (typeof delta.content === "string" && delta.content.length) {
-            assistantContent += delta.content
-          }
-          if (delta.tool_calls?.length) {
-            for (const tc of delta.tool_calls) {
-              const idx = tc.index ?? 0
-              const prev = toolCallsByIndex.get(idx)
-              const id = tc.id ?? prev?.id ?? `tool_${idx}`
-              const name = tc.function?.name ?? prev?.name ?? ""
-              const args = (prev?.args ?? "") + (tc.function?.arguments ?? "")
-              toolCallsByIndex.set(idx, { id, name, args })
-            }
-          }
-        }
-      }
+      turn = await readOpenRouterStreamTurn({
+        upstream,
+        upstreamAbort,
+        idleTimeoutMs: params.idleTimeoutMs,
+        onIdleTimeout: ({ idleTimeoutMs, idleForMs }) => {
+          upstreamAbortCode = "AGENT_IDLE_TIMEOUT"
+          upstreamAbortMeta = { round, idleTimeoutMs, idleForMs }
+        },
+      })
     } catch (e) {
       if (upstreamAbortCode && upstreamAbortCode !== "REQUEST_ABORTED") {
         const err = new Error(upstreamAbortCode)
@@ -136,21 +86,13 @@ async function runAgentToTerminal<TBody>(params: {
       }
       throw e
     } finally {
-      clearInterval(idleCheck)
       clearTimeout(roundTimeout)
       params.ctx.signal.removeEventListener("abort", onReqAbort)
     }
 
-    if (toolCallsByIndex.size) {
-      const toolCalls: ToolCall[] = [...toolCallsByIndex.entries()]
-        .sort((a, b) => a[0] - b[0])
-        .map(([, v]) => ({
-          id: v.id,
-          type: "function",
-          function: { name: v.name, arguments: v.args },
-        }))
-
-      history.push({ role: "assistant", content: assistantContent, tool_calls: toolCalls })
+    if (turn.toolCalls.length) {
+      const toolCalls: ToolCall[] = turn.toolCalls
+      history.push({ role: "assistant", content: turn.assistantContent, tool_calls: toolCalls })
 
       for (const tc of toolCalls) {
         const name = String(tc.function.name ?? "")
@@ -170,7 +112,7 @@ async function runAgentToTerminal<TBody>(params: {
       continue
     }
 
-    if (finishReason === "stop" || finishReason === "length" || finishReason == null) break
+    if (turn.finishReason === "stop" || turn.finishReason === "length" || turn.finishReason == null) break
   }
   return { name: null, result: null }
 }
@@ -241,7 +183,7 @@ export async function runAgentToEmitter<TBody>(params: {
 
     let upstream: ReadableStream<Uint8Array>
     try {
-      upstream = await deepseekStreamOnce({
+      upstream = await openrouterStreamOnce({
         apiKey: settings.apiKey,
         model: settings.model,
         messages: history,
@@ -259,98 +201,36 @@ export async function runAgentToEmitter<TBody>(params: {
       throw e
     }
 
-    const reader = upstream.getReader()
-    const decoder = new TextDecoder()
-    let carry = ""
-
-    const toolCallsByIndex = new Map<number, { id: string; name: string; args: string }>()
-    let finishReason: string | null | undefined = null
-    let assistantContent = ""
-    let lastUpstreamAt = Date.now()
-    const bumpUpstream = () => {
-      lastUpstreamAt = Date.now()
-    }
-
-    const idleCheck = setInterval(() => {
-      if (upstreamAbort.signal.aborted) return
-      const idleFor = Date.now() - lastUpstreamAt
-      if (idleFor > UPSTREAM_IDLE_TIMEOUT_MS) {
-        upstreamAbortCode = "AGENT_IDLE_TIMEOUT"
-        upstreamAbortMeta = { round, idleTimeoutMs: UPSTREAM_IDLE_TIMEOUT_MS, idleForMs: idleFor }
-        try {
-          upstreamAbort.abort()
-        } catch {}
-      }
-    }, 250)
-
+    let turn: Awaited<ReturnType<typeof readOpenRouterStreamTurn>>
     try {
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) break
-        bumpUpstream()
-        carry += decoder.decode(value, { stream: true })
-        const parsed = parseUpstreamSseLines(carry)
-        carry = parsed.rest
-
-        for (const ev of parsed.events) {
-          if (ev.data === "[DONE]") {
-            finishReason = finishReason ?? "stop"
-            continue
-          }
-          let chunk: DeepseekUpstreamChunk | null = null
-          try {
-            chunk = JSON.parse(ev.data) as DeepseekUpstreamChunk
-          } catch {
-            continue
-          }
-          const choice = chunk.choices?.[0]
-          if (!choice) continue
-          finishReason = choice.finish_reason ?? finishReason
-          const delta = choice.delta
-          if (!delta) continue
-
-          if (typeof delta.content === "string" && delta.content.length) {
-            assistantContent += delta.content
-            await params.send("delta", { delta: delta.content })
-            await params.agent.onDelta?.({ delta: delta.content, send: params.send })
-          }
-
-          if (delta.tool_calls?.length) {
-            for (const tc of delta.tool_calls) {
-              const idx = tc.index ?? 0
-              const prev = toolCallsByIndex.get(idx)
-              const id = tc.id ?? prev?.id ?? `tool_${idx}`
-              const name = tc.function?.name ?? prev?.name ?? ""
-              const args = (prev?.args ?? "") + (tc.function?.arguments ?? "")
-              toolCallsByIndex.set(idx, { id, name, args })
-            }
-          }
-        }
-      }
+      turn = await readOpenRouterStreamTurn({
+        upstream,
+        upstreamAbort,
+        idleTimeoutMs: UPSTREAM_IDLE_TIMEOUT_MS,
+        onIdleTimeout: ({ idleTimeoutMs, idleForMs }) => {
+          upstreamAbortCode = "AGENT_IDLE_TIMEOUT"
+          upstreamAbortMeta = { round, idleTimeoutMs, idleForMs }
+        },
+        onDelta: async (delta) => {
+          await params.send("delta", { delta })
+          await params.agent.onDelta?.({ delta, send: params.send })
+        },
+      })
     } catch (e) {
       if (upstreamAbortCode && upstreamAbortCode !== "REQUEST_ABORTED") {
-        clearInterval(idleCheck)
         const err = new Error(upstreamAbortCode)
         ;(err as ErrorWithMeta).meta = upstreamAbortMeta
         throw err
       }
       throw e
     } finally {
-      clearInterval(idleCheck)
       clearTimeout(roundTimeout)
       params.ctx.signal.removeEventListener("abort", onReqAbort)
     }
 
-    if (toolCallsByIndex.size) {
-      const toolCalls = [...toolCallsByIndex.entries()]
-        .sort((a, b) => a[0] - b[0])
-        .map(([, v]) => ({
-          id: v.id,
-          type: "function",
-          function: { name: v.name, arguments: v.args },
-        }))
-
-      history.push({ role: "assistant", content: assistantContent, tool_calls: toolCalls })
+    if (turn.toolCalls.length) {
+      const toolCalls = turn.toolCalls
+      history.push({ role: "assistant", content: turn.assistantContent, tool_calls: toolCalls })
 
       for (const tc of toolCalls) {
         const name = tc.function?.name as string
@@ -503,7 +383,7 @@ export async function runAgentToEmitter<TBody>(params: {
       continue
     }
 
-    if (finishReason === "stop" || finishReason === "length" || finishReason == null) break
+    if (turn.finishReason === "stop" || turn.finishReason === "length" || turn.finishReason == null) break
   }
 
   if (hitMaxRounds && !terminal) {

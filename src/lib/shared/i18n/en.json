@@ -168,15 +168,11 @@
       "title": "Agent",
       "description": "Configure API key and model for agent-assisted workflows",
       "apiKey": "API key",
-      "apiKeyPlaceholder": "DeepSeek API key",
+      "apiKeyPlaceholder": "OpenRouter API key",
       "model": "Model",
       "modelPlaceholder": "Select a model",
       "showAction": "Show",
       "hideAction": "Hide",
-      "models": {
-        "deepseekChat": "deepseek-chat",
-        "deepseekReasoner": "deepseek-reasoner"
-      },
       "saveFailed": "Save failed"
     },
     "system": {
@@ -1779,7 +1775,7 @@
     "NO_SUCCESSFUL_ATTEMPTS": "No successful runs yet",
     "DEPS_INSTALL_FAILED": "Dependency installation failed (see install logs)",
     "AGENT_API_KEY_MISSING": "Agent API key is missing (go to Preferences → Agent)",
-    "DEEPSEEK_HTTP_ERROR": "Agent request failed (upstream service error)",
+    "OPENROUTER_HTTP_ERROR": "Agent request failed (upstream service error)",
     "AGENT_STREAM_FAILED": "Agent stream failed",
     "AGENT_UPSTREAM_TIMEOUT": "Agent timed out (upstream took too long)",
     "AGENT_IDLE_TIMEOUT": "Agent timed out (no upstream output)",

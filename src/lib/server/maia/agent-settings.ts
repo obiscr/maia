@@ -15,15 +15,20 @@ import {
 import { USER_SETTING_KEYS, getUserSettingJson, setUserSettingJson } from "@/lib/server/settings/user-settings"
 import { pathExists, readJsonFile } from "@/lib/server/maia/fs"
 import { maiaDataDir } from "@/lib/server/maia/paths"
+import { OPENROUTER_MODELS, DEFAULT_OPENROUTER_MODEL } from "@/lib/server/agent/openrouter"
+
+export function getAvailableModels() {
+  return OPENROUTER_MODELS.map((m) => ({ id: m.id, name: m.name, provider: m.provider }))
+}
+
+const agentModelSchema = z.string().trim().min(1).default(DEFAULT_OPENROUTER_MODEL)
 
 export const agentSettingsSchema = z.object({
   apiKey: z.string().default(""),
-  model: z.string().default("deepseek-chat"),
+  model: agentModelSchema,
 })
 
 export type AgentSettings = z.infer<typeof agentSettingsSchema>
-
-const agentModelSchema = z.enum(["deepseek-chat", "deepseek-reasoner"]).default("deepseek-chat")
 
 function legacyAgentSettingsPath() {
   return path.join(maiaDataDir(), "settings", "agent.json")
@@ -53,7 +58,12 @@ async function maybeImportLegacySettingsToUser(userId: string): Promise<void> {
   const raw = await readJsonFile<unknown>(legacyPath).catch(() => null)
   if (!raw) return
 
-  const legacy = agentSettingsSchema.safeParse(raw)
+  const legacy = z
+    .object({
+      apiKey: z.string().default(""),
+      model: z.string().default(DEFAULT_OPENROUTER_MODEL),
+    })
+    .safeParse(raw)
   if (!legacy.success) return
 
   const apiKey = String(legacy.data.apiKey ?? "").trim()
@@ -63,11 +73,11 @@ async function maybeImportLegacySettingsToUser(userId: string): Promise<void> {
     await upsertUserSecret({ userId, key: USER_SECRET_KEYS.agentApiKey, plaintext: apiKey })
   }
   if (model) {
-    const safeModel = agentModelSchema.parse(model)
+    const safeModel = agentModelSchema.safeParse(model)
     await setUserSettingJson({
       userId,
       key: USER_SETTING_KEYS.agentModel,
-      valueJson: JSON.stringify(safeModel),
+      valueJson: JSON.stringify(safeModel.success ? safeModel.data : DEFAULT_OPENROUTER_MODEL),
       version: 1,
     })
   }
@@ -77,14 +87,14 @@ async function maybeImportLegacySettingsToUser(userId: string): Promise<void> {
   void fs.unlink(aiPath).catch(() => {})
 }
 
-async function readUserAgentModel(userId: string) {
+async function readUserAgentModel(userId: string): Promise<string> {
   const raw = await getUserSettingJson({ userId, key: USER_SETTING_KEYS.agentModel })
-  if (!raw) return agentModelSchema.parse(undefined)
+  if (!raw) return DEFAULT_OPENROUTER_MODEL
   try {
     const parsed = JSON.parse(raw)
     return agentModelSchema.parse(parsed)
   } catch {
-    return agentModelSchema.parse(undefined)
+    return DEFAULT_OPENROUTER_MODEL
   }
 }
 
