@@ -46,6 +46,7 @@ export function useWorkflowAgentSession(params: {
   initialPrompt?: string | null
   initialMessages?: UIMessage[]
   initialModel?: string
+  initialChatTitle?: string
 }) {
   const { chatId: chatIdProp, workflowId: workflowIdProp, locale, t, initialPrompt, initialMessages } = params
 
@@ -64,6 +65,8 @@ export function useWorkflowAgentSession(params: {
 
   const [effectiveWorkflowId, setEffectiveWorkflowId] = React.useState<string | undefined>(workflowIdProp)
   React.useEffect(() => setEffectiveWorkflowId(workflowIdProp), [workflowIdProp])
+
+  const [chatTitle, setChatTitle] = React.useState(() => String(params.initialChatTitle ?? "").trim())
 
   const [model, setModelState] = React.useState<string>(
     () => String(params.initialModel ?? "").trim() || DEFAULT_CHAT_MODEL,
@@ -147,6 +150,12 @@ export function useWorkflowAgentSession(params: {
     messages: initialMessages,
     experimental_throttle: 48,
     sendAutomaticallyWhen: shouldAutoContinueToolChain,
+    onData: (dataPart) => {
+      const part = dataPart as { type?: string; data?: unknown }
+      if (part.type === "data-chat-title" && typeof part.data === "string") {
+        setChatTitle(part.data.trim())
+      }
+    },
     onFinish: () => {
       if (chatIdProp) return
       if (didCanonicalRedirectRef.current) return
@@ -325,6 +334,7 @@ export function useWorkflowAgentSession(params: {
     initialStepsRef.current = null
     publicIdRef.current = null
     didCanonicalRedirectRef.current = false
+    setChatTitle("")
     setEffectiveWorkflowId(workflowIdProp)
     setWorkflow(null)
     setLocalStepOverrides(null)
@@ -596,6 +606,7 @@ export function useWorkflowAgentSession(params: {
 
   return {
     chatId: stableChatId,
+    chatTitle,
     listRef,
     scrollContainerRef,
     inputRef,

@@ -16,7 +16,7 @@ import { createOpenRouterModel } from "@/lib/server/agent/openrouter"
 import { getModelMaxOutputTokens, resolveAiModelAlias } from "@/lib/server/agent/models"
 import { getAgentSettingsForUser } from "@/lib/server/maia/agent-settings"
 import { requireRequestAuth } from "@/lib/server/authz"
-import { ensureChat, saveChat } from "@/lib/server/chat/persistence"
+import { ensureChat, saveChat, generateChatTitle, updateChatTitle } from "@/lib/server/chat/persistence"
 import { listRegisteredTools } from "@/lib/server/tools/registry"
 import { isToolUIPart, getToolName } from "ai"
 import { canonicalToSdkToolName, type ToolPart } from "@/lib/shared/agent/tool-parts"
@@ -269,6 +269,15 @@ export const POST = withApiObservability(async (req: Request) => {
     return new Response(JSON.stringify({ error: "USER_NOT_FOUND" }), { status: 401 })
   }
 
+  // Kick off title generation in parallel (fast model, doesn't block the main stream)
+  const firstUserMsg = originalMessages.find((m) => m.role === "user")
+  const firstUserText = firstUserMsg?.parts.find((p): p is Extract<typeof p, { type: "text" }> => p.type === "text")?.text
+  const isFirstMessage = originalMessages.filter((m) => m.role === "user").length === 1
+  let titlePromise: Promise<string> | null = null
+  if (isFirstMessage && firstUserText?.trim()) {
+    titlePromise = generateChatTitle({ firstUserText: firstUserText.trim(), apiKey: settings.apiKey! }).catch(() => "")
+  }
+
   let trackerRef: OrchestratorPhaseTracker | null = null
 
   const stream = createUIMessageStream({
@@ -435,6 +444,14 @@ export const POST = withApiObservability(async (req: Request) => {
       })
 
       writer.merge(result.toUIMessageStream())
+
+      if (titlePromise) {
+        const title = await titlePromise
+        if (title) {
+          writer.write({ type: "data-chat-title" as never, data: title } as never)
+          void updateChatTitle(chatId, title).catch(() => {})
+        }
+      }
     },
     onFinish: async ({ messages: finalMessages }) => {
       await saveChat({

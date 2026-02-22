@@ -37,6 +37,7 @@ export default async function ChatPage(props: {
       initialMessages={chat.messages}
       initialPrompt={prompt}
       initialApiKeyConfigured={settings.apiKeyConfigured}
+      initialChatTitle={chat.title ?? undefined}
     />
   )
 }

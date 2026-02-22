@@ -2,11 +2,14 @@ import "server-only"
 
 import crypto from "node:crypto"
 
+import { generateText } from "ai"
 import { prisma } from "@/lib/server/db"
 import { allocatePublicId } from "@/lib/server/public-ids"
 import { type UIMessage, isToolUIPart, getToolName } from "ai"
 import type { ToolPart } from "@/lib/shared/agent/tool-parts"
 import { isRecord } from "@/lib/shared/lang/is-record"
+import { createOpenRouterModel } from "@/lib/server/agent/openrouter"
+import { CHAT_TITLE_GENERATION_MODEL } from "@/lib/server/agent/models"
 
 function ensureMessageIds(messages: UIMessage[]): UIMessage[] {
   return messages.map((m) => (m.id ? m : { ...m, id: crypto.randomUUID() }))
@@ -190,7 +193,6 @@ export async function saveChat(params: {
   model?: string | null
 }): Promise<{ publicId: string }> {
   const withIds = ensureMessageIds(params.messages)
-  const title = params.title || inferTitle(withIds) || ""
 
   const { publicId } = await ensureChat({
     chatId: params.chatId,
@@ -199,7 +201,7 @@ export async function saveChat(params: {
     model: params.model,
   })
 
-  const updateData: Record<string, unknown> = { title, updatedAt: new Date() }
+  const updateData: Record<string, unknown> = { updatedAt: new Date() }
   if (params.model != null) updateData.model = params.model
 
   await prisma.chat.update({
@@ -250,16 +252,37 @@ export async function saveChat(params: {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// AI title generation
 // ---------------------------------------------------------------------------
 
-function inferTitle(messages: UIMessage[]): string {
-  const firstUser = messages.find((m) => m.role === "user")
-  if (!firstUser) return ""
-  for (const part of firstUser.parts) {
-    if (part.type === "text" && part.text.trim()) {
-      return part.text.trim().slice(0, 100)
-    }
-  }
-  return ""
+const TITLE_SYSTEM_PROMPT = [
+  "Generate a short, descriptive title (max 50 chars) for a chat conversation based on the user's first message.",
+  "Rules:",
+  "- Reply with ONLY the title text, nothing else.",
+  "- Match the language of the user's message.",
+  "- Be concise and descriptive.",
+  "- Do NOT wrap in quotes or add punctuation at the end.",
+].join("\n")
+
+export async function generateChatTitle(params: {
+  firstUserText: string
+  apiKey: string
+}): Promise<string> {
+  const model = createOpenRouterModel({ apiKey: params.apiKey, model: CHAT_TITLE_GENERATION_MODEL })
+  const { text } = await generateText({
+    model,
+    system: TITLE_SYSTEM_PROMPT,
+    prompt: params.firstUserText.slice(0, 2000),
+    maxOutputTokens: 80,
+    temperature: 0.3,
+  })
+  return text
+    .replace(/^[#*"'\s]+/, "")
+    .replace(/["']+$/, "")
+    .trim()
+    .slice(0, 100)
+}
+
+export async function updateChatTitle(chatId: string, title: string) {
+  await prisma.chat.update({ where: { id: chatId }, data: { title } })
 }
