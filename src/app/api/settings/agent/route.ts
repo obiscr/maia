@@ -38,7 +38,8 @@ export const PUT = withApiObservability(async (req: Request) => {
   }
   const settings = await saveAgentSettingsForUser({
     userId: user.id,
-    apiKey: body.apiKey ?? undefined,
+    // Keep `null` to explicitly clear the secret; only `undefined` means unchanged.
+    apiKey: body.apiKey,
     model: body.model ?? undefined,
   })
   mark("write")

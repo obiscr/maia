@@ -7,7 +7,12 @@ import { prisma } from "@/lib/server/db"
 import { readSmtpConfig } from "@/lib/server/email/email-settings"
 import { preferredPublicBaseUrl, sendTemplatedEmail } from "@/lib/server/email/send-templated-email"
 import { EMAIL_SETTINGS_ROW_ID, INSTALLATION_ROW_ID, ensureInstallationRowTx } from "@/lib/server/installation"
-import { SYSTEM_SECRET_KEYS, hasSystemSecret, upsertSystemSecretTx } from "@/lib/server/settings/system-secrets"
+import {
+  SYSTEM_SECRET_KEYS,
+  deleteSystemSecretTx,
+  hasSystemSecret,
+  upsertSystemSecretTx,
+} from "@/lib/server/settings/system-secrets"
 import { getOutboundLocaleForUser } from "@/lib/server/settings/outbound-language-settings"
 import { zodIssues } from "@/lib/shared/http/zod"
 
@@ -110,6 +115,8 @@ export const POST = withApiObservability(async (req: Request) => {
         if (typeof body.smtpPassword === "string") {
           const trimmed = body.smtpPassword.trim()
           if (trimmed) await upsertSystemSecretTx(tx, { key: SYSTEM_SECRET_KEYS.smtpPassword, plaintext: trimmed })
+        } else if (body.smtpPassword === null) {
+          await deleteSystemSecretTx(tx, { key: SYSTEM_SECRET_KEYS.smtpPassword })
         }
 
         if (Object.keys(instUpdate).length) {
