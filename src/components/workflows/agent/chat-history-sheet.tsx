@@ -148,7 +148,13 @@ export function ChatHistorySheet(props: {
                   const busy = savingId === it.id
                   const title = (it.title || "").trim() || t("agent.chat.history.untitled")
                   return (
-                    <div key={it.id} className="rounded-lg border bg-card p-3">
+                    <div
+                      key={it.id}
+                      className={`rounded-lg border bg-card p-3 transition-colors ${isEditing ? "" : "cursor-pointer hover:bg-accent/50"}`}
+                      onClick={() => {
+                        if (!isEditing && !busy) props.onOpenChat(it.publicId)
+                      }}
+                    >
                       <div className="flex items-start gap-3">
                         <div className="min-w-0 flex-1">
                           {isEditing ? (
@@ -158,6 +164,7 @@ export function ChatHistorySheet(props: {
                               maxLength={120}
                               placeholder={t("agent.chat.history.namePlaceholder")}
                               disabled={busy}
+                              onClick={(e) => e.stopPropagation()}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") {
                                   e.preventDefault()
@@ -177,7 +184,7 @@ export function ChatHistorySheet(props: {
                           </div>
                         </div>
 
-                        <div className="flex shrink-0 items-center gap-1">
+                        <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
                           {isEditing ? (
                             <>
                               <Button
@@ -200,38 +207,28 @@ export function ChatHistorySheet(props: {
                               </Button>
                             </>
                           ) : (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => props.onOpenChat(it.publicId)}
-                                disabled={busy}
-                              >
-                                {t("common.openAction")}
-                              </Button>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    size="icon-sm"
-                                    variant="ghost"
-                                    disabled={busy}
-                                    aria-label={t("common.actions")}
-                                  >
-                                    <MoreHorizontal className="size-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onSelect={() => beginEdit(it)}>
-                                    <Pencil className="size-4" />
-                                    {t("agent.chat.history.renameAction")}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem data-variant="destructive" onSelect={() => setDeletingId(it.id)}>
-                                    <Trash2 className="size-4" />
-                                    {t("common.deleteAction")}
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  size="icon-sm"
+                                  variant="ghost"
+                                  disabled={busy}
+                                  aria-label={t("common.actions")}
+                                >
+                                  <MoreHorizontal className="size-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onSelect={() => beginEdit(it)}>
+                                  <Pencil className="size-4" />
+                                  {t("agent.chat.history.renameAction")}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem data-variant="destructive" onSelect={() => setDeletingId(it.id)}>
+                                  <Trash2 className="size-4" />
+                                  {t("common.deleteAction")}
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           )}
                         </div>
                       </div>
