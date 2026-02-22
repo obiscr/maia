@@ -76,6 +76,7 @@ function extractMermaidBlocks() {
   return (tree: any) => {
     visit(tree, "element", (node: any, index: any, parent: any) => {
       if (node.tagName !== "pre" || !parent || typeof index !== "number") return
+      if (node._mermaidExtracted) return
       const code = node.children?.[0]
       if (code?.tagName !== "code") return
       const className = code?.properties?.className
@@ -86,14 +87,23 @@ function extractMermaidBlocks() {
         .join("")
       const chart = String(raw ?? "").trim()
       if (!chart) return
+      node._mermaidExtracted = true
       parent.children[index] = {
         type: "element",
         tagName: "div",
-        properties: {
-          className: ["maia-mermaid", "mermaid", "not-content"],
-          "data-mermaid": "true",
-        },
-        children: [{ type: "text", value: chart }],
+        properties: { className: ["maia-mermaid-wrap"] },
+        children: [
+          {
+            type: "element",
+            tagName: "div",
+            properties: {
+              className: ["maia-mermaid", "mermaid", "not-content"],
+              "data-mermaid": "true",
+            },
+            children: [{ type: "text", value: chart }],
+          },
+          node,
+        ],
       }
     })
   }
@@ -111,6 +121,7 @@ const fastProcessor = unified()
   .use(wrapTables)
   .use(extractMermaidBlocks)
   .use(rehypeStringify)
+  .freeze()
 
 const expressiveCodeOptions: RehypeExpressiveCodeOptions = {
   themes: ["github-light", "github-dark"],
@@ -133,6 +144,7 @@ const enhancedProcessor = unified()
   .use(extractMermaidBlocks)
   .use(rehypeExpressiveCode, expressiveCodeOptions)
   .use(rehypeStringify)
+  .freeze()
 
 function sanitizeHtml(html: string): string {
   if (typeof window === "undefined") return html
@@ -142,6 +154,28 @@ function sanitizeHtml(html: string): string {
     FORBID_TAGS: ["script"],
     FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover"],
   })
+}
+
+const ENHANCED_CACHE_MAX = 64
+const enhancedHtmlCache = new Map<string, string>()
+
+function getCachedEnhancedHtml(key: string): string | undefined {
+  const val = enhancedHtmlCache.get(key)
+  if (val !== undefined) {
+    enhancedHtmlCache.delete(key)
+    enhancedHtmlCache.set(key, val)
+  }
+  return val
+}
+
+function setCachedEnhancedHtml(key: string, val: string): void {
+  if (enhancedHtmlCache.has(key)) {
+    enhancedHtmlCache.delete(key)
+  } else if (enhancedHtmlCache.size >= ENHANCED_CACHE_MAX) {
+    const oldest = enhancedHtmlCache.keys().next().value
+    if (oldest !== undefined) enhancedHtmlCache.delete(oldest)
+  }
+  enhancedHtmlCache.set(key, val)
 }
 
 function legacyCopy(text: string) {
@@ -259,14 +293,19 @@ async function renderAllMermaid() {
       document.getElementById(`d${id}`)?.remove()
       el.innerHTML = ""
       el.classList.remove("mermaid")
-      const pre = document.createElement("pre")
-      const code = document.createElement("code")
-      code.className = "language-mermaid"
-      code.textContent = source
-      pre.appendChild(code)
-      el.appendChild(pre)
       renderedMermaidThemeByEl.delete(el)
       el.removeAttribute("data-maia-rendered")
+      const wrap = el.closest(".maia-mermaid-wrap")
+      if (wrap) {
+        wrap.classList.add("maia-mermaid-error")
+      } else {
+        const pre = document.createElement("pre")
+        const code = document.createElement("code")
+        code.className = "language-mermaid"
+        code.textContent = source
+        pre.appendChild(code)
+        el.appendChild(pre)
+      }
     }
   }
 }
@@ -283,14 +322,25 @@ function scheduleMermaidRender() {
   else window.setTimeout(() => void run(), 0)
 }
 
-function ensureMermaidThemeObserver() {
+let mermaidObserverRefCount = 0
+
+function acquireMermaidThemeObserver() {
+  mermaidObserverRefCount++
   if (mermaidThemeObserver) return
   const html = document.documentElement
   mermaidThemeObserver = new MutationObserver(() => scheduleMermaidRender())
   mermaidThemeObserver.observe(html, { attributes: true, attributeFilter: ["class"] })
 }
 
-export function ChatMarkdown(props: Props) {
+function releaseMermaidThemeObserver() {
+  mermaidObserverRefCount = Math.max(0, mermaidObserverRefCount - 1)
+  if (mermaidObserverRefCount === 0 && mermaidThemeObserver) {
+    mermaidThemeObserver.disconnect()
+    mermaidThemeObserver = null
+  }
+}
+
+export const ChatMarkdown = React.memo(function ChatMarkdown(props: Props) {
   const containerRef = React.useRef<HTMLDivElement>(null)
   const renderSeqRef = React.useRef(0)
   const deferred = React.useDeferredValue(props.markdown)
@@ -315,13 +365,22 @@ export function ChatMarkdown(props: Props) {
       return
     }
 
+    const cached = getCachedEnhancedHtml(src)
+    if (cached !== undefined) {
+      setEnhancedHtml(cached)
+      setEnhancedFor(src)
+      return
+    }
+
     const seq = ++renderSeqRef.current
     let cancelled = false
     void (async () => {
       try {
         const file = await enhancedProcessor.process(src)
         if (cancelled || seq !== renderSeqRef.current) return
-        setEnhancedHtml(sanitizeHtml(String(file)))
+        const html = sanitizeHtml(String(file))
+        setCachedEnhancedHtml(src, html)
+        setEnhancedHtml(html)
         setEnhancedFor(src)
       } catch {
         if (cancelled || seq !== renderSeqRef.current) return
@@ -337,9 +396,13 @@ export function ChatMarkdown(props: Props) {
   const effectiveHtml = enhancedHtml && enhancedFor === (deferred ?? "") ? enhancedHtml : fastHtml
 
   React.useEffect(() => {
+    acquireMermaidThemeObserver()
+    return () => releaseMermaidThemeObserver()
+  }, [])
+
+  React.useEffect(() => {
     if (!containerRef.current || !effectiveHtml) return
     bindExpressiveCodeCopy(containerRef.current)
-    ensureMermaidThemeObserver()
     scheduleMermaidRender()
   }, [effectiveHtml])
 
@@ -347,4 +410,4 @@ export function ChatMarkdown(props: Props) {
     return <div className={cn(props.className, "whitespace-pre-wrap break-words")}>{props.markdown}</div>
   }
   return <div ref={containerRef} className={props.className} dangerouslySetInnerHTML={{ __html: effectiveHtml }} />
-}
+})

@@ -13,7 +13,7 @@ type Props = {
   className?: string
 }
 
-function splitByLastClosedFence(markdown: string): { stable: string; tail: string } {
+function splitAtLastStableBoundary(markdown: string): { stable: string; tail: string } {
   const text = String(markdown ?? "")
   if (!text.trim()) return { stable: "", tail: text }
 
@@ -21,35 +21,54 @@ function splitByLastClosedFence(markdown: string): { stable: string; tail: strin
   let inFence = false
   let fenceChar = ""
   let fenceLen = 0
-  let sawAnyFence = false
-  let lastClosedFenceLine = -1
+  let inMathBlock = false
+  let hadAnyBlock = false
+  let lastClosedBlockLine = -1
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? ""
-    const m = line.match(/^[ \t]{0,3}(`{3,}|~{3,})/)
-    if (!m) continue
-    const marker = m[1] ?? ""
-    const char = marker[0] ?? ""
-    const len = marker.length
-    if (!inFence) {
-      inFence = true
-      fenceChar = char
-      fenceLen = len
-      sawAnyFence = true
-      continue
+
+    if (!inMathBlock) {
+      const m = line.match(/^[ \t]{0,3}(`{3,}|~{3,})/)
+      if (m) {
+        const marker = m[1] ?? ""
+        const char = marker[0] ?? ""
+        const len = marker.length
+        if (!inFence) {
+          inFence = true
+          fenceChar = char
+          fenceLen = len
+          hadAnyBlock = true
+          continue
+        }
+        if (char === fenceChar && len >= fenceLen) {
+          inFence = false
+          lastClosedBlockLine = i
+        }
+        continue
+      }
     }
-    if (char === fenceChar && len >= fenceLen) {
-      inFence = false
-      lastClosedFenceLine = i
+
+    if (inFence) continue
+
+    if (/^\s*\$\$\s*$/.test(line)) {
+      if (!inMathBlock) {
+        inMathBlock = true
+        hadAnyBlock = true
+      } else {
+        inMathBlock = false
+        lastClosedBlockLine = i
+      }
+      continue
     }
   }
 
-  if (!sawAnyFence || lastClosedFenceLine < 0) {
+  if (!hadAnyBlock || lastClosedBlockLine < 0) {
     return { stable: "", tail: text }
   }
 
-  const stable = lines.slice(0, lastClosedFenceLine + 1).join("\n")
-  const tail = lines.slice(lastClosedFenceLine + 1).join("\n")
+  const stable = lines.slice(0, lastClosedBlockLine + 1).join("\n")
+  const tail = lines.slice(lastClosedBlockLine + 1).join("\n")
   return { stable, tail }
 }
 
@@ -95,8 +114,8 @@ const streamdownComponents: Components = {
   section: ({ children, node: _node, ...rest }) => <section {...rest}>{children}</section>,
 }
 
-export function ChatStreamdown(props: Props) {
-  const { stable, tail } = React.useMemo(() => splitByLastClosedFence(props.markdown), [props.markdown])
+export const ChatStreamdown = React.memo(function ChatStreamdown(props: Props) {
+  const { stable, tail } = React.useMemo(() => splitAtLastStableBoundary(props.markdown), [props.markdown])
 
   return (
     <div className={cn("space-y-0", props.className)}>
@@ -122,4 +141,4 @@ export function ChatStreamdown(props: Props) {
       ) : null}
     </div>
   )
-}
+})
