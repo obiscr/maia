@@ -10,6 +10,7 @@ import { ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Spinner } from "@/components/ui/spinner"
+import { useListQuery } from "@/hooks/list-query/use-list-query"
 import { apiFetchJson } from "@/lib/shared/http/api"
 import { toast } from "@/lib/client/toast"
 import { tApiError } from "@/lib/shared/i18n/error"
@@ -134,9 +135,14 @@ export function EmailTemplatesSection(props: {
 }) {
   const { t, locale: uiLocale } = useI18n()
 
-  const [loading, setLoading] = React.useState(true)
+  const templatesQuery = useListQuery<{ templates?: EmailTemplateRow[] }>({
+    queryKey: ["emailTemplates"],
+    queryFn: async ({ signal }) => apiFetchJson("/api/settings/system/email/templates", { method: "GET", signal }),
+  })
+  const rows = Array.isArray(templatesQuery.data?.templates) ? templatesQuery.data.templates : []
+  const loading = templatesQuery.isLoading && !templatesQuery.data
+
   const [saving, setSaving] = React.useState(false)
-  const [rows, setRows] = React.useState<EmailTemplateRow[]>([])
 
   const [sheetOpen, setSheetOpen] = React.useState(false)
   const [activeKey, setActiveKey] = React.useState<string | null>(null)
@@ -149,28 +155,6 @@ export function EmailTemplatesSection(props: {
     if (sheetOpen) return
     setActiveLocale(preferredLocale)
   }, [preferredLocale, sheetOpen])
-
-  React.useEffect(() => {
-    let cancelled = false
-    async function load() {
-      setLoading(true)
-      try {
-        const json = await apiFetchJson<{ templates?: EmailTemplateRow[] }>("/api/settings/system/email/templates", {
-          method: "GET",
-        })
-        if (cancelled) return
-        setRows(Array.isArray(json.templates) ? json.templates : [])
-      } catch (e) {
-        if (!cancelled) toast.error(tApiError({ t, err: e, fallbackKey: "common.loadFailed" }))
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    void load()
-    return () => {
-      cancelled = true
-    }
-  }, [t])
 
   const templateByKeyLocale = React.useMemo(() => {
     const map = new Map<string, EmailTemplateRow>()
@@ -217,21 +201,7 @@ export function EmailTemplatesSection(props: {
           schemaJson: draft.schemaJson,
         }),
       })
-      const updated = json.template
-      if (updated) {
-        setRows((prev) => {
-          const next = prev.filter((r) => !(r.key === updated.key && r.locale === updated.locale))
-          next.push(updated)
-          next.sort((a, b) => {
-            const ak = String(a.key)
-            const bk = String(b.key)
-            if (ak < bk) return -1
-            if (ak > bk) return 1
-            return String(a.locale).localeCompare(String(b.locale))
-          })
-          return next
-        })
-      }
+      await templatesQuery.refetch()
       toast.success(t("common.saved"))
     } catch (e) {
       toast.error(tApiError({ t, err: e, fallbackKey: "common.updateFailed" }))

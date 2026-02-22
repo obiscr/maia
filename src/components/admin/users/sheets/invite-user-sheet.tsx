@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/sheet"
 import { toast } from "@/lib/client/toast"
 import { copyTextToClipboard } from "@/lib/client/clipboard"
+import { useListQuery } from "@/hooks/list-query/use-list-query"
 import { apiFetchJson } from "@/lib/shared/http/api"
 import { formatRelativeTimeFromNow } from "@/lib/shared/format/time"
 import { tApiError } from "@/lib/shared/i18n/error"
@@ -49,43 +50,29 @@ export function InviteUserSheet(props: { open: boolean; onOpenChange: (open: boo
 
   const [email, setEmail] = React.useState("")
   const [creating, setCreating] = React.useState(false)
-  const [loadingInvites, setLoadingInvites] = React.useState(false)
   const [revokingId, setRevokingId] = React.useState<string | null>(null)
-  const [invites, setInvites] = React.useState<InviteRow[]>([])
-  const [loaded, setLoaded] = React.useState(false)
 
-  const hasInvites = invites.length > 0
-  const initialInvitesLoading = loadingInvites && !loaded && !hasInvites
-
-  const emailTrim = email.trim()
-  const normalizedEmail = emailTrim.toLowerCase()
-  const emailValid = emailTrim.length > 0 && emailSchema.safeParse(emailTrim).success
-
-  async function loadInvitesList() {
-    setLoadingInvites(true)
-    try {
-      const res = await apiFetchJson<{ invites?: InviteRow[] }>("/api/admin/users/invites?page=1&pageSize=50", {
-        cache: "no-store",
-      })
-      setInvites(Array.isArray(res.invites) ? (res.invites as InviteRow[]) : [])
-      setLoaded(true)
-    } catch (e) {
-      toast.error(tApiError({ t, err: e, fallbackKey: "admin.users.invite.loadFailed" }))
-    } finally {
-      setLoadingInvites(false)
-    }
-  }
+  const invitesQuery = useListQuery<{ invites?: InviteRow[] }>({
+    queryKey: ["adminInvites"],
+    enabled: props.open,
+    queryFn: async ({ signal }) =>
+      apiFetchJson("/api/admin/users/invites?page=1&pageSize=50", { cache: "no-store", signal }),
+  })
+  const invites = Array.isArray(invitesQuery.data?.invites) ? (invitesQuery.data.invites as InviteRow[]) : []
+  const loadingInvites = invitesQuery.isFetching
+  const initialInvitesLoading = invitesQuery.isLoading && !invitesQuery.data
 
   React.useEffect(() => {
     const prev = prevOpenRef.current
     prevOpenRef.current = props.open
     if (!prev && props.open) {
-      // On open: always load "pending invites" list (across emails).
-      setInvites([])
-      setLoaded(false)
-      void loadInvitesList()
+      void invitesQuery.refetch()
     }
   }, [props.open])
+
+  const emailTrim = email.trim()
+  const normalizedEmail = emailTrim.toLowerCase()
+  const emailValid = emailTrim.length > 0 && emailSchema.safeParse(emailTrim).success
 
   async function createInvite() {
     if (!emailValid) {
@@ -109,7 +96,7 @@ export function InviteUserSheet(props: { open: boolean; onOpenChange: (open: boo
       await copyTextToClipboard(String(res.invite.inviteUrl))
       toast.success(t("admin.users.invite.createdCopied"))
 
-      await loadInvitesList()
+      await invitesQuery.refetch()
     } catch (e) {
       toast.error(tApiError({ t, err: e, fallbackKey: "admin.users.invite.createFailed" }))
     } finally {
@@ -128,7 +115,7 @@ export function InviteUserSheet(props: { open: boolean; onOpenChange: (open: boo
       })
       const n = Number(res.revokedCount ?? 0)
       toast.success(t("admin.users.invite.revokedToast", { count: n }))
-      await loadInvitesList()
+      await invitesQuery.refetch()
     } catch (e) {
       toast.error(tApiError({ t, err: e, fallbackKey: "admin.users.invite.revokeFailed" }))
     } finally {
@@ -137,7 +124,7 @@ export function InviteUserSheet(props: { open: boolean; onOpenChange: (open: boo
   }
 
   const uiPending = creating || !!revokingId
-  const canLoad = !uiPending && !loadingInvites
+  const canLoad = !uiPending && !invitesQuery.isFetching
   const canInvite = emailValid && !uiPending
 
   async function copyInviteLink(invite: InviteRow) {
@@ -164,8 +151,7 @@ export function InviteUserSheet(props: { open: boolean; onOpenChange: (open: boo
       await copyTextToClipboard(String(url))
       toast.success(t("admin.users.invite.createdCopied"))
 
-      // Invites are invalidated per-email when issuing a new one; refresh the list to reflect that.
-      await loadInvitesList()
+      await invitesQuery.refetch()
     } catch {
       toast.error(t("common.copyActionFailed"))
     }
@@ -248,7 +234,7 @@ export function InviteUserSheet(props: { open: boolean; onOpenChange: (open: boo
                   type="button"
                   variant="ghost"
                   className="-mr-2"
-                  onClick={() => void loadInvitesList()}
+                  onClick={() => void invitesQuery.refetch()}
                   disabled={!canLoad}
                 >
                   {loadingInvites ? (
@@ -271,7 +257,7 @@ export function InviteUserSheet(props: { open: boolean; onOpenChange: (open: boo
                 </div>
               ) : invites.length === 0 ? (
                 <div className="px-4 py-10 text-center text-sm text-muted-foreground">
-                  {loaded ? t("admin.users.invite.none") : t("common.loading")}
+                  {invitesQuery.data ? t("admin.users.invite.none") : t("common.loading")}
                 </div>
               ) : (
                 <ItemsList<InviteRow>

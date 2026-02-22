@@ -6,6 +6,7 @@ import type { ErrorObject } from "ajv"
 
 import { toast } from "@/lib/client/toast"
 import { ajvErrorsToApiIssues, compileAjvValidator } from "@/lib/client/jsonschema"
+import { useListQuery } from "@/hooks/list-query/use-list-query"
 import { ApiError } from "@/lib/shared/http/api"
 import { apiFetchJson } from "@/lib/shared/http/api"
 import { tApiError } from "@/lib/shared/i18n/error"
@@ -27,7 +28,13 @@ export function useNewScheduleForm(params: { t: (key: string, vars?: Record<stri
 
   const DEFAULT_CATCH_UP_LIMIT = 100
 
-  const [workflows, setWorkflows] = useState<Workflow[]>([])
+  const workflowsQuery = useListQuery<{ workflows: Workflow[] }>({
+    queryKey: ["newScheduleForm:workflows"],
+    queryFn: async ({ signal }) => apiFetchJson("/api/workflows", { cache: "no-store", signal }),
+  })
+  const workflows = Array.isArray(workflowsQuery.data?.workflows) ? workflowsQuery.data.workflows : []
+  const loading = workflowsQuery.isLoading && !workflowsQuery.data
+
   const [workflowId, _setWorkflowId] = useState<string>("")
   const [name, setName] = useState<string>("")
   const [kind, setKind] = useState<"CRON" | "INTERVAL">("CRON")
@@ -37,12 +44,10 @@ export function useNewScheduleForm(params: { t: (key: string, vars?: Record<stri
   const [misfirePolicy, setMisfirePolicy] = useState<"SKIP" | "FIRE_ONCE" | "CATCH_UP">("FIRE_ONCE")
   const [catchUpLimit, setCatchUpLimit] = useState<number>(DEFAULT_CATCH_UP_LIMIT)
   const [overlapPolicy, setOverlapPolicy] = useState<"SKIP" | "ALLOW">("SKIP")
-  // Lock workflow version by number (server resolves -> internal ID).
   const [pinnedWorkflowVersionNumber, setPinnedWorkflowVersionNumber] = useState<number | null>(null)
   const [inputJsonRaw, _setInputJsonRaw] = useState<string>("{}")
   const [inputTouched, setInputTouched] = useState(false)
   const [urlList, setUrlList] = useState<string>("")
-  const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
 
   const [inputSpec, setInputSpec] = useState<WorkflowInputSpec | null>(null)
@@ -206,18 +211,11 @@ export function useNewScheduleForm(params: { t: (key: string, vars?: Record<stri
     return out
   }
 
-  async function refreshWorkflows() {
-    setLoading(true)
-    try {
-      const j = await apiFetchJson<{ workflows: Workflow[] }>("/api/workflows", { cache: "no-store" })
-      setWorkflows(j.workflows ?? [])
-      _setWorkflowId((prev) => prev || j.workflows?.[0]?.id || "")
-    } catch (e) {
-      toast.error(tApiError({ t, err: e, fallbackKey: "common.loadFailed" }))
-    } finally {
-      setLoading(false)
+  useEffect(() => {
+    if (workflows.length && !workflowId) {
+      _setWorkflowId(workflows[0]?.id || "")
     }
-  }
+  }, [workflows, workflowId])
 
   function setWorkflowId(next: string) {
     const nextId = String(next ?? "")
@@ -229,10 +227,6 @@ export function useNewScheduleForm(params: { t: (key: string, vars?: Record<stri
       return nextId
     })
   }
-
-  useEffect(() => {
-    void refreshWorkflows()
-  }, [])
 
   const desiredPinnedWorkflowVersion = useMemo(() => {
     if (typeof pinnedWorkflowVersionNumber !== "number" || !Number.isFinite(pinnedWorkflowVersionNumber)) return null

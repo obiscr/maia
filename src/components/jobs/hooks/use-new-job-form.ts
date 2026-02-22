@@ -6,6 +6,7 @@ import type { ErrorObject } from "ajv"
 
 import { toast } from "@/lib/client/toast"
 import { ajvErrorsToApiIssues, compileAjvValidator } from "@/lib/client/jsonschema"
+import { useListQuery } from "@/hooks/list-query/use-list-query"
 import { apiFetchJson } from "@/lib/shared/http/api"
 import { tApiError } from "@/lib/shared/i18n/error"
 import {
@@ -26,14 +27,19 @@ export function useNewJobForm(params: {
   const { t, redirectTo } = params
   const router = useRouter()
 
-  const [workflows, setWorkflows] = useState<Workflow[]>([])
+  const workflowsQuery = useListQuery<{ workflows: Workflow[] }>({
+    queryKey: ["newJobForm:workflows"],
+    queryFn: async ({ signal }) => apiFetchJson("/api/workflows", { cache: "no-store", signal }),
+  })
+  const workflows = Array.isArray(workflowsQuery.data?.workflows) ? workflowsQuery.data.workflows : []
+  const loading = workflowsQuery.isLoading && !workflowsQuery.data
+
   const [workflowId, setWorkflowIdRaw] = useState<string>("")
   const [inputJson, setInputJson] = useState<string>('{"url":"https://example.com"}')
   const [urlList, setUrlList] = useState<string>("")
   const [files, setFiles] = useState<File[]>([])
   const [pinnedWorkflowVersionNumber, setPinnedWorkflowVersionNumber] = useState<number | null>(null)
   const [inputTouched, setInputTouched] = useState(false)
-  const [loading, setLoading] = useState(true)
   const [inputSpec, setInputSpec] = useState<WorkflowInputSpec | null>(null)
   const [inputSpecForWorkflowId, setInputSpecForWorkflowId] = useState<string | null>(null)
   const [inputSpecErr, setInputSpecErr] = useState<string | null>(null)
@@ -150,22 +156,15 @@ export function useNewJobForm(params: {
     return out
   }
 
-  async function refreshWorkflows() {
-    setLoading(true)
-    try {
-      const j = await apiFetchJson<{ workflows: Workflow[] }>("/api/workflows", { cache: "no-store" })
-      setWorkflows(j.workflows ?? [])
-      setWorkflowIdRaw((prev) => prev || j.workflows?.[0]?.id || "")
-    } catch (e) {
-      toast.error(tApiError({ t, err: e, fallbackKey: "common.loadFailed" }))
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
-    void refreshWorkflows()
-  }, [])
+    if (workflows.length && !workflowId) {
+      setWorkflowIdRaw(workflows[0]?.id || "")
+    }
+  }, [workflows, workflowId])
+
+  const refreshWorkflows = async () => {
+    await workflowsQuery.refetch()
+  }
 
   useEffect(() => {
     if (!workflowId) {

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 
 import { toast } from "@/lib/client/toast"
+import { useListQuery } from "@/hooks/list-query/use-list-query"
 import { apiFetchJson } from "@/lib/shared/http/api"
 import { tApiError } from "@/lib/shared/i18n/error"
 import { fetchWorkflowStepCount } from "@/lib/client/workflows"
@@ -14,7 +15,13 @@ export function useNewBatchForm(params: { t: (key: string, vars?: Record<string,
   const { t } = params
   const router = useRouter()
 
-  const [workflows, setWorkflows] = useState<Workflow[]>([])
+  const workflowsQuery = useListQuery<{ workflows: Workflow[] }>({
+    queryKey: ["newBatchForm:workflows"],
+    queryFn: async ({ signal }) => apiFetchJson("/api/workflows", { cache: "no-store", signal }),
+  })
+  const workflows = Array.isArray(workflowsQuery.data?.workflows) ? workflowsQuery.data.workflows : []
+  const loading = workflowsQuery.isLoading && !workflowsQuery.data
+
   const [workflowId, setWorkflowIdRaw] = useState<string>("")
   const [name, setName] = useState<string>("")
   const [pinnedWorkflowVersionNumber, setPinnedWorkflowVersionNumber] = useState<number | null>(null)
@@ -23,7 +30,6 @@ export function useNewBatchForm(params: { t: (key: string, vars?: Record<string,
   const [autoMaxConcurrency, setAutoMaxConcurrency] = useState<number | null>(null)
   const [failFast, setFailFast] = useState(false)
   const [maxFailures, setMaxFailures] = useState<number | null>(null)
-  const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [workflowStepCount, setWorkflowStepCount] = useState<number | null>(null)
   const [workflowStepCountLoading, setWorkflowStepCountLoading] = useState(false)
@@ -80,22 +86,11 @@ export function useNewBatchForm(params: { t: (key: string, vars?: Record<string,
     }
   }, [pinnedWorkflowVersionNumber, selectedWorkflow?.stepCount, workflowId])
 
-  async function refreshWorkflows() {
-    setLoading(true)
-    try {
-      const j = await apiFetchJson<{ workflows: Workflow[] }>("/api/workflows", { cache: "no-store" })
-      setWorkflows(j.workflows ?? [])
-      setWorkflowIdRaw((prev) => prev || j.workflows?.[0]?.id || "")
-    } catch (e) {
-      toast.error(tApiError({ t, err: e, fallbackKey: "common.loadFailed" }))
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
-    void refreshWorkflows()
-  }, [])
+    if (workflows.length && !workflowId) {
+      setWorkflowIdRaw(workflows[0]?.id || "")
+    }
+  }, [workflows, workflowId])
 
   async function createBatch(opts?: { sourceJson?: unknown }) {
     if (!canSubmit) return { started: false as const }
