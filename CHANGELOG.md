@@ -8,6 +8,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
+## v0.3.0
+
+### Breaking
+  - Replace background `AgentRun` engine with AI SDK chat streaming; drop `AgentRun` table and remove `/api/agent-runs` endpoints.
+  - Agent URLs now use `chatId` (e.g. `/agent/{chatId}`); existing agent-run history is not preserved.
+
+### Added
+  - Chat persistence (`Chat`, `Message`) and chat history (rename/delete/list).
+  - `/api/chat` streaming endpoint (AI SDK message parts + tool-call streaming).
+  - Chat attachments endpoints (`/api/chats/{chatId}/attachments/**`) and initial-send handoff support (`ChatInitialSend`).
+
+### Changed
+  - Agent/orchestrator UI now renders standardized message `parts` (tool states: input-streaming → output-available, etc.).
+  - Operations include optional `source` field for origin tracing (ui/agent/mcp).
+
+### Migration
+  - Run `prisma migrate deploy` on upgrade; note that `AgentRun` data is dropped.
+
 ## v0.2.1
 
 ### Added
