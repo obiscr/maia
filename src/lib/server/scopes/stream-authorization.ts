@@ -9,7 +9,6 @@ import { getRunFindFirstWhereByPublicId } from "@/lib/server/scopes/runs-scope"
 import { getJobRunFindFirstWhereByPublicId } from "@/lib/server/scopes/jobs-scope"
 import { getBatchFindFirstWhereByPublicId } from "@/lib/server/scopes/batches-scope"
 import { getScheduleFindFirstWhereByPublicId } from "@/lib/server/scopes/schedules-scope"
-import { getAgentRunFindFirstWhereByPublicId } from "@/lib/server/scopes/agent-runs-scope"
 import { getOperationFindFirstWhereByPublicId } from "@/lib/server/scopes/operations-scope"
 import { getWorkflowFindFirstWhereById, getWorkflowFindFirstWhereByPublicId } from "@/lib/server/scopes/workflows-scope"
 
@@ -88,15 +87,6 @@ export async function assertCanSubscribe(auth: RequestAuthContext, parsed: Parse
   if (kind === "schedule") {
     const ok = await prisma.schedule
       .findFirst({ where: getScheduleFindFirstWhereByPublicId(a, parsed.id), select: { id: true } })
-      .then(Boolean)
-      .catch(() => false)
-    if (!ok) throw forbidden()
-    return
-  }
-
-  if (kind === "agentRun") {
-    const ok = await prisma.agentRun
-      .findFirst({ where: getAgentRunFindFirstWhereByPublicId(a, parsed.id), select: { id: true } })
       .then(Boolean)
       .catch(() => false)
     if (!ok) throw forbidden()

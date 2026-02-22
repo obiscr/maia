@@ -15,11 +15,7 @@ import {
 import { USER_SETTING_KEYS, getUserSettingJson, setUserSettingJson } from "@/lib/server/settings/user-settings"
 import { pathExists, readJsonFile } from "@/lib/server/maia/fs"
 import { maiaDataDir } from "@/lib/server/maia/paths"
-import { OPENROUTER_MODELS, DEFAULT_OPENROUTER_MODEL } from "@/lib/server/agent/openrouter"
-
-export function getAvailableModels() {
-  return OPENROUTER_MODELS.map((m) => ({ id: m.id, name: m.name, provider: m.provider }))
-}
+import { DEFAULT_OPENROUTER_MODEL, resolveAiModelAlias } from "@/lib/server/agent/models"
 
 const agentModelSchema = z.string().trim().min(1).default(DEFAULT_OPENROUTER_MODEL)
 
@@ -73,7 +69,7 @@ async function maybeImportLegacySettingsToUser(userId: string): Promise<void> {
     await upsertUserSecret({ userId, key: USER_SECRET_KEYS.agentApiKey, plaintext: apiKey })
   }
   if (model) {
-    const safeModel = agentModelSchema.safeParse(model)
+    const safeModel = agentModelSchema.safeParse(resolveAiModelAlias(model))
     await setUserSettingJson({
       userId,
       key: USER_SETTING_KEYS.agentModel,
@@ -92,7 +88,7 @@ async function readUserAgentModel(userId: string): Promise<string> {
   if (!raw) return DEFAULT_OPENROUTER_MODEL
   try {
     const parsed = JSON.parse(raw)
-    return agentModelSchema.parse(parsed)
+    return agentModelSchema.parse(resolveAiModelAlias(typeof parsed === "string" ? parsed : String(parsed ?? "")))
   } catch {
     return DEFAULT_OPENROUTER_MODEL
   }
@@ -133,7 +129,7 @@ export async function saveAgentSettingsForUser(params: {
   await maybeImportLegacySettingsToUser(params.userId).catch(() => {})
 
   if (typeof params.model === "string") {
-    const safeModel = agentModelSchema.parse(params.model)
+    const safeModel = agentModelSchema.parse(resolveAiModelAlias(params.model))
     await setUserSettingJson({
       userId: params.userId,
       key: USER_SETTING_KEYS.agentModel,

@@ -9,8 +9,6 @@ export const KNOWN_STREAM_TOPIC_KINDS = [
   "batches",
   "schedule",
   "schedules",
-  "agentRun",
-  "agentRuns",
   "workflowDeps",
   "operation",
   "operations",
@@ -23,7 +21,7 @@ export function isKnownStreamTopicKind(kind: string): kind is StreamTopicKind {
 }
 
 // Only these kinds support list topics (`kind:list_admin` / `kind:list_<userPublicId>`).
-export const LIST_STREAM_TOPIC_KINDS = ["runs", "jobs", "batches", "schedules", "operations", "agentRuns"] as const
+export const LIST_STREAM_TOPIC_KINDS = ["runs", "jobs", "batches", "schedules", "operations"] as const
 export type ListStreamTopicKind = (typeof LIST_STREAM_TOPIC_KINDS)[number]
 
 export function isListStreamTopicKind(kind: string): kind is ListStreamTopicKind {

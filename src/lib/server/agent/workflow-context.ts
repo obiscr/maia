@@ -47,8 +47,13 @@ export type WorkflowForContext = {
   }>
 }
 
-export function buildWorkflowContextPrompt(params: { workflow: WorkflowForContext; maxChars?: number }) {
+export function buildWorkflowContextPrompt(params: {
+  workflow: WorkflowForContext
+  maxChars?: number
+  includeScripts?: boolean
+}) {
   const max = params.maxChars ?? 18000
+  const includeScripts = params.includeScripts === true
   const wf = params.workflow
 
   const lines: string[] = []
@@ -59,7 +64,11 @@ export function buildWorkflowContextPrompt(params: { workflow: WorkflowForContex
   lines.push(`dependencies (JSON string): ${wf.dependencies ?? "{}"}`)
   if (wf.inputSpec) lines.push(`inputSpec (JSON string): ${String(wf.inputSpec).slice(0, 4000)}`)
   lines.push("")
-  lines.push("steps:")
+  lines.push(
+    includeScripts
+      ? "steps:"
+      : "steps: (scripts omitted to save context; call get_workflow if you need the full scriptEsm for a step)",
+  )
 
   let out = lines.join("\n")
   for (const [i, s] of (wf.steps ?? []).entries()) {
@@ -74,13 +83,16 @@ export function buildWorkflowContextPrompt(params: { workflow: WorkflowForContex
       .join("\n")
 
     const remaining = max - (out.length + header.length + 50)
-    let scriptBlock = "\nscriptEsm:\n```js\n\n```"
-    if (remaining > 200) {
-      const scriptBudget = Math.max(0, remaining - scriptBlock.length)
-      const script = trimToMaxChars(String(s.scriptEsm ?? ""), scriptBudget)
-      scriptBlock = `\nscriptEsm:\n\`\`\`js\n${script}\n\`\`\``
-    } else {
-      scriptBlock = "\nscriptEsm: (omitted to save context; ask me to expand if needed)"
+    let scriptBlock = ""
+    if (includeScripts) {
+      scriptBlock = "\nscriptEsm:\n```js\n\n```"
+      if (remaining > 200) {
+        const scriptBudget = Math.max(0, remaining - scriptBlock.length)
+        const script = trimToMaxChars(String(s.scriptEsm ?? ""), scriptBudget)
+        scriptBlock = `\nscriptEsm:\n\`\`\`js\n${script}\n\`\`\``
+      } else {
+        scriptBlock = "\nscriptEsm: (omitted to save context; ask me to expand if needed)"
+      }
     }
 
     const chunk = `${header}${scriptBlock}`

@@ -1,7 +1,7 @@
 import { z } from "zod"
 
 import { getAuthedUserFromRequest } from "@/lib/server/auth/session"
-import { getAgentSettingsStatusForUser, saveAgentSettingsForUser, getAvailableModels } from "@/lib/server/maia/agent-settings"
+import { getAgentSettingsStatusForUser, saveAgentSettingsForUser } from "@/lib/server/maia/agent-settings"
 import { fail, ok } from "@/lib/server/http/response"
 import { zodIssues } from "@/lib/shared/http/zod"
 import { mark, withApiObservability } from "@/lib/server/observability"
@@ -18,11 +18,9 @@ export const GET = withApiObservability(async (req: Request) => {
   const user = await getAuthedUserFromRequest(req).catch(() => null)
   if (!user) return fail({ status: 401, code: "UNAUTHORIZED" })
 
-  // Never expose plaintext API keys to clients.
   const settings = await getAgentSettingsStatusForUser(user.id)
-  const models = getAvailableModels()
   mark("read")
-  return ok({ settings, models })
+  return ok({ settings })
 })
 
 export const PUT = withApiObservability(async (req: Request) => {
@@ -43,7 +41,6 @@ export const PUT = withApiObservability(async (req: Request) => {
     apiKey: body.apiKey ?? undefined,
     model: body.model ?? undefined,
   })
-  const models = getAvailableModels()
   mark("write")
-  return ok({ settings, models })
+  return ok({ settings })
 })
