@@ -52,9 +52,11 @@ function ReadonlyUserMessage(props: ReadonlyUserMessageProps) {
         .startsWith("image/"),
   )
 
+  const textRef = React.useRef<HTMLDivElement | null>(null)
+
   return (
     <div
-      className="rounded-md bg-accent/50"
+      className="relative rounded-md bg-accent/50"
       role="button"
       tabIndex={0}
       onClick={props.onFocus}
@@ -116,7 +118,10 @@ function ReadonlyUserMessage(props: ReadonlyUserMessageProps) {
           ) : null}
         </div>
       ) : null}
-      <div className="min-h-11 whitespace-pre-wrap break-all px-3 py-3 text-base md:text-sm">
+      <div
+        ref={textRef}
+        className="min-h-11 max-h-[8vh] overflow-hidden whitespace-pre-wrap break-all px-3 py-3 text-base md:text-sm"
+      >
         {props.draft || props.text || " "}
       </div>
     </div>
