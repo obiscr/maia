@@ -1,11 +1,10 @@
-import { ensureEngineRunning } from "@/lib/server/maia/server"
 import { mark, withApiObservability } from "@/lib/server/observability"
 import { runIdempotentOperation } from "@/lib/server/operations/run-operation"
-import { prisma } from "@/lib/server/db"
 import { notFound } from "@/lib/server/http/response"
 import { requireRequestAuth } from "@/lib/server/authz"
-import { getJobRunFindFirstWhereByPublicId } from "@/lib/server/scopes/jobs-scope"
 import { toViewerAuthContext } from "@/lib/server/scopes/viewer-scope"
+import { cancelJobByPublicId } from "@/lib/server/services/jobs/cancel-job"
+import { getJobByPublicId } from "@/lib/server/services/jobs/get-job"
 
 export const runtime = "nodejs"
 
@@ -16,10 +15,7 @@ export const POST = withApiObservability(async (req: Request, ctx: { params: Pro
   const jobPublicId = String(jobId || "")
     .trim()
     .toLowerCase()
-  const job = await prisma.jobRun.findFirst({
-    where: getJobRunFindFirstWhereByPublicId(viewerAuth, jobPublicId),
-    select: { id: true },
-  })
+  const job = await getJobByPublicId({ viewerAuth, jobId: jobPublicId })
   if (!job) return notFound("NOT_FOUND")
   return await runIdempotentOperation({
     req,
@@ -40,13 +36,9 @@ export const POST = withApiObservability(async (req: Request, ctx: { params: Pro
       } catch {
         reason = null
       }
-
-      const eng = await ensureEngineRunning()
-      mark("engine")
-      await eng.requestCancelJobRun({ jobRunId: job.id, reason })
+      const canceled = await cancelJobByPublicId({ viewerAuth, jobId: jobPublicId, reason })
+      if (!canceled.ok) return { status: 404, body: { code: "NOT_FOUND" } }
       mark("engine.cancel_requested")
-      void eng.tick()
-      mark("engine.tick")
       return { status: 200, body: { ok: true, operationId } }
     },
   })

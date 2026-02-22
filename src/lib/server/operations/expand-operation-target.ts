@@ -3,7 +3,6 @@ import "server-only"
 import { prisma } from "@/lib/server/db"
 import type { OperationTargetType } from "@/lib/server/operations/operations"
 import type { ErrorEnvelope } from "@/lib/shared/error-display/types"
-import { buildAgentRunErrorEnvelope } from "@/lib/shared/error-display/adapters/agent-run"
 import { buildRunErrorEnvelope } from "@/lib/shared/error-display/adapters/run"
 import { buildJobErrorEnvelope } from "@/lib/shared/error-display/adapters/job"
 import { buildWorkflowDepsErrorEnvelope } from "@/lib/shared/error-display/adapters/workflow-deps"
@@ -11,15 +10,6 @@ import { formatPublicIdForDisplay } from "@/lib/shared/format/id"
 import { safeJsonParseObject } from "@/lib/shared/lang/safe-json"
 
 export type ExpandedOperationTarget =
-  | {
-      type: "agentRun"
-      id: string
-      displayId: string
-      href: string
-      status: string
-      title: string | null
-      error: ErrorEnvelope | null
-    }
   | {
       type: "run"
       id: string
@@ -110,35 +100,6 @@ export async function expandOperationTarget(params: {
   const targetType = params.targetType ? String(params.targetType) : ""
   const targetId = params.targetId ? String(params.targetId) : ""
   if (!targetType || !targetId) return null
-
-  if (targetType === "agentRun") {
-    const row = await prisma.agentRun.findUnique({
-      where: { publicId: safeLower(targetId) },
-      select: {
-        publicId: true,
-        status: true,
-        type: true,
-        workflowId: true,
-        errorCode: true,
-        errorMessage: true,
-        errorMetaJson: true,
-      },
-    })
-    if (!row) return null
-    return {
-      type: "agentRun",
-      id: row.publicId,
-      displayId: formatPublicIdForDisplay(row.publicId),
-      href: `/agent/${encodeURIComponent(String(row.publicId))}`,
-      status: String(row.status),
-      title: row.type ? String(row.type) : null,
-      error: buildAgentRunErrorEnvelope({
-        errorCode: row.errorCode,
-        errorMessage: row.errorMessage,
-        errorMetaJson: row.errorMetaJson,
-      }),
-    }
-  }
 
   if (targetType === "run") {
     const row = await prisma.run.findUnique({

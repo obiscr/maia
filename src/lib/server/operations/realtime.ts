@@ -8,6 +8,7 @@ export type OperationRealtimeState = {
   operationId: string
   status: string
   action: string
+  source?: string | null
   scope?: string | null
   targetType?: string | null
   targetId?: string | null
@@ -39,6 +40,7 @@ export async function emitOperationEvent(params: { operationId: string; event: O
       publicNumber: true,
       status: true,
       action: true,
+      source: true,
       scope: true,
       targetType: true,
       targetId: true,
@@ -79,6 +81,7 @@ export async function emitOperationEvent(params: { operationId: string; event: O
     operationId: String(op.publicId ?? op.id),
     status: String(op.status),
     action: String(op.action),
+    source: op.source ? String(op.source) : null,
     scope: op.scope ? String(op.scope) : null,
     targetType: op.targetType ? String(op.targetType) : null,
     targetId: op.targetId ? String(op.targetId) : null,

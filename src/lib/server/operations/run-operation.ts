@@ -34,6 +34,7 @@ function getAuditContextFromRequest(req: Request) {
 export async function runIdempotentOperation(params: {
   req: Request
   action: OperationAction
+  source?: "ui" | "agent" | "mcp"
   scope: string
   targetType?: OperationTargetType
   targetId?: string
@@ -46,6 +47,7 @@ export async function runIdempotentOperation(params: {
 
   const started = await beginOperation({
     action: params.action,
+    source: params.source ?? "ui",
     scope: params.scope,
     targetType: params.targetType,
     targetId: params.targetId,

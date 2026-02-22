@@ -1,10 +1,8 @@
-import { prisma } from "@/lib/server/db"
 import { withApiObservability, mark } from "@/lib/server/observability"
 import { runIdempotentOperation } from "@/lib/server/operations/run-operation"
 import { notFound } from "@/lib/server/http/response"
-import { ensureEngineRunning } from "@/lib/server/maia/server"
-import { JobRunStatus } from "@prisma/client"
-import { isAdmin, requireRequestAuth } from "@/lib/server/authz"
+import { requireRequestAuth } from "@/lib/server/authz"
+import { resumeBatch } from "@/lib/server/services/batches/control-batch"
 
 export const runtime = "nodejs"
 
@@ -14,11 +12,8 @@ export const POST = withApiObservability(async (req: Request, ctx: { params: Pro
   const batchPublicId = String(batchId || "")
     .trim()
     .toLowerCase()
-  const batch = await prisma.batch.findFirst({
-    where: { publicId: batchPublicId, ...(isAdmin(auth) ? {} : { ownerUserId: auth.userId }) },
-    select: { id: true, startedAt: true },
-  })
-  if (!batch) return notFound("NOT_FOUND")
+  const batch = await resumeBatch(auth, batchPublicId)
+  if (!batch.ok) return notFound("NOT_FOUND")
 
   return await runIdempotentOperation({
     req,
@@ -27,39 +22,10 @@ export const POST = withApiObservability(async (req: Request, ctx: { params: Pro
     targetType: "batch",
     targetId: batchPublicId,
     exec: async ({ operationId }) => {
-      const now = new Date()
-      const updated = await prisma.jobRun.updateMany({
-        where: { batchId: batch.id, status: JobRunStatus.PAUSED },
-        data: {
-          status: JobRunStatus.QUEUED,
-          queuedAt: now,
-          nextAttemptAt: null,
-          finishedAt: null,
-          lastErrorCode: null,
-          lastErrorMessage: null,
-          lastErrorMetaJson: null,
-          lastErrorAt: null,
-          claimedBy: null,
-          claimedAt: null,
-          leaseExpiresAt: null,
-          startedAt: null,
-          runId: null,
-        },
-      })
-
-      // Mark the batch as started once we resume (best-effort; rollup will correct status).
-      if (!batch.startedAt) {
-        await prisma.batch
-          .updateMany({ where: { id: batch.id, startedAt: null }, data: { startedAt: now } })
-          .catch(() => {})
-      }
-
-      const eng = await ensureEngineRunning()
-      mark("engine")
-      void eng.tick({ priority: "low", reason: "batches:resume" })
+      const result = await resumeBatch(auth, batchPublicId)
+      if (!result.ok) return { status: 404, body: { code: "NOT_FOUND" } }
       mark("engine.tick")
-
-      return { status: 200, body: { ok: true, resumed: updated.count, operationId } }
+      return { status: 200, body: { ok: true, resumed: result.resumed, operationId } }
     },
   })
 })

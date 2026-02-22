@@ -21,7 +21,6 @@ export type OperationAction =
   | "RUN_STEP_RESTART"
   | "WORKFLOW_DEPS_INSTALL"
   | "WORKFLOW_CREATE"
-  | "AGENT_RUN_CREATE"
   | "JOB_CREATE"
   | "SCHEDULE_CREATE"
   | "BATCH_CREATE"
@@ -31,10 +30,11 @@ export type OperationAction =
   | "BATCH_RESUME"
   | "BATCH_CANCEL"
 
-export type OperationTargetType = "run" | "job" | "schedule" | "workflow" | "runStep" | "batch" | "agentRun"
+export type OperationTargetType = "run" | "job" | "schedule" | "workflow" | "runStep" | "batch"
 
 export type OperationCreateParams = {
   action: OperationAction
+  source?: "ui" | "agent" | "mcp" | null
   scope: string
   targetType?: OperationTargetType
   targetId?: string
@@ -124,6 +124,7 @@ export async function beginOperation(params: OperationCreateParams) {
           publicNumber: pub.publicNumber,
           status: "RUNNING",
           action: params.action,
+          source: params.source ?? null,
           scope: params.scope,
           targetType: params.targetType ?? null,
           targetId: params.targetId ?? null,
@@ -158,6 +159,7 @@ export async function beginOperation(params: OperationCreateParams) {
       publicNumber: pub.publicNumber,
       status: "RUNNING",
       action: params.action,
+      source: params.source ?? null,
       scope: params.scope,
       targetType: params.targetType ?? null,
       targetId: params.targetId ?? null,

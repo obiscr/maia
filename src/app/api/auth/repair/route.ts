@@ -123,15 +123,6 @@ export const POST = withApiObservability(async (req: Request) => {
         where: { ownerUserId: null },
         data: { ownerUserId: user.id, createdByUserId: user.id, updatedByUserId: user.id, triggeredByUserId: user.id },
       }),
-      tx.agentRun.updateMany({
-        where: { ownerUserId: null },
-        data: {
-          ownerUserId: user.id,
-          createdByUserId: user.id,
-          updatedByUserId: user.id,
-          triggeredByUserId: user.id,
-        },
-      }),
     ]).catch(() => {})
 
     return user

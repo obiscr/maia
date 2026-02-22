@@ -1,9 +1,8 @@
-import { prisma } from "@/lib/server/db"
 import { withApiObservability } from "@/lib/server/observability"
 import { runIdempotentOperation } from "@/lib/server/operations/run-operation"
 import { notFound } from "@/lib/server/http/response"
-import { JobRunStatus } from "@prisma/client"
-import { isAdmin, requireRequestAuth } from "@/lib/server/authz"
+import { requireRequestAuth } from "@/lib/server/authz"
+import { pauseBatch } from "@/lib/server/services/batches/control-batch"
 
 export const runtime = "nodejs"
 
@@ -13,11 +12,8 @@ export const POST = withApiObservability(async (req: Request, ctx: { params: Pro
   const batchPublicId = String(batchId || "")
     .trim()
     .toLowerCase()
-  const batch = await prisma.batch.findFirst({
-    where: { publicId: batchPublicId, ...(isAdmin(auth) ? {} : { ownerUserId: auth.userId }) },
-    select: { id: true },
-  })
-  if (!batch) return notFound("NOT_FOUND")
+  const batch = await pauseBatch(auth, batchPublicId)
+  if (!batch.ok) return notFound("NOT_FOUND")
 
   return await runIdempotentOperation({
     req,
@@ -26,11 +22,9 @@ export const POST = withApiObservability(async (req: Request, ctx: { params: Pro
     targetType: "batch",
     targetId: batchPublicId,
     exec: async ({ operationId }) => {
-      const updated = await prisma.jobRun.updateMany({
-        where: { batchId: batch.id, status: JobRunStatus.QUEUED },
-        data: { status: JobRunStatus.PAUSED },
-      })
-      return { status: 200, body: { ok: true, paused: updated.count, operationId } }
+      const result = await pauseBatch(auth, batchPublicId)
+      if (!result.ok) return { status: 404, body: { code: "NOT_FOUND" } }
+      return { status: 200, body: { ok: true, paused: result.paused, operationId } }
     },
   })
 })
