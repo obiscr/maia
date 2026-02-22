@@ -428,7 +428,6 @@
         "title": "Chat history",
         "description": "{n} chats",
         "empty": "No chat history yet",
-        "untitled": "Untitled chat",
         "loadMore": "Load more",
         "renameAction": "Rename",
         "namePlaceholder": "Enter chat title",
@@ -436,7 +435,9 @@
         "renamedToast": "Chat title updated",
         "deleteTitle": "Delete chat?",
         "deleteDescription": "This will permanently delete this chat history. This cannot be undone",
-        "deletedToast": "Chat deleted"
+        "deletedToast": "Chat deleted",
+        "searchPlaceholder": "Search chats…",
+        "noSearchResults": "No matching chats"
       }
     }
   },

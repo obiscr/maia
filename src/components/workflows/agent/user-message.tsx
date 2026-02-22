@@ -189,15 +189,6 @@ export function UserMessage(props: UserMessageProps) {
   const [focused, setFocused] = React.useState(false)
   const rootRef = React.useRef<HTMLDivElement | null>(null)
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null)
-  const lastPointerDownRef = React.useRef<EventTarget | null>(null)
-
-  React.useEffect(() => {
-    const onPointerDown = (ev: PointerEvent) => {
-      lastPointerDownRef.current = ev.target
-    }
-    window.addEventListener("pointerdown", onPointerDown, true)
-    return () => window.removeEventListener("pointerdown", onPointerDown, true)
-  }, [])
 
   React.useEffect(() => {
     if (focused) return
@@ -300,6 +291,40 @@ export function UserMessage(props: UserMessageProps) {
     }
   }, [text, files, props.message.id])
 
+  React.useEffect(() => {
+    if (!focused) return
+    const root = rootRef.current
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (!root) return
+      if (e.target instanceof Node && root.contains(e.target)) return
+      if (e.target instanceof HTMLElement && shouldKeepEditingOnBlur(e.target)) return
+      onCancel()
+    }
+
+    const onFocusOut = (e: FocusEvent) => {
+      const next = e.relatedTarget as Node | null
+      if (next && root?.contains(next)) return
+      if (shouldKeepEditingOnBlur(next)) return
+      onCancel()
+    }
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return
+      if (e.isComposing) return
+      onCancel()
+    }
+
+    window.addEventListener("pointerdown", onPointerDown)
+    root?.addEventListener("focusout", onFocusOut)
+    window.addEventListener("keydown", onKeyDown)
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown)
+      root?.removeEventListener("focusout", onFocusOut)
+      window.removeEventListener("keydown", onKeyDown)
+    }
+  }, [focused, onCancel])
+
   const onSave = React.useCallback(async () => {
     if (!dirty) return
     if (saving) return
@@ -362,18 +387,6 @@ export function UserMessage(props: UserMessageProps) {
         focused ? "shadow-xs" : "",
       )}
       ref={rootRef}
-      onBlurCapture={(e) => {
-        const next = e.relatedTarget as Node | null
-        const pointerTarget = lastPointerDownRef.current
-        if (next && e.currentTarget.contains(next)) return
-        if (!next && pointerTarget instanceof Node && e.currentTarget.contains(pointerTarget)) return
-        if (shouldKeepEditingOnBlur(next)) return
-        if (!saving && dirty) {
-          onCancel()
-          return
-        }
-        setFocused(false)
-      }}
     >
       {focused ? (
         <PromptComposer

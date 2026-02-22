@@ -1,17 +1,19 @@
 "use client"
 
 import * as React from "react"
-import { Check, MoreHorizontal, Pencil, Trash2, X } from "lucide-react"
+import { Check, MoreHorizontal, Pencil, Search, Trash2, X } from "lucide-react"
 
 import { useI18n } from "@/components/i18n-provider"
 import { StandardActionDialog } from "@/components/common/standard-action-dialog"
 import { ChatHistorySheetSkeleton } from "@/components/workflows/agent/chat-history-sheet-skeleton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Spinner } from "@/components/ui/spinner"
 import { toast } from "@/lib/client/toast"
+import { formatPublicIdForDisplay } from "@/lib/shared/format/id"
 import { formatAbsoluteTime } from "@/lib/shared/format/time"
 import type { Locale } from "@/lib/shared/i18n/constants"
 import { tApiError } from "@/lib/shared/i18n/error"
@@ -29,6 +31,9 @@ export function ChatHistorySheet(props: {
   onOpenChange: (open: boolean) => void
   locale: string
   items: ChatHistoryItem[]
+  totalCount?: number
+  search: string
+  onSearchChange: (next: string) => void
   loading: boolean
   hasMore: boolean
   loadingMore: boolean
@@ -131,22 +136,51 @@ export function ChatHistorySheet(props: {
         >
           <SheetHeader>
             <SheetTitle>{t("agent.chat.history.title")}</SheetTitle>
-            <SheetDescription>{t("agent.chat.history.description", { n: props.items.length })}</SheetDescription>
+            <SheetDescription>
+              {t("agent.chat.history.description", { n: props.totalCount ?? props.items.length })}
+            </SheetDescription>
           </SheetHeader>
 
           <div className="min-h-0 flex-1 overflow-auto px-4 pb-2">
+            <div className="sticky top-0 z-10 bg-background pb-2 pt-1">
+              <InputGroup>
+                <InputGroupAddon align="inline-start">
+                  <Search aria-hidden="true" />
+                </InputGroupAddon>
+                <InputGroupInput
+                  value={props.search}
+                  onChange={(e) => props.onSearchChange(e.target.value)}
+                  placeholder={t("agent.chat.history.searchPlaceholder")}
+                  className="h-8 text-sm"
+                />
+                {props.search.length > 0 && (
+                  <InputGroupAddon align="inline-end">
+                    <button
+                      type="button"
+                      className="flex size-5 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+                      onClick={() => props.onSearchChange("")}
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </InputGroupAddon>
+                )}
+              </InputGroup>
+            </div>
+
             {props.loading ? (
               <div className="pt-2">
                 <ChatHistorySheetSkeleton rows={6} />
               </div>
             ) : props.items.length === 0 ? (
-              <div className="pt-4 text-sm text-muted-foreground">{t("agent.chat.history.empty")}</div>
+              <div className="pt-4 text-sm text-muted-foreground">
+                {props.search.trim() ? t("agent.chat.history.noSearchResults") : t("agent.chat.history.empty")}
+              </div>
             ) : (
               <div className="space-y-2 pt-2">
                 {props.items.map((it) => {
                   const isEditing = editingId === it.id
                   const busy = savingId === it.id
-                  const title = (it.title || "").trim() || t("agent.chat.history.untitled")
+                  const title = (it.title || "").trim() || t("agent.chat.newChat")
                   return (
                     <div
                       key={it.id}
@@ -180,6 +214,8 @@ export function ChatHistorySheet(props: {
                             <div className="truncate text-sm font-medium">{title}</div>
                           )}
                           <div className="mt-1 text-xs text-muted-foreground">
+                            <span className="font-mono">{formatPublicIdForDisplay(it.publicId)}</span>
+                            <span> • </span>
                             {formatAbsoluteTime(it.updatedAt, { locale: props.locale as Locale })}
                           </div>
                         </div>
@@ -209,12 +245,7 @@ export function ChatHistorySheet(props: {
                           ) : (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button
-                                  size="icon-sm"
-                                  variant="ghost"
-                                  disabled={busy}
-                                  aria-label={t("common.actions")}
-                                >
+                                <Button size="icon-sm" variant="ghost" disabled={busy} aria-label={t("common.actions")}>
                                   <MoreHorizontal className="size-4" />
                                 </Button>
                               </DropdownMenuTrigger>

@@ -9,6 +9,23 @@ import { prisma } from "@/lib/server/db"
 
 export const runtime = "nodejs"
 
+/**
+ * GET /api/chats/:chatId — fetch chat metadata (title, model, etc.).
+ */
+export const GET = withApiObservability(async (_req: Request, { params }: { params: Promise<{ chatId: string }> }) => {
+  const auth = requireRequestAuth()
+  const { chatId } = await params
+
+  const chat = await prisma.chat.findUnique({
+    where: { id: chatId },
+    select: { id: true, publicId: true, title: true, model: true, userId: true },
+  })
+  if (!chat) return fail({ status: 404, code: "NOT_FOUND" })
+  if (chat.userId !== auth.userId) return fail({ status: 403, code: "FORBIDDEN" })
+
+  return ok({ id: chat.id, publicId: chat.publicId, title: chat.title ?? "", model: chat.model ?? "" })
+})
+
 const patchSchema = z.object({
   model: z.string().trim().min(1).optional(),
   title: z.string().max(120).optional(),

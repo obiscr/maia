@@ -428,7 +428,6 @@
         "title": "对话历史",
         "description": "共 {n} 条对话",
         "empty": "暂无对话历史",
-        "untitled": "未命名对话",
         "loadMore": "加载更多",
         "renameAction": "重命名",
         "namePlaceholder": "输入对话名称",
@@ -436,7 +435,9 @@
         "renamedToast": "对话名称已更新",
         "deleteTitle": "删除对话？",
         "deleteDescription": "这将永久删除该对话历史，且无法撤销",
-        "deletedToast": "对话已删除"
+        "deletedToast": "对话已删除",
+        "searchPlaceholder": "搜索对话…",
+        "noSearchResults": "没有匹配的对话"
       }
     }
   },

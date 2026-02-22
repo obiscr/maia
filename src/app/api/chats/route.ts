@@ -18,6 +18,7 @@ const bodySchema = z.object({
 const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   offset: z.coerce.number().int().min(0).default(0),
+  q: z.string().trim().max(200).default(""),
 })
 
 /**
@@ -109,25 +110,34 @@ export const GET = withApiObservability(async (req: Request) => {
     query = listQuerySchema.parse({
       limit: sp.get("limit") ?? undefined,
       offset: sp.get("offset") ?? undefined,
+      q: sp.get("q") ?? undefined,
     })
   } catch (e) {
     if (e instanceof z.ZodError) return fail({ status: 422, code: "INVALID_QUERY", issues: zodIssues(e) })
     return fail({ status: 400, code: "INVALID_QUERY" })
   }
 
-  const rows = await prisma.chat.findMany({
-    where: { userId: auth.userId },
-    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-    skip: query.offset,
-    take: query.limit,
-    select: {
-      id: true,
-      publicId: true,
-      title: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  })
+  const where: Record<string, unknown> = { userId: auth.userId }
+  if (query.q) {
+    where.OR = [{ title: { contains: query.q } }, { publicId: { contains: query.q.toLowerCase() } }]
+  }
+
+  const [rows, totalCount] = await Promise.all([
+    prisma.chat.findMany({
+      where,
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      skip: query.offset,
+      take: query.limit,
+      select: {
+        id: true,
+        publicId: true,
+        title: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    }),
+    prisma.chat.count({ where }),
+  ])
 
   return ok({
     items: rows.map((row) => ({
@@ -137,6 +147,7 @@ export const GET = withApiObservability(async (req: Request) => {
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     })),
+    totalCount,
     limit: query.limit,
     offset: query.offset,
     hasMore: rows.length >= query.limit,

@@ -29,9 +29,12 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import { toast } from "@/lib/client/toast"
 import { HeaderActions } from "@/components/common/header-actions"
 import { MessageParts } from "@/components/workflows/agent/message-parts"
+import { MessageActions } from "@/components/workflows/agent/message-actions"
 import { ImagePreviewDialog, type ImagePreviewItem } from "@/components/workflows/agent/image-preview-dialog"
 import { UserMessage } from "@/components/workflows/agent/user-message"
 import { AVAILABLE_MODELS, groupModelsByProvider } from "@/lib/shared/models"
+import { useQueryClient } from "@tanstack/react-query"
+import { useListQuery } from "@/hooks/list-query/use-list-query"
 import { apiFetchJson } from "@/lib/shared/http/api"
 import { tApiError } from "@/lib/shared/i18n/error"
 import { ChatHistorySheet, type ChatHistoryItem } from "@/components/workflows/agent/chat-history-sheet"
@@ -151,6 +154,7 @@ const ChatMessageRow = React.memo(function ChatMessageRow(props: {
           onToolApprovalResponse={props.onToolApprovalResponse}
           orchestratorProgress={props.isLive ? props.orchestratorProgress : null}
         />
+        {!props.isStreaming && <MessageActions message={message} t={t} />}
       </div>
     )
   }
@@ -181,6 +185,7 @@ export default function WorkflowAgentClient(props: {
   initialMessages?: UIMessage[]
   initialPrompt?: string
   initialApiKeyConfigured?: boolean
+  initialChatTitle?: string
 }) {
   const { t, locale } = useI18n()
   const router = useRouter()
@@ -197,6 +202,7 @@ export default function WorkflowAgentClient(props: {
     initialPrompt: apiKeyConfigured ? props.initialPrompt : undefined,
     initialMessages: props.initialMessages,
     initialModel: props.initialModel,
+    initialChatTitle: props.initialChatTitle,
   })
   const selectedStep = session.selectedStep
   const stepKeyInputId = React.useId()
@@ -204,11 +210,11 @@ export default function WorkflowAgentClient(props: {
   const stepTimeoutInputId = React.useId()
   const [newChatConfirmOpen, setNewChatConfirmOpen] = React.useState(false)
   const [chatHistoryOpen, setChatHistoryOpen] = React.useState(false)
-  const [chatHistoryItems, setChatHistoryItems] = React.useState<ChatHistoryItem[]>([])
-  const [chatHistoryLoading, setChatHistoryLoading] = React.useState(false)
+  const [chatHistorySearchDraft, setChatHistorySearchDraft] = React.useState("")
+  const [chatHistorySearch, setChatHistorySearch] = React.useState("")
+  const [chatHistoryExtraItems, setChatHistoryExtraItems] = React.useState<ChatHistoryItem[]>([])
   const [chatHistoryLoadingMore, setChatHistoryLoadingMore] = React.useState(false)
-  const [chatHistoryOffset, setChatHistoryOffset] = React.useState(0)
-  const [chatHistoryHasMore, setChatHistoryHasMore] = React.useState(true)
+  const queryClient = useQueryClient()
   const [mobileTab, setMobileTab] = React.useState<"chat" | "canvas">("chat")
   const [composerValue, setComposerValue] = React.useState("")
   const [modelsLoading, setModelsLoading] = React.useState(() => !String(props.initialModel ?? "").trim())
@@ -342,57 +348,102 @@ export default function WorkflowAgentClient(props: {
     startNewChat()
   }, [session.pending, session.saving, session.isDirty, startNewChat])
 
-  const loadChatHistory = React.useCallback(
-    async (reset: boolean) => {
-      if (reset) setChatHistoryLoading(true)
-      else setChatHistoryLoadingMore(true)
-      try {
-        const offset = reset ? 0 : chatHistoryOffset
-        const json = await apiFetchJson<{
-          items?: Array<{
-            id?: string
-            publicId?: string
-            title?: string
-            createdAt?: string
-            updatedAt?: string
-          }>
-          nextOffset?: number
-          hasMore?: boolean
-        }>(`/api/chats?limit=${CHAT_HISTORY_PAGE_SIZE}&offset=${offset}`, { cache: "no-store" })
+  type ChatHistoryResponse = {
+    items?: Array<{ id?: string; publicId?: string; title?: string; createdAt?: string; updatedAt?: string }>
+    totalCount?: number
+    nextOffset?: number
+    hasMore?: boolean
+  }
 
-        const incoming = (Array.isArray(json?.items) ? json.items : [])
-          .map((it) => ({
-            id: String(it?.id ?? ""),
-            publicId: String(it?.publicId ?? ""),
-            title: String(it?.title ?? ""),
-            createdAt: String(it?.createdAt ?? ""),
-            updatedAt: String(it?.updatedAt ?? ""),
-          }))
-          .filter((it) => it.id && it.publicId)
+  const chatHistoryQueryKey = React.useMemo(() => ["chatHistory", { q: chatHistorySearch.trim() }], [chatHistorySearch])
 
-        setChatHistoryItems((prev) => (reset ? incoming : [...prev, ...incoming]))
-        setChatHistoryOffset(
-          typeof json?.nextOffset === "number" && Number.isFinite(json.nextOffset)
-            ? json.nextOffset
-            : offset + incoming.length,
-        )
-        setChatHistoryHasMore(Boolean(json?.hasMore))
-      } catch (e) {
-        toast.error(tApiError({ t, err: e, fallbackKey: "common.loadFailed" }))
-      } finally {
-        if (reset) setChatHistoryLoading(false)
-        else setChatHistoryLoadingMore(false)
-      }
+  const chatHistoryQuery = useListQuery<ChatHistoryResponse>({
+    queryKey: chatHistoryQueryKey,
+    enabled: chatHistoryOpen,
+    queryFn: async ({ signal }) => {
+      const params = new URLSearchParams()
+      params.set("limit", String(CHAT_HISTORY_PAGE_SIZE))
+      params.set("offset", "0")
+      const q = chatHistorySearch.trim()
+      if (q) params.set("q", q)
+      return apiFetchJson(`/api/chats?${params}`, { cache: "no-store", signal })
     },
-    [chatHistoryOffset, t],
+  })
+
+  const chatHistoryFirstPageItems = React.useMemo(
+    () =>
+      (Array.isArray(chatHistoryQuery.data?.items) ? chatHistoryQuery.data.items : [])
+        .map((it) => ({
+          id: String(it?.id ?? ""),
+          publicId: String(it?.publicId ?? ""),
+          title: String(it?.title ?? ""),
+          createdAt: String(it?.createdAt ?? ""),
+          updatedAt: String(it?.updatedAt ?? ""),
+        }))
+        .filter((it) => it.id && it.publicId),
+    [chatHistoryQuery.data],
   )
+
+  const chatHistoryItems = React.useMemo(
+    () => [...chatHistoryFirstPageItems, ...chatHistoryExtraItems],
+    [chatHistoryFirstPageItems, chatHistoryExtraItems],
+  )
+
+  const chatHistoryHasData = !!chatHistoryQuery.data
+  const chatHistoryLoading = chatHistoryQuery.isLoading && !chatHistoryHasData
+  const chatHistoryTotalCount =
+    typeof chatHistoryQuery.data?.totalCount === "number" ? chatHistoryQuery.data.totalCount : undefined
+  const chatHistoryNextOffset =
+    chatHistoryExtraItems.length > 0
+      ? chatHistoryFirstPageItems.length + chatHistoryExtraItems.length
+      : typeof chatHistoryQuery.data?.nextOffset === "number"
+        ? chatHistoryQuery.data.nextOffset
+        : chatHistoryFirstPageItems.length
+  const chatHistoryHasMore =
+    chatHistoryExtraItems.length > 0
+      ? chatHistoryItems.length < (chatHistoryTotalCount ?? Infinity)
+      : Boolean(chatHistoryQuery.data?.hasMore)
+
+  React.useEffect(() => {
+    setChatHistoryExtraItems([])
+  }, [chatHistorySearch])
+
+  React.useEffect(() => {
+    const tmr = window.setTimeout(() => {
+      setChatHistorySearch((prev) => (prev === chatHistorySearchDraft ? prev : chatHistorySearchDraft))
+    }, 250)
+    return () => window.clearTimeout(tmr)
+  }, [chatHistorySearchDraft])
+
+  const loadMoreChatHistory = React.useCallback(async () => {
+    setChatHistoryLoadingMore(true)
+    try {
+      const params = new URLSearchParams()
+      params.set("limit", String(CHAT_HISTORY_PAGE_SIZE))
+      params.set("offset", String(chatHistoryNextOffset))
+      const q = chatHistorySearch.trim()
+      if (q) params.set("q", q)
+      const json = await apiFetchJson<ChatHistoryResponse>(`/api/chats?${params}`, { cache: "no-store" })
+      const incoming = (Array.isArray(json?.items) ? json.items : [])
+        .map((it) => ({
+          id: String(it?.id ?? ""),
+          publicId: String(it?.publicId ?? ""),
+          title: String(it?.title ?? ""),
+          createdAt: String(it?.createdAt ?? ""),
+          updatedAt: String(it?.updatedAt ?? ""),
+        }))
+        .filter((it) => it.id && it.publicId)
+      setChatHistoryExtraItems((prev) => [...prev, ...incoming])
+    } catch (e) {
+      toast.error(tApiError({ t, err: e, fallbackKey: "common.loadFailed" }))
+    } finally {
+      setChatHistoryLoadingMore(false)
+    }
+  }, [chatHistoryNextOffset, chatHistorySearch, t])
 
   const onOpenHistorySheet = React.useCallback(() => {
     setChatHistoryOpen(true)
-    if (!chatHistoryItems.length && !chatHistoryLoading) {
-      void loadChatHistory(true)
-    }
-  }, [chatHistoryItems.length, chatHistoryLoading, loadChatHistory])
+  }, [])
 
   const onOpenHistoryChat = React.useCallback(
     (chatPublicId: string) => {
@@ -402,22 +453,29 @@ export default function WorkflowAgentClient(props: {
     [router],
   )
 
-  const onRenameHistoryChat = React.useCallback(async (chatId: string, title: string) => {
-    await apiFetchJson(`/api/chats/${encodeURIComponent(chatId)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
-    })
-    setChatHistoryItems((prev) =>
-      prev.map((it) => (it.id === chatId ? { ...it, title, updatedAt: new Date().toISOString() } : it)),
-    )
-  }, [])
+  const onRenameHistoryChat = React.useCallback(
+    async (chatId: string, title: string) => {
+      await apiFetchJson(`/api/chats/${encodeURIComponent(chatId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      })
+      setChatHistoryExtraItems((prev) =>
+        prev.map((it) => (it.id === chatId ? { ...it, title, updatedAt: new Date().toISOString() } : it)),
+      )
+      void queryClient.invalidateQueries({ queryKey: ["chatHistory"] })
+    },
+    [queryClient],
+  )
 
-  const onDeleteHistoryChat = React.useCallback(async (chatId: string) => {
-    await apiFetchJson(`/api/chats/${encodeURIComponent(chatId)}`, { method: "DELETE" })
-    setChatHistoryItems((prev) => prev.filter((it) => it.id !== chatId))
-    setChatHistoryOffset((prev) => Math.max(0, prev - 1))
-  }, [])
+  const onDeleteHistoryChat = React.useCallback(
+    async (chatId: string) => {
+      await apiFetchJson(`/api/chats/${encodeURIComponent(chatId)}`, { method: "DELETE" })
+      setChatHistoryExtraItems((prev) => prev.filter((it) => it.id !== chatId))
+      void queryClient.invalidateQueries({ queryKey: ["chatHistory"] })
+    },
+    [queryClient],
+  )
 
   const onSend = React.useCallback(() => {
     const text = composerValue.trim()
@@ -563,7 +621,7 @@ export default function WorkflowAgentClient(props: {
   )
 
   const stepSheetContentRef = React.useRef<HTMLDivElement | null>(null)
-  const title = workflowId ? t("workflows.orchestrator.titleEdit") : t("workflows.orchestrator.titleNew")
+  const title = session.chatTitle || t("agent.chat.newChat")
   const subtitle = workflowId ? t("workflows.orchestrator.subtitleEdit") : t("workflows.orchestrator.subtitleNew")
   const chatSpan = "row-span-5 lg:row-span-8"
   const composerSpan = "row-span-2"
@@ -922,13 +980,23 @@ export default function WorkflowAgentClient(props: {
           </Sheet>
           <ChatHistorySheet
             open={chatHistoryOpen}
-            onOpenChange={setChatHistoryOpen}
+            onOpenChange={(open) => {
+              setChatHistoryOpen(open)
+              if (!open) {
+                setChatHistorySearchDraft("")
+                setChatHistorySearch("")
+                setChatHistoryExtraItems([])
+              }
+            }}
             locale={locale}
             items={chatHistoryItems}
+            totalCount={chatHistoryTotalCount}
+            search={chatHistorySearchDraft}
+            onSearchChange={setChatHistorySearchDraft}
             loading={chatHistoryLoading}
             hasMore={chatHistoryHasMore}
             loadingMore={chatHistoryLoadingMore}
-            onLoadMore={() => loadChatHistory(false)}
+            onLoadMore={loadMoreChatHistory}
             onOpenChat={onOpenHistoryChat}
             onRenameChat={onRenameHistoryChat}
             onDeleteChat={onDeleteHistoryChat}
