@@ -7,6 +7,7 @@ import crypto from "node:crypto"
 import { requireAuthedUser } from "@/lib/server/auth/require"
 import { requirePublicResource } from "@/lib/server/routing/require-public-resource"
 import { ensureChat } from "@/lib/server/chat/persistence"
+import { getAgentSettingsStatusForUser } from "@/lib/server/maia/agent-settings"
 
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getT()
@@ -34,5 +35,7 @@ export default async function Page(props: { searchParams: Promise<{ workflowId?:
     redirect(`/agent/${encodeURIComponent(publicId)}?${qs.toString()}`)
   }
 
-  return <AgentLandingPage />
+  const user = await requireAuthedUser()
+  const settings = await getAgentSettingsStatusForUser(user.id)
+  return <AgentLandingPage initialApiKeyConfigured={settings.apiKeyConfigured} />
 }

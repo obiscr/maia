@@ -419,6 +419,9 @@
   "agent": {
     "apiKey": "Agent API key",
     "chat": {
+      "missingApiKeyAlertTitle": "Agent API key is missing",
+      "missingApiKeyAlertDescription": "Please configure an API key in Preferences → Agent. You won’t be able to send messages until it’s set.",
+      "missingApiKeyAlertAction": "Configure API key",
       "newChat": "New chat",
       "history": {
         "action": "Chat history",
@@ -1957,7 +1960,7 @@
     "NO_STEP_DEFINITION": "No step definition available",
     "NO_SUCCESSFUL_ATTEMPTS": "No successful runs yet",
     "DEPS_INSTALL_FAILED": "Dependency installation failed (see install logs)",
-    "AGENT_API_KEY_MISSING": "Agent API key is missing (go to Preferences → Agent)",
+    "AGENT_API_KEY_MISSING": "Agent API key is missing, go to Preferences → Agent to configure",
     "OPENROUTER_HTTP_ERROR": "Agent request failed (upstream service error)",
     "AGENT_STREAM_FAILED": "Agent stream failed",
     "AGENT_UPSTREAM_TIMEOUT": "Agent timed out (upstream took too long)",

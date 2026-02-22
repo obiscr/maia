@@ -419,6 +419,9 @@
   "agent": {
     "apiKey": "智能体 API Key",
     "chat": {
+      "missingApiKeyAlertTitle": "未配置智能体 API Key",
+      "missingApiKeyAlertDescription": "请先到 偏好 → 智能体 配置 API Key，未配置前将无法发送消息。",
+      "missingApiKeyAlertAction": "配置 API Key",
       "newChat": "新建对话",
       "history": {
         "action": "对话历史",
@@ -1929,7 +1932,7 @@
     "NO_STEP_DEFINITION": "暂无步骤定义",
     "NO_SUCCESSFUL_ATTEMPTS": "暂无成功的运行记录",
     "DEPS_INSTALL_FAILED": "依赖安装失败（请查看安装日志）",
-    "AGENT_API_KEY_MISSING": "未配置智能体 API Key（请到 偏好 → 智能体 中配置）",
+    "AGENT_API_KEY_MISSING": "未配置智能体 API Key，请到 偏好 → 智能体 中配置",
     "OPENROUTER_HTTP_ERROR": "智能体请求失败（上游服务错误）",
     "AGENT_STREAM_FAILED": "智能体流式请求失败",
     "AGENT_UPSTREAM_TIMEOUT": "智能体超时（上游响应过慢）",

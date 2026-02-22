@@ -15,7 +15,7 @@ type AgentSettingsResponse = {
   settings: { apiKeyConfigured: boolean; model: string }
 }
 
-export function AgentLandingPage() {
+export function AgentLandingPage(props: { initialApiKeyConfigured?: boolean }) {
   const { t, locale } = useI18n()
   const router = useRouter()
   const sp = useSearchParams()
@@ -26,6 +26,9 @@ export function AgentLandingPage() {
   const startingRef = React.useRef(false)
   const [starting, setStarting] = React.useState(false)
   const [modelsLoading, setModelsLoading] = React.useState(true)
+  const [apiKeyConfigured, setApiKeyConfigured] = React.useState<boolean | null>(() =>
+    typeof props.initialApiKeyConfigured === "boolean" ? props.initialApiKeyConfigured : null,
+  )
   const session = useWorkflowAgentSession({
     chatId: null,
     locale,
@@ -43,6 +46,7 @@ export function AgentLandingPage() {
       try {
         const json = await apiFetchJson<AgentSettingsResponse>("/api/settings/agent", { method: "GET" })
         if (cancelled) return
+        setApiKeyConfigured(Boolean(json?.settings?.apiKeyConfigured))
         const m = String(json?.settings?.model ?? "").trim()
         if (m) setSessionModel(m)
       } catch {
@@ -239,6 +243,10 @@ export function AgentLandingPage() {
   const onSubmit = React.useCallback(async () => {
     const text = prompt.trim()
     if (pending || startingRef.current) return
+    if (apiKeyConfigured === false) {
+      toast.error(t("errors.AGENT_API_KEY_MISSING"))
+      return
+    }
     if (anyUploading) {
       toast.error(t("workflows.orchestrator.attachments.uploadingToast"))
       return
@@ -273,17 +281,18 @@ export function AgentLandingPage() {
       }
       return []
     })
-  }, [pending, prompt, anyUploading, anyFailed, attachments, t, startViaDetailsPage])
+  }, [pending, prompt, apiKeyConfigured, anyUploading, anyFailed, attachments, t, startViaDetailsPage])
 
   React.useEffect(() => {
     if (didAutoRunRef.current) return
     if (pending || startingRef.current) return
+    if (apiKeyConfigured === null) return
     const promptFromUrl = (sp.get("prompt") ?? "").trim()
     if (!promptFromUrl) return
     didAutoRunRef.current = true
     setPrompt(promptFromUrl)
-    void startViaDetailsPage(promptFromUrl, [])
-  }, [pending, startViaDetailsPage, sp])
+    if (apiKeyConfigured) void startViaDetailsPage(promptFromUrl, [])
+  }, [pending, apiKeyConfigured, startViaDetailsPage, sp])
 
   return (
     <AgentWelcomeEmpty
@@ -293,6 +302,7 @@ export function AgentLandingPage() {
       promptRef={promptRef}
       onSubmit={onSubmit}
       pending={pending || starting}
+      apiKeyConfigured={apiKeyConfigured}
       model={model}
       setModel={setModel}
       groupedModels={groupedModels}

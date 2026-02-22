@@ -5,6 +5,7 @@ import WorkflowAgentClient from "@/components/workflows/agent/workflow-agent-cli
 import { getT } from "@/lib/server/i18n/server"
 import { requireAuthedUser } from "@/lib/server/auth/require"
 import { loadChat } from "@/lib/server/chat/persistence"
+import { getAgentSettingsStatusForUser } from "@/lib/server/maia/agent-settings"
 
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getT()
@@ -26,6 +27,7 @@ export default async function ChatPage(props: {
   const chat = await loadChat(chatId, { userId: user.id })
   if (!chat) notFound()
 
+  const settings = await getAgentSettingsStatusForUser(user.id)
   return (
     <WorkflowAgentClient
       key={chat.id}
@@ -34,6 +36,7 @@ export default async function ChatPage(props: {
       initialModel={chat.model ?? undefined}
       initialMessages={chat.messages}
       initialPrompt={prompt}
+      initialApiKeyConfigured={settings.apiKeyConfigured}
     />
   )
 }

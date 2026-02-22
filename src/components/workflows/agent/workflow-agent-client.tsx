@@ -35,6 +35,7 @@ import { AVAILABLE_MODELS, groupModelsByProvider } from "@/lib/shared/models"
 import { apiFetchJson } from "@/lib/shared/http/api"
 import { tApiError } from "@/lib/shared/i18n/error"
 import { ChatHistorySheet, type ChatHistoryItem } from "@/components/workflows/agent/chat-history-sheet"
+import { AgentMissingApiKeyAlert } from "@/components/agent/agent-missing-api-key-alert"
 
 // ---------------------------------------------------------------------------
 // Message rendering
@@ -179,17 +180,21 @@ export default function WorkflowAgentClient(props: {
   initialModel?: string
   initialMessages?: UIMessage[]
   initialPrompt?: string
+  initialApiKeyConfigured?: boolean
 }) {
   const { t, locale } = useI18n()
   const router = useRouter()
   const isMobile = useIsMobile()
   const workflowId = props.workflowId
+  const [apiKeyConfigured, setApiKeyConfigured] = React.useState<boolean>(() =>
+    typeof props.initialApiKeyConfigured === "boolean" ? props.initialApiKeyConfigured : false,
+  )
   const session = useWorkflowAgentSession({
     chatId: props.chatId ?? null,
     workflowId,
     locale,
     t,
-    initialPrompt: props.initialPrompt,
+    initialPrompt: apiKeyConfigured ? props.initialPrompt : undefined,
     initialMessages: props.initialMessages,
     initialModel: props.initialModel,
   })
@@ -213,21 +218,19 @@ export default function WorkflowAgentClient(props: {
   const groupedModels = React.useMemo(() => groupModelsByProvider(AVAILABLE_MODELS, session.model), [session.model])
 
   React.useEffect(() => {
-    if (String(props.initialModel ?? "").trim()) {
-      setModelsLoading(false)
-      return
-    }
     let cancelled = false
+    const hasInitialModel = Boolean(String(props.initialModel ?? "").trim())
     async function loadAgentSettings() {
       try {
         const json = await apiFetchJson<AgentSettingsResponse>("/api/settings/agent", { method: "GET" })
         if (cancelled) return
+        setApiKeyConfigured(Boolean(json?.settings?.apiKeyConfigured))
         const m = String(json?.settings?.model ?? "").trim()
-        if (m) session.setModel(m)
+        if (!hasInitialModel && m) session.setModel(m)
       } catch {
         // ignore – chat/session already has a fallback model
       } finally {
-        if (!cancelled) setModelsLoading(false)
+        if (!cancelled && !hasInitialModel) setModelsLoading(false)
       }
     }
     void loadAgentSettings()
@@ -419,6 +422,10 @@ export default function WorkflowAgentClient(props: {
   const onSend = React.useCallback(() => {
     const text = composerValue.trim()
     if (session.pending) return
+    if (!apiKeyConfigured) {
+      toast.error(t("errors.AGENT_API_KEY_MISSING"))
+      return
+    }
     if (anyUploading) {
       toast.error(t("workflows.orchestrator.attachments.uploadingToast"))
       return
@@ -451,7 +458,7 @@ export default function WorkflowAgentClient(props: {
       }
       return []
     })
-  }, [composerValue, session, composerAttachments, anyUploading, anyFailed, t])
+  }, [composerValue, session, composerAttachments, anyUploading, anyFailed, apiKeyConfigured, t])
 
   const uploadPickedImages = React.useCallback(
     async (files: File[]) => {
@@ -990,6 +997,11 @@ export default function WorkflowAgentClient(props: {
                     <ScrollArea className="relative h-full min-h-0 flex-1 bg-background p-3 [&_[data-slot=scroll-area-viewport]>div]:!block">
                       {renderChatContent()}
                     </ScrollArea>
+                    {!apiKeyConfigured ? (
+                      <div className="shrink-0 border-t p-3">
+                        <AgentMissingApiKeyAlert />
+                      </div>
+                    ) : null}
                   </div>
                 </Card>
                 <Card className={cn("min-h-0 overflow-hidden p-0 shadow-none rounded-md", composerSpan)}>
@@ -1028,6 +1040,11 @@ export default function WorkflowAgentClient(props: {
                   <ScrollArea className="relative h-full min-h-0 flex-1 bg-background p-3 [&_[data-slot=scroll-area-viewport]>div]:!block">
                     {renderChatContent()}
                   </ScrollArea>
+                  {!apiKeyConfigured ? (
+                    <div className="shrink-0 border-t p-3">
+                      <AgentMissingApiKeyAlert />
+                    </div>
+                  ) : null}
                 </div>
               </Card>
               <Card className={cn("min-h-0 overflow-hidden p-0 shadow-none rounded-md", composerSpan)}>

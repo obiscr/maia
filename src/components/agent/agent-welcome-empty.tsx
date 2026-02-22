@@ -14,6 +14,7 @@ import {
   type PromptComposerAttachment,
   type PromptComposerModelGroup,
 } from "@/components/agent/prompt-composer"
+import { AgentMissingApiKeyAlert } from "@/components/agent/agent-missing-api-key-alert"
 
 export function AgentWelcomeEmpty(props: {
   t: TFunction
@@ -24,6 +25,7 @@ export function AgentWelcomeEmpty(props: {
   pending?: boolean
   /** When false, avoids using viewport-based min-height (useful inside dialogs). */
   fullHeight?: boolean
+  apiKeyConfigured?: boolean | null
 
   model: string
   setModel: (m: string) => void
@@ -43,6 +45,7 @@ export function AgentWelcomeEmpty(props: {
     onSubmit,
     pending = false,
     fullHeight = true,
+    apiKeyConfigured = null,
     model,
     setModel,
     groupedModels,
@@ -135,6 +138,8 @@ export function AgentWelcomeEmpty(props: {
                   t={t}
                 />
               ) : null}
+
+              {apiKeyConfigured === false ? <AgentMissingApiKeyAlert className="mb-3" /> : null}
 
               <PromptComposer
                 t={t}
