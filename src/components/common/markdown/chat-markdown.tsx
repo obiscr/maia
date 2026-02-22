@@ -15,6 +15,7 @@ import { pluginCollapsibleSections } from "@expressive-code/plugin-collapsible-s
 import { pluginLineNumbers } from "@expressive-code/plugin-line-numbers"
 import { visit } from "unist-util-visit"
 import mermaid from "mermaid"
+import DOMPurify from "dompurify"
 import { cn } from "@/lib/utils"
 
 type Props = {
@@ -133,8 +134,14 @@ const enhancedProcessor = unified()
   .use(rehypeExpressiveCode, expressiveCodeOptions)
   .use(rehypeStringify)
 
-function stripScriptsFromHtml(html: string) {
-  return html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
+function sanitizeHtml(html: string): string {
+  if (typeof window === "undefined") return html
+  return DOMPurify.sanitize(html, {
+    ADD_TAGS: ["iframe"],
+    ADD_ATTR: ["target", "rel", "data-mermaid", "data-language", "data-code", "data-copied"],
+    FORBID_TAGS: ["script"],
+    FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover"],
+  })
 }
 
 function legacyCopy(text: string) {
@@ -240,7 +247,10 @@ async function renderAllMermaid() {
     const id = `mmd-${Math.random().toString(36).slice(2)}`
     try {
       const { svg, bindFunctions } = await m.render(id, source)
-      el.innerHTML = svg
+      el.innerHTML = DOMPurify.sanitize(svg, {
+        USE_PROFILES: { svg: true, svgFilters: true },
+        ADD_TAGS: ["foreignObject"],
+      })
       bindFunctions?.(el)
       renderedMermaidThemeByEl.set(el, themeKey)
       el.setAttribute("data-maia-rendered", "true")
@@ -288,7 +298,7 @@ export function ChatMarkdown(props: Props) {
   const fastHtml = React.useMemo(() => {
     try {
       const file = fastProcessor.processSync(deferred ?? "")
-      return String(file)
+      return sanitizeHtml(String(file))
     } catch {
       return ""
     }
@@ -311,7 +321,7 @@ export function ChatMarkdown(props: Props) {
       try {
         const file = await enhancedProcessor.process(src)
         if (cancelled || seq !== renderSeqRef.current) return
-        setEnhancedHtml(stripScriptsFromHtml(String(file)))
+        setEnhancedHtml(sanitizeHtml(String(file)))
         setEnhancedFor(src)
       } catch {
         if (cancelled || seq !== renderSeqRef.current) return
