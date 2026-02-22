@@ -81,7 +81,7 @@ export function AppSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <NavItem href="/agent" icon={GradientBotIcon} label={t("nav.agent")} badge={t("common.beta")} />
+              <NavItem href="/agent" icon={GradientBotIcon} label={t("nav.agent")} />
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

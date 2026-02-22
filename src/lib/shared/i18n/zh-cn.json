@@ -417,7 +417,25 @@
     }
   },
   "agent": {
-    "apiKey": "智能体 API Key"
+    "apiKey": "智能体 API Key",
+    "chat": {
+      "newChat": "新建对话",
+      "history": {
+        "action": "对话历史",
+        "title": "对话历史",
+        "description": "共 {n} 条对话",
+        "empty": "暂无对话历史",
+        "untitled": "未命名对话",
+        "loadMore": "加载更多",
+        "renameAction": "重命名",
+        "namePlaceholder": "输入对话名称",
+        "nameRequired": "请输入对话名称",
+        "renamedToast": "对话名称已更新",
+        "deleteTitle": "删除对话？",
+        "deleteDescription": "这将永久删除该对话历史，且无法撤销",
+        "deletedToast": "对话已删除"
+      }
+    }
   },
   "theme": {
     "light": "亮色",
@@ -900,7 +918,7 @@
     "aiOrchestrateAction": "智能体编排",
     "newWorkflowDescription": "创建工作流并开始编辑",
     "listDescription": "浏览工作流并打开编辑",
-    "emptyTitle": "你想要构建什么样的工作流？",
+    "emptyTitle": "有什么可以帮你的？",
     "updatedAt": "更新",
     "workflowVersion": "工作流版本",
     "versions": {
@@ -1109,19 +1127,32 @@
       "proposalReadyDescription": "智能体已准备好可应用的更新。确认后才会应用",
       "draftReadyTitle": "草稿已生成",
       "draftReadyDescription": "已生成可保存的工作流草稿，可能尚未通过最终校验；你可以先保存，再在编辑器里继续调整",
+      "draftValidatedDescription": "已生成可保存的工作流草稿，并已通过校验；你可以直接保存，之后也可以在编辑器里继续调整",
       "stepSelectHint": "请选择一个步骤查看详情",
       "thinking": "思考中…",
-      "composerPlaceholder": "描述你的需求，让智能体帮你构建工作流…",
+      "reasoningSummary": {
+        "title": "思考中",
+        "titleDone": "思考了 {seconds}s"
+      },
+      "composerPlaceholder": "描述你的需求，让智能体帮你操作…",
       "sendAction": "发送",
       "applyCreateAction": "保存为新工作流",
       "createWorkflowQueued": "智能体：开始生成工作流",
       "streamEndedEarly": "智能体流式生成提前结束：已收到 {done}/{total} 个步骤；请重试",
       "createInputSpecQueued": "智能体：开始生成输入规范",
       "createOutputsSpecQueued": "智能体：开始生成输出规范",
-      "newChat": "新建对话",
       "newChatUnsavedDescription": "当前工作流还有未保存的更改。要先保存再开始新的对话吗？",
       "errors": {
         "failed": "智能体请求失败"
+      },
+      "attachments": {
+        "uploadingToast": "图片上传中，请稍候…",
+        "removeFailedToast": "请先移除上传失败的图片再发送",
+        "uploadImageAriaLabel": "上传图片",
+        "removeImageAriaLabel": "移除图片",
+        "failedBadge": "失败",
+        "fallbackImageName": "图片",
+        "fallbackFileName": "文件"
       },
       "examples": {
         "difficulty": {
@@ -1129,67 +1160,41 @@
           "medium": "中等",
           "hard": "复杂"
         },
-        "items": {
-          "ex1": {
-            "title": "网页标题 → 摘要 JSON"
-          },
-          "ex2": {
-            "title": "CSV → 基础统计报告"
-          },
-          "ex3": {
-            "title": "三步转换（含校验）"
-          },
-          "ex4": {
-            "title": "RSS → Top10 摘要"
-          },
-          "ex5": {
-            "title": "截图 → OCR → 规范化文本"
-          },
-          "ex6": {
-            "title": "视频字幕 → 关键要点与行动项"
-          },
-          "ex7": {
-            "title": "Markdown → 结构化大纲"
-          },
-          "ex8": {
-            "title": "日志 → 错误热点分析"
-          },
-          "ex9": {
-            "title": "评论 → 情感 + 主题分析"
-          },
-          "ex10": {
-            "title": "发票 PDF → 明细 JSON"
-          },
-          "ex11": {
-            "title": "Issue 分诊 → 标签 + 优先级"
-          },
-          "ex12": {
-            "title": "数据样本 → Schema + 约束建议"
-          },
-          "ex13": {
-            "title": "多源资讯 → 合并去重摘要"
-          },
-          "ex14": {
-            "title": "A/B 实验 → 统计分析报告"
-          },
-          "ex15": {
-            "title": "客服工单 → 路由 + SLA 风险"
-          },
-          "ex16": {
-            "title": "长文档 → 分层摘要 + 索引"
-          },
-          "ex17": {
-            "title": "端到端 ETL（含质量闸门）"
-          },
-          "ex18": {
-            "title": "多语言站点监控 + 告警"
-          },
-          "ex19": {
-            "title": "混合来源 → 知识库构建"
-          },
-          "ex20": {
-            "title": "带分支与回滚的工作流生成器"
-          }
+        "templates": {
+          "web_summary": { "title": "网页标题 → 摘要 JSON" },
+          "csv_stats": { "title": "CSV → 基础统计报告" },
+          "json_validate": { "title": "三步转换（含校验）" },
+          "rss_digest": { "title": "RSS → Top10 摘要" },
+          "image_ocr": { "title": "截图 → OCR → 规范化文本" },
+          "video_takeaways": { "title": "视频字幕 → 关键要点与行动项" },
+          "markdown_outline": { "title": "Markdown → 结构化大纲" },
+          "log_errors": { "title": "日志 → 错误热点分析" },
+          "review_sentiment": { "title": "评论 → 情感 + 主题分析" },
+          "invoice_parse": { "title": "发票 PDF → 明细 JSON" },
+          "issue_triage": { "title": "Issue 分诊 → 标签 + 优先级" },
+          "data_schema": { "title": "数据样本 → Schema + 约束建议" },
+          "news_merge": { "title": "多源资讯 → 合并去重摘要" },
+          "ab_analysis": { "title": "A/B 实验 → 统计分析报告" },
+          "ticket_routing": { "title": "客服工单 → 路由 + SLA 风险" },
+          "doc_summary": { "title": "长文档 → 分层摘要 + 索引" },
+          "etl_pipeline": { "title": "端到端 ETL（含质量闸门）" },
+          "site_monitor": { "title": "多语言站点监控 + 告警" },
+          "knowledge_base": { "title": "混合来源 → 知识库构建" },
+          "branching_workflow": { "title": "带分支与回滚的工作流生成器" }
+        },
+        "actions": {
+          "workflow_list": { "title": "查看工作流列表" },
+          "workflow_versions": { "title": "查看版本历史" },
+          "run_failures": { "title": "分析运行失败原因" },
+          "run_results": { "title": "查看运行结果" },
+          "job_run": { "title": "运行指定工作流" },
+          "job_status": { "title": "查看当前任务状态" },
+          "schedule_create": { "title": "创建调度计划" },
+          "schedule_overview": { "title": "查看调度概览" },
+          "batch_create": { "title": "创建批处理任务" },
+          "batch_progress": { "title": "查看批次执行进度" },
+          "operation_log": { "title": "查看操作记录" },
+          "operation_overview": { "title": "系统状态总览" }
         }
       },
       "progress": {
@@ -1197,12 +1202,14 @@
         "validateLabel": "验证工作流",
         "inputSpecLabel": "生成输入规范",
         "outputsSpecLabel": "生成输出规范",
-        "generatingStep": "正在生成：{step}",
+        "generatingStep": "正在生成…",
         "validating": "正在校验工作流…",
         "generatingInputSpec": "正在生成输入规范…",
         "generatingOutputsSpec": "正在生成输出规范…",
         "doneBadge": "已完成",
-        "completedCount": "已完成 {count} 项"
+        "completedCount": "已完成 {count} 项",
+        "stepsCount": "{count} 个步骤",
+        "completedStepsCount": "已完成 {count} 个步骤"
       }
     }
   },
@@ -1472,7 +1479,14 @@
     "deleteScheduleDescription": "这将删除该调度规则记录",
     "deletedToast": "调度规则已删除",
     "createdToast": "调度规则已创建",
-    "updatedToast": "调度规则已更新"
+    "updatedToast": "调度规则已更新",
+    "cronGenerator": {
+      "openAction": "智能体生成",
+      "resetAction": "重置",
+      "inputPlaceholder": "描述你的规则，然后点击右侧智能体按钮生成 CRON 表达式",
+      "intentUnclear": "没理解你的触发意图，请更明确地描述（例如“工作日 09:00”）",
+      "notExpressible": "这个规则在当前 CRON 格式下无法精确表达。请尝试更简单的规则，或改写描述（例如避免“每月第 2 个周三”这类写法）"
+    }
   },
   "batches": {
     "recentBatchesDescription": "浏览批次并跟踪批量派发进度",
@@ -1566,6 +1580,7 @@
     "detail": {
       "summary": "摘要",
       "action": "动作",
+      "source": "来源",
       "target": "目标",
       "status": "状态",
       "responseStatus": "响应",
@@ -1587,6 +1602,146 @@
       "installingDeps": "正在安装依赖"
     },
     "statusPending": "等待中"
+  },
+  "toolCalls": {
+    "title": "工具调用",
+    "status": {
+      "todo": "等待中",
+      "running": "执行中",
+      "done": "完成",
+      "failed": "失败"
+    },
+    "showDetails": "查看详情",
+    "hideDetails": "收起详情",
+    "set_plan": {
+      "label": "制定计划",
+      "running": "正在制定计划…",
+      "done": "计划已生成",
+      "doneWithCount": "计划已生成 · {count} 个步骤"
+    },
+    "draft_step": {
+      "label": "生成步骤",
+      "running": "正在生成步骤…",
+      "runningWithName": "正在生成：{name}…",
+      "done": "步骤已生成",
+      "doneWithName": "已生成步骤：{name}"
+    },
+    "finalize_draft": {
+      "label": "验证工作流",
+      "running": "正在验证工作流…",
+      "done": "工作流验证通过",
+      "failed": "验证失败"
+    },
+    "create_workflow_draft": {
+      "label": "创建工作流",
+      "running": "正在创建工作流…",
+      "done": "工作流已创建",
+      "failed": "创建失败"
+    },
+    "update_workflow_draft": {
+      "label": "更新工作流",
+      "running": "正在更新工作流…",
+      "done": "工作流已更新",
+      "failed": "更新失败"
+    },
+    "generate_input_spec": {
+      "label": "生成输入规范",
+      "running": "正在生成输入规范…",
+      "done": "输入规范已生成",
+      "failed": "输入规范生成失败"
+    },
+    "generate_output_spec": {
+      "label": "生成输出规范",
+      "running": "正在生成输出规范…",
+      "done": "输出规范已生成",
+      "failed": "输出规范生成失败"
+    },
+    "get_workflow": {
+      "label": "加载工作流",
+      "running": "正在加载工作流…",
+      "done": "工作流已加载"
+    },
+    "workflow": {
+      "list": { "label": "查询工作流", "running": "正在查询工作流…", "done": "已查询工作流" },
+      "get": { "label": "获取工作流", "running": "正在加载工作流…", "done": "工作流已加载" },
+      "create": { "label": "创建工作流", "running": "正在创建工作流…", "done": "工作流已创建" },
+      "update": { "label": "更新工作流", "running": "正在更新工作流…", "done": "工作流已更新" },
+      "patch": { "label": "更新元数据", "running": "正在更新元数据…", "done": "元数据已更新" },
+      "delete": { "label": "删除工作流", "running": "正在删除工作流…", "done": "工作流已删除" },
+      "meta_get": { "label": "获取工作流元信息", "running": "正在加载元信息…", "done": "元信息已加载" },
+      "export": { "label": "导出工作流", "running": "正在导出…", "done": "已导出" },
+      "deps_install": { "label": "安装依赖", "running": "正在安装依赖…", "done": "依赖已安装" },
+      "deps_log_list": { "label": "查看安装日志", "running": "正在加载日志…", "done": "日志已加载" },
+      "version_list": { "label": "查询版本", "running": "正在加载版本…", "done": "版本已加载" },
+      "version_create_snapshot": { "label": "创建版本", "running": "正在创建版本…", "done": "版本已创建" },
+      "version_get": { "label": "获取版本", "running": "正在加载版本…", "done": "版本已加载" },
+      "version_restore": { "label": "恢复版本", "running": "正在恢复…", "done": "版本已恢复" }
+    },
+    "run": {
+      "list": { "label": "查询运行", "running": "正在查询运行…", "done": "已查询运行" },
+      "get": { "label": "查看运行", "running": "正在加载运行…", "done": "运行已加载" },
+      "cancel": { "label": "取消运行", "running": "正在取消…", "done": "运行已取消" },
+      "delete": { "label": "删除运行", "running": "正在删除…", "done": "运行已删除" },
+      "force_stop": { "label": "强制停止", "running": "正在停止…", "done": "运行已停止" },
+      "attempt_list": { "label": "查询尝试记录", "running": "正在加载尝试记录…", "done": "尝试记录已加载" },
+      "inputs_get": { "label": "获取运行输入", "running": "正在加载输入…", "done": "输入已加载" },
+      "outputs_get": { "label": "获取输出", "running": "正在加载输出…", "done": "输出已加载" },
+      "artifact_list": { "label": "查询产物", "running": "正在加载产物…", "done": "产物已加载" },
+      "artifact_download": { "label": "下载产物", "running": "正在下载…", "done": "已下载" },
+      "input_file_list": { "label": "查询输入文件", "running": "正在加载输入文件…", "done": "输入文件已加载" },
+      "file_download": { "label": "下载文件", "running": "正在下载…", "done": "已下载" },
+      "step_definition_get": { "label": "获取步骤定义", "running": "正在加载定义…", "done": "定义已加载" },
+      "step_input_get": { "label": "获取步骤输入", "running": "正在加载步骤输入…", "done": "步骤输入已加载" },
+      "step_output_get": { "label": "获取步骤输出", "running": "正在加载步骤输出…", "done": "步骤输出已加载" },
+      "step_artifact_list": { "label": "查询步骤产物", "running": "正在加载产物…", "done": "产物已加载" },
+      "step_retry": { "label": "重试步骤", "running": "正在重试…", "done": "步骤已重试" },
+      "step_rerun": { "label": "重跑步骤", "running": "正在重跑…", "done": "步骤已重跑" },
+      "step_restart": { "label": "从步骤重启", "running": "正在重启…", "done": "已重启" }
+    },
+    "job": {
+      "list": { "label": "查询任务", "running": "正在查询任务…", "done": "已查询任务" },
+      "get": { "label": "查看任务", "running": "正在加载任务…", "done": "任务已加载" },
+      "create": { "label": "创建任务", "running": "正在创建任务…", "done": "任务已创建" },
+      "cancel": { "label": "取消任务", "running": "正在取消…", "done": "任务已取消" },
+      "resume": { "label": "恢复任务", "running": "正在恢复…", "done": "任务已恢复" },
+      "delete": { "label": "删除任务", "running": "正在删除…", "done": "任务已删除" },
+      "attempt_list": { "label": "查询任务尝试记录", "running": "正在加载尝试记录…", "done": "尝试记录已加载" },
+      "input_file_list": { "label": "查询输入文件", "running": "正在加载输入文件…", "done": "输入文件已加载" }
+    },
+    "schedule": {
+      "list": { "label": "查询调度", "running": "正在查询调度…", "done": "已查询调度" },
+      "get": { "label": "查看调度", "running": "正在加载调度…", "done": "调度已加载" },
+      "create": { "label": "创建调度", "running": "正在创建调度…", "done": "调度已创建" },
+      "patch": { "label": "更新调度", "running": "正在更新…", "done": "调度已更新" },
+      "delete": { "label": "删除调度", "running": "正在删除…", "done": "调度已删除" },
+      "preview": { "label": "预览调度", "running": "正在预览…", "done": "预览就绪" },
+      "run_now": { "label": "立即运行", "running": "正在启动…", "done": "已启动" },
+      "job_list": { "label": "查询调度任务", "running": "正在加载任务…", "done": "任务已加载" }
+    },
+    "batch": {
+      "list": { "label": "查询批次", "running": "正在查询批次…", "done": "已查询批次" },
+      "get": { "label": "查看批次", "running": "正在加载批次…", "done": "批次已加载" },
+      "create": { "label": "创建批次", "running": "正在创建批次…", "done": "批次已创建" },
+      "patch": { "label": "更新批次", "running": "正在更新…", "done": "批次已更新" },
+      "delete": { "label": "删除批次", "running": "正在删除…", "done": "批次已删除" },
+      "pause": { "label": "暂停批次", "running": "正在暂停…", "done": "批次已暂停" },
+      "resume": { "label": "恢复批次", "running": "正在恢复…", "done": "批次已恢复" },
+      "cancel": { "label": "取消批次", "running": "正在取消…", "done": "批次已取消" },
+      "fanout": { "label": "批次展开", "running": "正在展开…", "done": "展开完成" },
+      "job_create": { "label": "创建批次任务", "running": "正在创建任务…", "done": "任务已创建" },
+      "job_list": { "label": "查询批次任务", "running": "正在加载任务…", "done": "任务已加载" }
+    },
+    "operation": {
+      "list": { "label": "查询操作", "running": "正在查询操作…", "done": "已查询操作" },
+      "get": { "label": "查看操作", "running": "正在加载操作…", "done": "操作已加载" },
+      "list_by_target": { "label": "按目标查询操作", "running": "正在查询操作…", "done": "操作已加载" }
+    },
+    "fallback": {
+      "todo": "等待中…",
+      "running": "执行中…",
+      "done": "已完成",
+      "failed": "失败"
+    }
   },
   "errors": {
     "ajv": {

@@ -91,6 +91,13 @@ export function SetupWizard() {
     if (!allowedStepIds.includes(step)) setStep(allowedStepIds[0])
   }, [allowedStepIds, step])
 
+  // Keep the browser tab title synced with the current step.
+  React.useEffect(() => {
+    const cur = STEPS.find((s) => s.id === step)
+    const stepTitle = cur ? t(cur.titleKey) : t("setupWizard.fallbackStep")
+    document.title = `${stepTitle} - ${t("setupWizard.title")}`
+  })
+
   // Mount a step the first time it is visited, so its local state persists on back/next
   // without eagerly mounting future steps (which could trigger unauthorized API calls).
   React.useEffect(() => {

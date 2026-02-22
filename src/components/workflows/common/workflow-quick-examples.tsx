@@ -2,148 +2,35 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Wand2, Circle, CircleDot, Zap } from "lucide-react"
+import {
+  Wand2,
+  Circle,
+  CircleDot,
+  Zap,
+  WorkflowIcon,
+  PlayIcon,
+  Clock,
+  Layers,
+  ListChecks,
+  Activity,
+} from "lucide-react"
 
 import { useI18n } from "@/components/i18n-provider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { getWorkflowExamplePrompt, type WorkflowExampleId } from "@/lib/shared/workflow-example-prompts"
+import {
+  WORKFLOW_TEMPLATES,
+  getWorkflowTemplatePrompt,
+  MODULE_ACTIONS_BY_MODULE,
+  getModuleActionPrompt,
+  type WorkflowTemplateDifficulty,
+  type WorkflowTemplateId,
+  type AgentModule,
+  type ModuleActionId,
+} from "@/lib/shared/workflow-example-prompts"
 
-export type WorkflowQuickExampleDifficulty = "simple" | "medium" | "hard"
-
-type WorkflowQuickExampleMeta = {
-  id: WorkflowExampleId
-  difficulty: WorkflowQuickExampleDifficulty
-  titleKey: string
-  difficultyKey: string
-}
-
-const EXAMPLE_META: WorkflowQuickExampleMeta[] = [
-  // Simple (<= 15 steps)
-  {
-    id: "ex1",
-    difficulty: "simple",
-    titleKey: "workflows.orchestrator.examples.items.ex1.title",
-    difficultyKey: "workflows.orchestrator.examples.difficulty.simple",
-  },
-  {
-    id: "ex2",
-    difficulty: "simple",
-    titleKey: "workflows.orchestrator.examples.items.ex2.title",
-    difficultyKey: "workflows.orchestrator.examples.difficulty.simple",
-  },
-  {
-    id: "ex3",
-    difficulty: "simple",
-    titleKey: "workflows.orchestrator.examples.items.ex3.title",
-    difficultyKey: "workflows.orchestrator.examples.difficulty.simple",
-  },
-  {
-    id: "ex4",
-    difficulty: "simple",
-    titleKey: "workflows.orchestrator.examples.items.ex4.title",
-    difficultyKey: "workflows.orchestrator.examples.difficulty.simple",
-  },
-  {
-    id: "ex5",
-    difficulty: "simple",
-    titleKey: "workflows.orchestrator.examples.items.ex5.title",
-    difficultyKey: "workflows.orchestrator.examples.difficulty.simple",
-  },
-  {
-    id: "ex6",
-    difficulty: "simple",
-    titleKey: "workflows.orchestrator.examples.items.ex6.title",
-    difficultyKey: "workflows.orchestrator.examples.difficulty.simple",
-  },
-  {
-    id: "ex7",
-    difficulty: "simple",
-    titleKey: "workflows.orchestrator.examples.items.ex7.title",
-    difficultyKey: "workflows.orchestrator.examples.difficulty.simple",
-  },
-  {
-    id: "ex8",
-    difficulty: "simple",
-    titleKey: "workflows.orchestrator.examples.items.ex8.title",
-    difficultyKey: "workflows.orchestrator.examples.difficulty.simple",
-  },
-  // Medium (15–30 steps)
-  {
-    id: "ex9",
-    difficulty: "medium",
-    titleKey: "workflows.orchestrator.examples.items.ex9.title",
-    difficultyKey: "workflows.orchestrator.examples.difficulty.medium",
-  },
-  {
-    id: "ex10",
-    difficulty: "medium",
-    titleKey: "workflows.orchestrator.examples.items.ex10.title",
-    difficultyKey: "workflows.orchestrator.examples.difficulty.medium",
-  },
-  {
-    id: "ex11",
-    difficulty: "medium",
-    titleKey: "workflows.orchestrator.examples.items.ex11.title",
-    difficultyKey: "workflows.orchestrator.examples.difficulty.medium",
-  },
-  {
-    id: "ex12",
-    difficulty: "medium",
-    titleKey: "workflows.orchestrator.examples.items.ex12.title",
-    difficultyKey: "workflows.orchestrator.examples.difficulty.medium",
-  },
-  {
-    id: "ex13",
-    difficulty: "medium",
-    titleKey: "workflows.orchestrator.examples.items.ex13.title",
-    difficultyKey: "workflows.orchestrator.examples.difficulty.medium",
-  },
-  {
-    id: "ex14",
-    difficulty: "medium",
-    titleKey: "workflows.orchestrator.examples.items.ex14.title",
-    difficultyKey: "workflows.orchestrator.examples.difficulty.medium",
-  },
-  {
-    id: "ex15",
-    difficulty: "medium",
-    titleKey: "workflows.orchestrator.examples.items.ex15.title",
-    difficultyKey: "workflows.orchestrator.examples.difficulty.medium",
-  },
-  // Hard (>= 30 steps)
-  {
-    id: "ex16",
-    difficulty: "hard",
-    titleKey: "workflows.orchestrator.examples.items.ex16.title",
-    difficultyKey: "workflows.orchestrator.examples.difficulty.hard",
-  },
-  {
-    id: "ex17",
-    difficulty: "hard",
-    titleKey: "workflows.orchestrator.examples.items.ex17.title",
-    difficultyKey: "workflows.orchestrator.examples.difficulty.hard",
-  },
-  {
-    id: "ex18",
-    difficulty: "hard",
-    titleKey: "workflows.orchestrator.examples.items.ex18.title",
-    difficultyKey: "workflows.orchestrator.examples.difficulty.hard",
-  },
-  {
-    id: "ex19",
-    difficulty: "hard",
-    titleKey: "workflows.orchestrator.examples.items.ex19.title",
-    difficultyKey: "workflows.orchestrator.examples.difficulty.hard",
-  },
-  {
-    id: "ex20",
-    difficulty: "hard",
-    titleKey: "workflows.orchestrator.examples.items.ex20.title",
-    difficultyKey: "workflows.orchestrator.examples.difficulty.hard",
-  },
-]
+// ---- Shared utilities -----------------------------------------------------
 
 function mulberry32(seed: number) {
   return function () {
@@ -157,7 +44,6 @@ function mulberry32(seed: number) {
 function pickRandomUnique<T>(arr: T[], count: number, rng: () => number): T[] {
   const n = Math.max(0, Math.min(count, arr.length))
   const copy = arr.slice()
-  // Fisher–Yates shuffle with seeded RNG
   for (let i = copy.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1))
     ;[copy[i], copy[j]] = [copy[j], copy[i]]
@@ -166,7 +52,6 @@ function pickRandomUnique<T>(arr: T[], count: number, rng: () => number): T[] {
 }
 
 function hashSeed(s: string): number {
-  // Deterministic, cheap string hash (FNV-1a 32-bit-ish)
   let h = 2166136261
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i)
@@ -175,15 +60,9 @@ function hashSeed(s: string): number {
   return h >>> 0
 }
 
-function difficultyBadgeVariant(d: WorkflowQuickExampleDifficulty) {
-  // Use outline variant for all difficulties to maintain consistency
-  // Color differentiation is handled via custom classes
-  return "outline" as const
-}
+// ---- Workflow template chips (difficulty badges) --------------------------
 
-function difficultyBadgeClass(d: WorkflowQuickExampleDifficulty) {
-  // Improved color scheme: avoid red for "hard" as it implies error/danger
-  // Instead use purple/violet which is neutral and commonly used for "advanced" or "complex"
+function difficultyBadgeClass(d: WorkflowTemplateDifficulty) {
   if (d === "hard")
     return "bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/30 dark:border-violet-500/20"
   if (d === "medium")
@@ -191,101 +70,260 @@ function difficultyBadgeClass(d: WorkflowQuickExampleDifficulty) {
   return "bg-emerald-500/10 text-emerald-700 border-emerald-500/20 dark:text-emerald-300 dark:bg-emerald-500/5"
 }
 
-function difficultyIcon(d: WorkflowQuickExampleDifficulty) {
-  // Use icons to provide visual redundancy beyond color
-  // This improves accessibility and recognition
+function difficultyIcon(d: WorkflowTemplateDifficulty) {
   if (d === "hard") return Zap
   if (d === "medium") return CircleDot
   return Circle
 }
 
-export function WorkflowQuickExamples(props: {
-  /** How many items to display. */
-  count: number
-  /** Fill composer, or navigate to agent page. */
-  behavior?: "fill" | "navigate"
-  /** Used when behavior="fill" */
-  onPick?: (prompt: string) => void
-  /** Used when behavior="navigate" */
-  agentHref?: string
-  className?: string
-  /** Layout: "wrap" is a natural flowing chip layout (recommended). */
-  layout?: "wrap" | "grid"
-}) {
-  const { t, locale } = useI18n()
+// ---- Module action icons ---------------------------------------------------
+
+const MODULE_ICONS: Record<AgentModule, React.ComponentType<{ className?: string }>> = {
+  workflow: WorkflowIcon,
+  run: PlayIcon,
+  job: ListChecks,
+  schedule: Clock,
+  batch: Layers,
+  operation: Activity,
+}
+
+const WORKFLOW_TEMPLATE_TITLE_KEYS = {
+  web_summary: "workflows.orchestrator.examples.templates.web_summary.title",
+  csv_stats: "workflows.orchestrator.examples.templates.csv_stats.title",
+  json_validate: "workflows.orchestrator.examples.templates.json_validate.title",
+  rss_digest: "workflows.orchestrator.examples.templates.rss_digest.title",
+  image_ocr: "workflows.orchestrator.examples.templates.image_ocr.title",
+  video_takeaways: "workflows.orchestrator.examples.templates.video_takeaways.title",
+  markdown_outline: "workflows.orchestrator.examples.templates.markdown_outline.title",
+  log_errors: "workflows.orchestrator.examples.templates.log_errors.title",
+  review_sentiment: "workflows.orchestrator.examples.templates.review_sentiment.title",
+  invoice_parse: "workflows.orchestrator.examples.templates.invoice_parse.title",
+  issue_triage: "workflows.orchestrator.examples.templates.issue_triage.title",
+  data_schema: "workflows.orchestrator.examples.templates.data_schema.title",
+  news_merge: "workflows.orchestrator.examples.templates.news_merge.title",
+  ab_analysis: "workflows.orchestrator.examples.templates.ab_analysis.title",
+  ticket_routing: "workflows.orchestrator.examples.templates.ticket_routing.title",
+  doc_summary: "workflows.orchestrator.examples.templates.doc_summary.title",
+  etl_pipeline: "workflows.orchestrator.examples.templates.etl_pipeline.title",
+  site_monitor: "workflows.orchestrator.examples.templates.site_monitor.title",
+  knowledge_base: "workflows.orchestrator.examples.templates.knowledge_base.title",
+  branching_workflow: "workflows.orchestrator.examples.templates.branching_workflow.title",
+} as const satisfies Record<WorkflowTemplateId, string>
+
+const WORKFLOW_TEMPLATE_DIFFICULTY_KEYS = {
+  simple: "workflows.orchestrator.examples.difficulty.simple",
+  medium: "workflows.orchestrator.examples.difficulty.medium",
+  hard: "workflows.orchestrator.examples.difficulty.hard",
+} as const satisfies Record<WorkflowTemplateDifficulty, string>
+
+const MODULE_ACTION_TITLE_KEYS = {
+  workflow_list: "workflows.orchestrator.examples.actions.workflow_list.title",
+  workflow_versions: "workflows.orchestrator.examples.actions.workflow_versions.title",
+  run_failures: "workflows.orchestrator.examples.actions.run_failures.title",
+  run_results: "workflows.orchestrator.examples.actions.run_results.title",
+  job_run: "workflows.orchestrator.examples.actions.job_run.title",
+  job_status: "workflows.orchestrator.examples.actions.job_status.title",
+  schedule_create: "workflows.orchestrator.examples.actions.schedule_create.title",
+  schedule_overview: "workflows.orchestrator.examples.actions.schedule_overview.title",
+  batch_create: "workflows.orchestrator.examples.actions.batch_create.title",
+  batch_progress: "workflows.orchestrator.examples.actions.batch_progress.title",
+  operation_log: "workflows.orchestrator.examples.actions.operation_log.title",
+  operation_overview: "workflows.orchestrator.examples.actions.operation_overview.title",
+} as const satisfies Record<ModuleActionId, string>
+
+// ---- usePick callback -----------------------------------------------------
+
+function usePickHandler(behavior: "fill" | "navigate", agentHref: string, onPickProp?: (prompt: string) => void) {
   const router = useRouter()
-  const behavior = props.behavior ?? (props.onPick ? "fill" : "navigate")
-  const agentHref = props.agentHref ?? "/agent"
-  const layout = props.layout ?? "wrap"
-  // IMPORTANT: Do not use Math.random() for initial render; this component is SSR'd and must hydrate deterministically.
-  // useId() is stable between server and client for the same tree position, so it's a safe seed source.
-  const reactId = React.useId()
-  const seedRef = React.useRef<number>(hashSeed(reactId))
-
-  const selected = React.useMemo(() => {
-    const rng = mulberry32(seedRef.current + (props.count ?? 0))
-    return pickRandomUnique(EXAMPLE_META, props.count, rng)
-  }, [props.count])
-
-  const onPick = React.useCallback(
+  return React.useCallback(
     (prompt: string) => {
       if (behavior === "navigate") {
-        // Prefer sessionStorage to avoid URL-length limits and leaking prompt into URLs/logs.
         try {
           sessionStorage.setItem("maia.workflows.orchestrator.initialPrompt", prompt)
           router.push(agentHref)
           return
         } catch {
-          // Fallback for environments where storage is blocked/unavailable.
           router.push(`${agentHref}?prompt=${encodeURIComponent(prompt)}`)
           return
         }
       }
-      props.onPick?.(prompt)
+      onPickProp?.(prompt)
     },
-    [agentHref, behavior, props, router],
+    [agentHref, behavior, onPickProp, router],
   )
+}
 
-  // Prefer flowing "chips": each item sizes to its text; if it doesn't fit, it moves to the next line.
-  // "grid" is kept for compatibility but behaves the same (no forced spans).
+// ---- Chip button ----------------------------------------------------------
+
+function ChipButton(props: {
+  icon: React.ComponentType<{ className?: string }>
+  iconClassName?: string
+  title: string
+  prompt: string
+  badge?: React.ReactNode
+  onPick: (prompt: string) => void
+  className?: string
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      onClick={() => props.onPick(props.prompt)}
+      className={cn(
+        "inline-flex w-full sm:w-auto min-w-0 max-w-full overflow-hidden items-center justify-start gap-2 rounded-full border bg-background px-3 py-1.5 text-sm text-left",
+        "h-auto font-[inherit] text-[inherit] hover:text-[inherit]",
+        "transition-colors hover:bg-accent active:scale-[0.99]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        props.className,
+      )}
+      title={props.prompt}
+    >
+      <props.icon className={cn("h-4 w-4 shrink-0 text-muted-foreground", props.iconClassName)} aria-hidden="true" />
+      <span className="min-w-0 flex-1 truncate">{props.title}</span>
+      <span className="shrink-0">{props.badge}</span>
+    </Button>
+  )
+}
+
+// ===========================================================================
+// WorkflowQuickExamples – shows workflow template chips only
+// Used by workflow pages and inline agent workflow editing.
+// ===========================================================================
+
+export function WorkflowQuickExamples(props: {
+  count: number
+  behavior?: "fill" | "navigate"
+  onPick?: (prompt: string) => void
+  agentHref?: string
+  className?: string
+  layout?: "wrap" | "grid"
+}) {
+  const { t, locale } = useI18n()
+  const behavior = props.behavior ?? (props.onPick ? "fill" : "navigate")
+  const agentHref = props.agentHref ?? "/agent"
+  const reactId = React.useId()
+  const seedRef = React.useRef<number>(hashSeed(reactId))
+
+  const selected = React.useMemo(() => {
+    const rng = mulberry32(seedRef.current + (props.count ?? 0))
+    return pickRandomUnique(WORKFLOW_TEMPLATES, props.count, rng)
+  }, [props.count])
+
+  const onPick = usePickHandler(behavior, agentHref, props.onPick)
+
   return (
     <div className={cn("flex max-w-full min-w-0 flex-wrap gap-2 overflow-x-hidden", props.className)}>
-      {selected.map((ex) => {
-        const title = t(ex.titleKey)
-        const prompt = getWorkflowExamplePrompt(locale, ex.id)
-        const diffLabel = t(ex.difficultyKey)
+      {selected.map((tpl) => {
+        const titleKey = WORKFLOW_TEMPLATE_TITLE_KEYS[tpl.id]
+        const title = t(titleKey)
+        const prompt = getWorkflowTemplatePrompt(locale, tpl.id)
+        const diffLabelKey = WORKFLOW_TEMPLATE_DIFFICULTY_KEYS[tpl.difficulty]
+        const diffLabel = t(diffLabelKey)
+        const DiffIcon = difficultyIcon(tpl.difficulty)
         return (
-          <Button
-            key={ex.id}
-            type="button"
-            variant="ghost"
-            onClick={() => onPick(prompt)}
-            className={cn(
-              // On small screens, make each item full width to avoid horizontal overflow.
-              // Also force flex items to be shrinkable (min-w-0) so truncation can work.
-              "inline-flex w-full sm:w-auto min-w-0 max-w-full overflow-hidden items-center justify-start gap-2 rounded-full border bg-background px-3 py-1.5 text-sm text-left",
-              "h-auto font-[inherit] text-[inherit] hover:text-[inherit]",
-              "transition-colors hover:bg-accent active:scale-[0.99]",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-            )}
-            title={prompt}
-          >
-            <Wand2 className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <span className="min-w-0 flex-1 line-clamp-1">{title}</span>
-            <Badge
-              variant={difficultyBadgeVariant(ex.difficulty)}
-              className={cn("ml-1 inline-flex items-center gap-1", difficultyBadgeClass(ex.difficulty))}
-              aria-label={`${diffLabel} difficulty`}
-            >
-              {React.createElement(difficultyIcon(ex.difficulty), {
-                className: "h-3 w-3 shrink-0",
-                "aria-hidden": "true",
-              })}
-              <span>{diffLabel}</span>
-            </Badge>
-          </Button>
+          <ChipButton
+            key={tpl.id}
+            icon={Wand2}
+            title={title}
+            prompt={prompt}
+            onPick={onPick}
+            badge={
+              <Badge
+                variant="outline"
+                className={cn("ml-1 inline-flex items-center gap-1", difficultyBadgeClass(tpl.difficulty))}
+                aria-label={`${diffLabel} difficulty`}
+              >
+                <DiffIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
+                <span>{diffLabel}</span>
+              </Badge>
+            }
+          />
         )
       })}
+    </div>
+  )
+}
+
+// ===========================================================================
+// AgentQuickExamples – combined layout:
+//   Top:    workflow template chips (flowing)
+//   Bottom: module action grid (responsive CSS grid)
+// ===========================================================================
+
+const NAV_KEYS: Record<AgentModule, string> = {
+  workflow: "nav.workflows",
+  run: "nav.runs",
+  job: "nav.jobs",
+  schedule: "nav.schedules",
+  batch: "nav.batches",
+  operation: "nav.operations",
+}
+
+const MODULE_ORDER: AgentModule[] = ["workflow", "run", "job", "schedule", "batch", "operation"]
+
+export function AgentQuickExamples(props: {
+  templateCount?: number
+  actionsPerModule?: number
+  behavior?: "fill" | "navigate"
+  onPick?: (prompt: string) => void
+  agentHref?: string
+  className?: string
+}) {
+  const { t, locale } = useI18n()
+  const behavior = props.behavior ?? (props.onPick ? "fill" : "navigate")
+  const agentHref = props.agentHref ?? "/agent"
+  const templateCount = props.templateCount ?? 6
+  const actionsPerModule = props.actionsPerModule ?? 1
+
+  const onPick = usePickHandler(behavior, agentHref, props.onPick)
+
+  const reactId = React.useId()
+  const seedRef = React.useRef<number>(hashSeed(reactId + "actions"))
+
+  const pickedActions = React.useMemo(() => {
+    const rng = mulberry32(seedRef.current)
+    return MODULE_ORDER.flatMap((mod) => {
+      const picked = pickRandomUnique(MODULE_ACTIONS_BY_MODULE[mod], actionsPerModule, rng)
+      return picked.map((action) => ({ mod, action }))
+    })
+  }, [actionsPerModule])
+
+  return (
+    <div className={cn("space-y-5", props.className)}>
+      {/* Workflow template chips */}
+      <WorkflowQuickExamples
+        count={templateCount}
+        behavior={behavior}
+        onPick={props.onPick}
+        agentHref={agentHref}
+        className="justify-center"
+      />
+
+      {/* Module action chips – flowing layout, 1 random action per module */}
+      <div className="flex max-w-full min-w-0 flex-wrap gap-2 overflow-x-hidden justify-center">
+        {pickedActions.map(({ mod, action }) => {
+          const Icon = MODULE_ICONS[mod]
+          const moduleLabelKey = NAV_KEYS[mod]
+          const moduleLabel = t(moduleLabelKey)
+          const titleKey = MODULE_ACTION_TITLE_KEYS[action.id]
+          const title = t(titleKey)
+          const prompt = getModuleActionPrompt(locale, action.id)
+          return (
+            <ChipButton
+              key={action.id}
+              icon={Icon}
+              title={title}
+              prompt={prompt}
+              onPick={onPick}
+              badge={
+                <Badge variant="outline" className="ml-1 inline-flex items-center text-muted-foreground border-border">
+                  {moduleLabel}
+                </Badge>
+              }
+            />
+          )
+        })}
+      </div>
     </div>
   )
 }

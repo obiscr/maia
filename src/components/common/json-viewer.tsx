@@ -57,7 +57,9 @@ export function JsonViewer(props: {
 }) {
   const i18n = useI18nOptional()
   const t = i18n?.t ?? ((key: string) => key)
-  const empty = props.empty ?? <pre className="p-4 text-xs whitespace-pre-wrap">{t("common.noData")}</pre>
+  const empty = props.empty ?? (
+    <pre className={cn("p-4 text-xs whitespace-pre-wrap", props.preClassName)}>{t("common.noData")}</pre>
+  )
   const [wrap, setWrap] = React.useState(props.defaultWrap ?? true)
   const [copied, setCopied] = React.useState(false)
 

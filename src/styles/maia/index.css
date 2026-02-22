@@ -3,6 +3,7 @@
 @import "./tailwind-theme.css";
 @import "../vendor/reactflow.css";
 @import "../vendor/highlightjs.css";
+@import "../vendor/katex.css";
 @import "./base.css";
 @import "./utils.css";
 @import "./animations.css";

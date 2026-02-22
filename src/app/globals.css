@@ -7,6 +7,9 @@
  * -------------------------------------------------------------------------- */
 @import "tailwindcss";
 
+/* Tailwind v4: include Streamdown utility classes emitted from JS. */
+@source "../../node_modules/streamdown/dist/*.js";
+
 @custom-variant dark (&:is(.dark *));
 
 /* Import the Maia bundle (tokens, layers, base/reset, components, content, print). */

@@ -1,14 +1,14 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Braces, Info, Plus, X } from "lucide-react"
+import { Braces, Info, Plus, RotateCcw, X } from "lucide-react"
 import type { editor as MonacoEditor } from "monaco-editor"
 
 import { useI18n } from "@/components/i18n-provider"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { PageBlocker } from "@/components/ui/page-blocker"
 import { WorkflowCombobox } from "@/components/common/workflow-combobox"
@@ -34,17 +34,24 @@ import { JsonMonacoEditor } from "@/components/common/json-monaco-editor"
 import { workflowInputSpecHasParams } from "@/lib/shared/maia/input-spec"
 import { workflowFileInputUi } from "@/lib/shared/maia/file-inputs-ui"
 import { WorkflowVersionSelect } from "@/components/common/workflow-version-select"
+import { GradientBotIcon } from "@/components/icons/GradientBotIcon"
+import { ApiError, apiFetchJson } from "@/lib/shared/http/api"
+import { tApiError } from "@/lib/shared/i18n/error"
 
 function toScheduleKind(v: string): "CRON" | "INTERVAL" {
   return v === "INTERVAL" ? "INTERVAL" : "CRON"
 }
 
 export function NewScheduleSheet(props: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const contentRef = useRef<HTMLDivElement | null>(null)
   const inputJsonEditorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
   const form = useNewScheduleForm({ t })
   const [enabled, setEnabled] = useState(true)
+  const savedCronRef = useRef<string>("")
+
+  const [cronGenLoading, setCronGenLoading] = useState(false)
+  const [cronGenError, setCronGenError] = useState<string | null>(null)
 
   const misfireHintKeyByPolicy: Record<"SKIP" | "FIRE_ONCE" | "CATCH_UP", string> = {
     FIRE_ONCE: "schedules.policies.misfireHint.FIRE_ONCE",
@@ -106,6 +113,14 @@ export function NewScheduleSheet(props: { open: boolean; onOpenChange: (open: bo
 
   const misfireHintKey = misfireHintKeyByPolicy[misfirePolicy]
   const overlapHintKey = overlapHintKeyByPolicy[overlapPolicy]
+
+  useEffect(() => {
+    if (!props.open) return
+    // For a new schedule, there is no "saved" cron yet; reset should clear to empty.
+    savedCronRef.current = ""
+    setCronGenLoading(false)
+    setCronGenError(null)
+  }, [props.open])
 
   const paramsEditorEnabled = useMemo(() => {
     if (!workflowId) return false
@@ -173,6 +188,32 @@ export function NewScheduleSheet(props: { open: boolean; onOpenChange: (open: bo
 
   function submit() {
     void form.createSchedule({ enabled })
+  }
+
+  async function generateCronFromPrompt() {
+    const prompt = cron.trim()
+    if (!prompt || cronGenLoading || uiPending) return
+    setCronGenLoading(true)
+    setCronGenError(null)
+    try {
+      const j = await apiFetchJson<{ cron: string }>("/api/schedules/generate-cron", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, locale }),
+      })
+      const next = String(j?.cron ?? "").trim()
+      if (next) setCron(next)
+    } catch (e) {
+      if (e instanceof ApiError && String(e.code ?? "") === "CRON_INTENT_UNCLEAR") {
+        setCronGenError(t("schedules.cronGenerator.intentUnclear"))
+      } else if (e instanceof ApiError && String(e.code ?? "") === "CRON_NOT_EXPRESSIBLE") {
+        setCronGenError(t("schedules.cronGenerator.notExpressible"))
+      } else {
+        setCronGenError(tApiError({ t, err: e, fallbackKey: "common.error" }))
+      }
+    } finally {
+      setCronGenLoading(false)
+    }
   }
 
   return (
@@ -316,12 +357,47 @@ export function NewScheduleSheet(props: { open: boolean; onOpenChange: (open: bo
                       <div className="grid gap-4">
                         <Field className="gap-2">
                           <FieldLabel htmlFor="schedule-new-cron">{t("schedules.cron")}</FieldLabel>
-                          <Input
-                            id="schedule-new-cron"
-                            value={cron}
-                            onChange={(e) => setCron(e.target.value)}
-                            disabled={uiPending}
-                          />
+                          <div className="relative">
+                            <Input
+                              id="schedule-new-cron"
+                              value={cron}
+                              onChange={(e) => setCron(e.target.value)}
+                              disabled={uiPending}
+                              className="pr-16"
+                              placeholder={t("schedules.cronGenerator.inputPlaceholder")}
+                            />
+                            <div className="absolute inset-y-0 right-2 flex items-center gap-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                className="h-7 w-7"
+                                disabled={uiPending || cronGenLoading || !cron.trim().length}
+                                onClick={() => void generateCronFromPrompt()}
+                                aria-label={t("schedules.cronGenerator.openAction")}
+                                title={t("schedules.cronGenerator.openAction")}
+                              >
+                                {cronGenLoading ? (
+                                  <Spinner className="size-4" />
+                                ) : (
+                                  <GradientBotIcon className="size-4.5" />
+                                )}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                className="h-7 w-7"
+                                disabled={uiPending || cron === savedCronRef.current}
+                                onClick={() => setCron(savedCronRef.current)}
+                                aria-label={t("schedules.cronGenerator.resetAction")}
+                                title={t("schedules.cronGenerator.resetAction")}
+                              >
+                                <RotateCcw className="size-4" />
+                              </Button>
+                            </div>
+                          </div>
+                          <FieldError>{cronGenError}</FieldError>
                         </Field>
                         <Field className="gap-2">
                           <FieldLabel>{t("schedules.timezone")}</FieldLabel>

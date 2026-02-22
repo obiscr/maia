@@ -19,6 +19,13 @@ type CronParts = {
   dowIsAny: boolean
 }
 
+export function validateCronExpression(expr: string) {
+  // Throws on invalid cron expression (5-field Vixie cron).
+  // Keep this as a fast parse-only validation (no search).
+  parseCron(expr)
+  return true
+}
+
 function parseCronField(field: string, min: number, max: number, opts?: { map7To0?: boolean }) {
   const out = new Set<number>()
   const raw = String(field ?? "").trim()

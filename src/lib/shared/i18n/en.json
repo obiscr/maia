@@ -417,7 +417,25 @@
     }
   },
   "agent": {
-    "apiKey": "Agent API key"
+    "apiKey": "Agent API key",
+    "chat": {
+      "newChat": "New chat",
+      "history": {
+        "action": "Chat history",
+        "title": "Chat history",
+        "description": "{n} chats",
+        "empty": "No chat history yet",
+        "untitled": "Untitled chat",
+        "loadMore": "Load more",
+        "renameAction": "Rename",
+        "namePlaceholder": "Enter chat title",
+        "nameRequired": "Please enter a chat title",
+        "renamedToast": "Chat title updated",
+        "deleteTitle": "Delete chat?",
+        "deleteDescription": "This will permanently delete this chat history. This cannot be undone",
+        "deletedToast": "Chat deleted"
+      }
+    }
   },
   "theme": {
     "light": "Light",
@@ -900,7 +918,7 @@
     "aiOrchestrateAction": "Agent orchestration",
     "newWorkflowDescription": "Create a workflow and start editing",
     "listDescription": "Browse workflows and open one to edit",
-    "emptyTitle": "What kind of workflow do you want to build?",
+    "emptyTitle": "How can I help you?",
     "updatedAt": "Updated",
     "workflowVersion": "Workflow version",
     "versions": {
@@ -1109,19 +1127,32 @@
       "proposalReadyDescription": "The agent prepared an update. Apply it only after you confirm",
       "draftReadyTitle": "Draft ready",
       "draftReadyDescription": "A saveable draft has been generated (it may not have passed final validation yet); you can save now and refine it in the editor",
+      "draftValidatedDescription": "A saveable workflow draft has been generated and validated. You can save it now and continue refining it in the editor",
       "stepSelectHint": "Select a step to view details",
       "thinking": "Thinking…",
-      "composerPlaceholder": "Describe what you want — let the agent build a workflow…",
+      "reasoningSummary": {
+        "title": "Thinking...",
+        "titleDone": "Thought for {seconds}s"
+      },
+      "composerPlaceholder": "Describe what you need — let the agent help you…",
       "sendAction": "Send",
       "applyCreateAction": "Save as new workflow",
       "createWorkflowQueued": "Agent workflow generation started",
       "streamEndedEarly": "Agent stream ended early (received {done}/{total} steps); please retry",
       "createInputSpecQueued": "Agent input spec generation started",
       "createOutputsSpecQueued": "Agent outputs spec generation started",
-      "newChat": "New chat",
       "newChatUnsavedDescription": "You have unsaved workflow changes. Save them before starting a new chat?",
       "errors": {
         "failed": "Agent request failed"
+      },
+      "attachments": {
+        "uploadingToast": "Please wait for uploads to finish.",
+        "removeFailedToast": "Remove failed uploads before sending.",
+        "uploadImageAriaLabel": "Upload image",
+        "removeImageAriaLabel": "Remove image",
+        "failedBadge": "failed",
+        "fallbackImageName": "image",
+        "fallbackFileName": "file"
       },
       "examples": {
         "difficulty": {
@@ -1129,67 +1160,41 @@
           "medium": "Medium",
           "hard": "Hard"
         },
-        "items": {
-          "ex1": {
-            "title": "Web page title → summary JSON"
-          },
-          "ex2": {
-            "title": "CSV → basic stats report"
-          },
-          "ex3": {
-            "title": "3-step transform with validation"
-          },
-          "ex4": {
-            "title": "RSS → top 10 digest"
-          },
-          "ex5": {
-            "title": "Screenshot → OCR → normalized text"
-          },
-          "ex6": {
-            "title": "YouTube transcript → key takeaways"
-          },
-          "ex7": {
-            "title": "Markdown → structured outline"
-          },
-          "ex8": {
-            "title": "Log file → error hotspots"
-          },
-          "ex9": {
-            "title": "Product reviews → sentiment + topics"
-          },
-          "ex10": {
-            "title": "Invoice PDF → line items JSON"
-          },
-          "ex11": {
-            "title": "GitHub issue triage → labels + priority"
-          },
-          "ex12": {
-            "title": "Dataset → schema + constraints proposal"
-          },
-          "ex13": {
-            "title": "Multi-source news → merged digest"
-          },
-          "ex14": {
-            "title": "A/B experiment results → analysis report"
-          },
-          "ex15": {
-            "title": "Support tickets → routing + SLA risk"
-          },
-          "ex16": {
-            "title": "Large doc → hierarchical summary + index"
-          },
-          "ex17": {
-            "title": "End-to-end ETL with data quality gates"
-          },
-          "ex18": {
-            "title": "Multi-lingual website monitor + alerting"
-          },
-          "ex19": {
-            "title": "Knowledge base builder from mixed sources"
-          },
-          "ex20": {
-            "title": "Workflow generator with branching + rollback plan"
-          }
+        "templates": {
+          "web_summary": { "title": "Web page title → summary JSON" },
+          "csv_stats": { "title": "CSV → basic stats report" },
+          "json_validate": { "title": "3-step transform with validation" },
+          "rss_digest": { "title": "RSS → top 10 digest" },
+          "image_ocr": { "title": "Screenshot → OCR → normalized text" },
+          "video_takeaways": { "title": "YouTube transcript → key takeaways" },
+          "markdown_outline": { "title": "Markdown → structured outline" },
+          "log_errors": { "title": "Log file → error hotspots" },
+          "review_sentiment": { "title": "Product reviews → sentiment + topics" },
+          "invoice_parse": { "title": "Invoice PDF → line items JSON" },
+          "issue_triage": { "title": "GitHub issue triage → labels + priority" },
+          "data_schema": { "title": "Dataset → schema + constraints proposal" },
+          "news_merge": { "title": "Multi-source news → merged digest" },
+          "ab_analysis": { "title": "A/B experiment results → analysis report" },
+          "ticket_routing": { "title": "Support tickets → routing + SLA risk" },
+          "doc_summary": { "title": "Large doc → hierarchical summary + index" },
+          "etl_pipeline": { "title": "End-to-end ETL with data quality gates" },
+          "site_monitor": { "title": "Multi-lingual website monitor + alerting" },
+          "knowledge_base": { "title": "Knowledge base builder from mixed sources" },
+          "branching_workflow": { "title": "Workflow generator with branching + rollback plan" }
+        },
+        "actions": {
+          "workflow_list": { "title": "List workflows" },
+          "workflow_versions": { "title": "View version history" },
+          "run_failures": { "title": "Analyze run failures" },
+          "run_results": { "title": "View run results" },
+          "job_run": { "title": "Run a workflow" },
+          "job_status": { "title": "Check job status" },
+          "schedule_create": { "title": "Create a schedule" },
+          "schedule_overview": { "title": "Schedule overview" },
+          "batch_create": { "title": "Create a batch" },
+          "batch_progress": { "title": "Check batch progress" },
+          "operation_log": { "title": "View operations log" },
+          "operation_overview": { "title": "System status overview" }
         }
       },
       "progress": {
@@ -1197,12 +1202,14 @@
         "validateLabel": "Validate workflow",
         "inputSpecLabel": "Generate input spec",
         "outputsSpecLabel": "Generate outputs spec",
-        "generatingStep": "Generating: {step}",
+        "generatingStep": "Generating…",
         "validating": "Validating workflow…",
         "generatingInputSpec": "Generating input spec…",
         "generatingOutputsSpec": "Generating outputs spec…",
         "doneBadge": "Done",
-        "completedCount": "{count} completed"
+        "completedCount": "{count} completed",
+        "stepsCount": "{count} steps",
+        "completedStepsCount": "{count} steps completed"
       }
     }
   },
@@ -1472,7 +1479,14 @@
     "deleteScheduleDescription": "This will delete the schedule record",
     "deletedToast": "Schedule deleted",
     "createdToast": "Schedule created",
-    "updatedToast": "Schedule updated"
+    "updatedToast": "Schedule updated",
+    "cronGenerator": {
+      "openAction": "Generate with agent",
+      "resetAction": "Reset",
+      "inputPlaceholder": "Describe your schedule, then click the agent button to generate a CRON expression",
+      "intentUnclear": "I couldn't understand the schedule. Please be more specific (e.g. “Weekdays at 09:00”)",
+      "notExpressible": "This schedule can’t be represented by the current CRON format. Try a simpler rule, or rewrite it (e.g. avoid “the 2nd Wednesday of the month”)"
+    }
   },
   "batches": {
     "recentBatchesDescription": "Browse batches and track bulk job dispatch progress",
@@ -1566,6 +1580,7 @@
     "detail": {
       "summary": "Summary",
       "action": "Action",
+      "source": "Source",
       "target": "Target",
       "status": "Status",
       "responseStatus": "Response",
@@ -1587,6 +1602,174 @@
       "installingDeps": "Installing dependencies"
     },
     "statusPending": "Pending"
+  },
+  "toolCalls": {
+    "title": "Tool call",
+    "status": {
+      "todo": "pending",
+      "running": "running",
+      "done": "done",
+      "failed": "failed"
+    },
+    "showDetails": "Show details",
+    "hideDetails": "Hide details",
+    "set_plan": {
+      "label": "Create plan",
+      "running": "Creating plan…",
+      "done": "Plan created",
+      "doneWithCount": "Plan created · {count} steps"
+    },
+    "draft_step": {
+      "label": "Draft step",
+      "running": "Drafting step…",
+      "runningWithName": "Generating: {name}…",
+      "done": "Step drafted",
+      "doneWithName": "Step drafted: {name}"
+    },
+    "finalize_draft": {
+      "label": "Validate workflow",
+      "running": "Validating workflow…",
+      "done": "Workflow validated",
+      "failed": "Validation failed"
+    },
+    "create_workflow_draft": {
+      "label": "Create workflow",
+      "running": "Creating workflow…",
+      "done": "Workflow created",
+      "failed": "Create failed"
+    },
+    "update_workflow_draft": {
+      "label": "Update workflow",
+      "running": "Updating workflow…",
+      "done": "Workflow updated",
+      "failed": "Update failed"
+    },
+    "generate_input_spec": {
+      "label": "Generate input spec",
+      "running": "Generating input spec…",
+      "done": "Input spec generated",
+      "failed": "Input spec generation failed"
+    },
+    "generate_output_spec": {
+      "label": "Generate output spec",
+      "running": "Generating output spec…",
+      "done": "Output spec generated",
+      "failed": "Output spec generation failed"
+    },
+    "get_workflow": {
+      "label": "Load workflow",
+      "running": "Loading workflow…",
+      "done": "Workflow loaded"
+    },
+    "workflow": {
+      "list": { "label": "List workflows", "running": "Listing workflows…", "done": "Listed workflows" },
+      "get": { "label": "Get workflow", "running": "Loading workflow…", "done": "Workflow loaded" },
+      "create": { "label": "Create workflow", "running": "Creating workflow…", "done": "Workflow created" },
+      "update": { "label": "Update workflow", "running": "Updating workflow…", "done": "Workflow updated" },
+      "patch": { "label": "Update metadata", "running": "Updating metadata…", "done": "Metadata updated" },
+      "delete": { "label": "Delete workflow", "running": "Deleting workflow…", "done": "Workflow deleted" },
+      "meta_get": { "label": "Get workflow metadata", "running": "Loading metadata…", "done": "Metadata loaded" },
+      "export": { "label": "Export workflow", "running": "Exporting…", "done": "Exported" },
+      "deps_install": { "label": "Install dependencies", "running": "Installing…", "done": "Installed" },
+      "deps_log_list": { "label": "View install logs", "running": "Loading logs…", "done": "Logs loaded" },
+      "version_list": { "label": "List versions", "running": "Loading versions…", "done": "Versions loaded" },
+      "version_create_snapshot": {
+        "label": "Create version",
+        "running": "Creating version…",
+        "done": "Version created"
+      },
+      "version_get": { "label": "Get version", "running": "Loading version…", "done": "Version loaded" },
+      "version_restore": { "label": "Restore version", "running": "Restoring…", "done": "Version restored" }
+    },
+    "run": {
+      "list": { "label": "List runs", "running": "Loading runs…", "done": "Runs loaded" },
+      "get": { "label": "Get run", "running": "Loading run…", "done": "Run loaded" },
+      "cancel": { "label": "Cancel run", "running": "Canceling…", "done": "Run canceled" },
+      "delete": { "label": "Delete run", "running": "Deleting…", "done": "Run deleted" },
+      "force_stop": { "label": "Force stop", "running": "Stopping…", "done": "Run stopped" },
+      "attempt_list": { "label": "List attempts", "running": "Loading attempts…", "done": "Attempts loaded" },
+      "inputs_get": { "label": "Get run inputs", "running": "Loading inputs…", "done": "Inputs loaded" },
+      "outputs_get": { "label": "Get outputs", "running": "Loading outputs…", "done": "Outputs loaded" },
+      "artifact_list": { "label": "List artifacts", "running": "Loading artifacts…", "done": "Artifacts loaded" },
+      "artifact_download": { "label": "Download artifact", "running": "Downloading…", "done": "Downloaded" },
+      "input_file_list": {
+        "label": "List input files",
+        "running": "Loading input files…",
+        "done": "Input files loaded"
+      },
+      "file_download": { "label": "Download file", "running": "Downloading…", "done": "Downloaded" },
+      "step_definition_get": {
+        "label": "Get step definition",
+        "running": "Loading definition…",
+        "done": "Definition loaded"
+      },
+      "step_input_get": { "label": "Get step input", "running": "Loading step input…", "done": "Step input loaded" },
+      "step_output_get": {
+        "label": "Get step output",
+        "running": "Loading step output…",
+        "done": "Step output loaded"
+      },
+      "step_artifact_list": {
+        "label": "List step artifacts",
+        "running": "Loading artifacts…",
+        "done": "Artifacts loaded"
+      },
+      "step_retry": { "label": "Retry step", "running": "Retrying…", "done": "Step retried" },
+      "step_rerun": { "label": "Rerun step", "running": "Rerunning…", "done": "Step rerun" },
+      "step_restart": { "label": "Restart from step", "running": "Restarting…", "done": "Restarted" }
+    },
+    "job": {
+      "list": { "label": "List jobs", "running": "Loading jobs…", "done": "Jobs loaded" },
+      "get": { "label": "Get job", "running": "Loading job…", "done": "Job loaded" },
+      "create": { "label": "Create job", "running": "Creating job…", "done": "Job created" },
+      "cancel": { "label": "Cancel job", "running": "Canceling…", "done": "Job canceled" },
+      "resume": { "label": "Resume job", "running": "Resuming…", "done": "Job resumed" },
+      "delete": { "label": "Delete job", "running": "Deleting…", "done": "Job deleted" },
+      "attempt_list": { "label": "List job attempts", "running": "Loading attempts…", "done": "Attempts loaded" },
+      "input_file_list": {
+        "label": "List input files",
+        "running": "Loading input files…",
+        "done": "Input files loaded"
+      }
+    },
+    "schedule": {
+      "list": { "label": "List schedules", "running": "Loading schedules…", "done": "Schedules loaded" },
+      "get": { "label": "Get schedule", "running": "Loading schedule…", "done": "Schedule loaded" },
+      "create": { "label": "Create schedule", "running": "Creating schedule…", "done": "Schedule created" },
+      "patch": { "label": "Update schedule", "running": "Updating…", "done": "Schedule updated" },
+      "delete": { "label": "Delete schedule", "running": "Deleting…", "done": "Schedule deleted" },
+      "preview": { "label": "Preview schedule", "running": "Previewing…", "done": "Preview ready" },
+      "run_now": { "label": "Run now", "running": "Starting…", "done": "Started" },
+      "job_list": { "label": "List schedule jobs", "running": "Loading jobs…", "done": "Jobs loaded" }
+    },
+    "batch": {
+      "list": { "label": "List batches", "running": "Loading batches…", "done": "Batches loaded" },
+      "get": { "label": "Get batch", "running": "Loading batch…", "done": "Batch loaded" },
+      "create": { "label": "Create batch", "running": "Creating batch…", "done": "Batch created" },
+      "patch": { "label": "Update batch", "running": "Updating…", "done": "Batch updated" },
+      "delete": { "label": "Delete batch", "running": "Deleting…", "done": "Batch deleted" },
+      "pause": { "label": "Pause batch", "running": "Pausing…", "done": "Batch paused" },
+      "resume": { "label": "Resume batch", "running": "Resuming…", "done": "Batch resumed" },
+      "cancel": { "label": "Cancel batch", "running": "Canceling…", "done": "Batch canceled" },
+      "fanout": { "label": "Fanout batch", "running": "Running fanout…", "done": "Fanout complete" },
+      "job_create": { "label": "Create batch jobs", "running": "Creating jobs…", "done": "Jobs created" },
+      "job_list": { "label": "List batch jobs", "running": "Loading jobs…", "done": "Jobs loaded" }
+    },
+    "operation": {
+      "list": { "label": "List operations", "running": "Loading operations…", "done": "Operations loaded" },
+      "get": { "label": "Get operation", "running": "Loading operation…", "done": "Operation loaded" },
+      "list_by_target": {
+        "label": "List target operations",
+        "running": "Loading operations…",
+        "done": "Operations loaded"
+      }
+    },
+    "fallback": {
+      "todo": "Pending",
+      "running": "Running…",
+      "done": "Done",
+      "failed": "Failed"
+    }
   },
   "errors": {
     "ajv": {

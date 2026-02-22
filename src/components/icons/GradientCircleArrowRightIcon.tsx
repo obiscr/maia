@@ -1,6 +1,6 @@
 import * as React from "react"
 
-export function GradientLoaderIcon(props: React.ComponentPropsWithoutRef<"svg">) {
+export function GradientCircleArrowRightIcon(props: React.ComponentPropsWithoutRef<"svg">) {
   const gradId = React.useId()
   const { className, ...rest } = props
   return (
@@ -22,8 +22,9 @@ export function GradientLoaderIcon(props: React.ComponentPropsWithoutRef<"svg">)
           <stop offset="100%" stopColor="#06b6d4" />
         </linearGradient>
       </defs>
-      {/* Loader2-like arc */}
-      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 16l4-4-4-4" />
+      <path d="M8 12h8" />
     </svg>
   )
 }

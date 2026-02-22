@@ -1,148 +1,230 @@
 "use client"
 
 import * as React from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
+import { useChat } from "@ai-sdk/react"
+import {
+  DefaultChatTransport,
+  isToolUIPart,
+  getToolName,
+  lastAssistantMessageIsCompleteWithApprovalResponses,
+  type UIMessage,
+} from "ai"
 
 import { toast } from "@/lib/client/toast"
 import { ApiError, apiFetchJson } from "@/lib/shared/http/api"
 import { tError } from "@/lib/shared/i18n/error"
-import { isRecord } from "@/lib/shared/lang/is-record"
-import { useTopicStream } from "@/hooks/use-topic-stream"
-import { makeStreamTopic } from "@/lib/shared/realtime/topics"
 import { MAIA_MONACO_THEME_DARK, MAIA_MONACO_THEME_LIGHT } from "@/lib/client/monaco"
 
-function readRecordStringField(data: unknown, key: string): string | null {
-  if (!isRecord(data)) return null
-  const v = data[key]
-  return typeof v === "string" ? String(v) : null
-}
+import {
+  type WorkflowStep,
+  type WorkflowForPanel,
+  type ProposalState,
+  extractPlanFromMessages,
+  extractDraftStepsFromMessages,
+  extractProposalFromMessages,
+  extractSavedWorkflowIdFromMessages,
+  deriveStageStatus,
+  readDraftSteps,
+  readDraftObject,
+} from "./orchestrator-state"
 
-export type UiMessage = { role: "user" | "assistant"; content: string }
-export type ProposalState = { ok?: boolean; draft?: unknown; warnings?: string[] } | null
-export type PlanState = { ok?: boolean; title?: string | null; steps?: string[] } | null
-export type AgentUiSignal = {
-  ok?: boolean
-  phase: "plan" | "draft" | "validate" | "inputSpec" | "outputsSpec"
-  state: "start" | "end"
-  stepIndex?: number
-  stepTitle?: string
-}
-export type AgentStageStatus = "todo" | "in_progress" | "done" | "failed"
-export type AgentStageState = {
-  plan: AgentStageStatus
-  draft: AgentStageStatus
-  validate: AgentStageStatus
-  inputSpec: AgentStageStatus
-  outputsSpec: AgentStageStatus
-}
-export type AgentProgressState = {
-  phase: "idle" | "planning" | "planned" | "drafting" | "validating" | "inputSpec" | "outputsSpec" | "done"
-  doneCount: number
-  activeIdx: number | null
-}
+export type { WorkflowStep, WorkflowForPanel, ProposalState } from "./orchestrator-state"
+export type { OrchestratorPlanStep, OrchestratorPlan } from "./orchestrator-state"
 
-export type WorkflowStep = {
-  stepKey: string
-  name: string
-  description?: string | null
-  scriptEsm: string
-  timeoutMs?: number
-  deps: string[]
-}
+// ---------------------------------------------------------------------------
+// Hook
+// ---------------------------------------------------------------------------
 
-export type WorkflowForPanel = {
-  id: string
-  name: string
-  description: string | null
-  dependencies?: string
-  inputSpec?: string
-  steps: WorkflowStep[]
-}
-
-export type AgentRunErrorState = {
-  errorCode: string | null
-  errorMessage: string | null
-  errorMetaJson: string | null
-} | null
-
-function readDraftSteps(p: ProposalState): WorkflowStep[] | null {
-  const draft = p?.draft
-  if (!isRecord(draft)) return null
-  const steps = draft.steps
-  if (!Array.isArray(steps)) return null
-  return steps as WorkflowStep[]
-}
-
-function readDraftObject(p: ProposalState): Record<string, unknown> | null {
-  return isRecord(p?.draft) ? (p?.draft as Record<string, unknown>) : null
-}
+import { DEFAULT_CHAT_MODEL } from "@/lib/shared/models"
 
 export function useWorkflowAgentSession(params: {
-  agentRunId?: string | null
+  chatId?: string | null
   workflowId?: string
   locale: string
   t: (k: string, vars?: Record<string, string | number>) => string
-  /**
-   * Optional prompt to auto-send exactly once (useful for modal/dialog flows that should not rely on URL params).
-   * When provided, it takes precedence over `?prompt=` in the URL and will NOT modify the router URL.
-   */
   initialPrompt?: string | null
+  initialMessages?: UIMessage[]
+  initialModel?: string
 }) {
-  const { agentRunId, workflowId, locale, t, initialPrompt } = params
+  const { chatId: chatIdProp, workflowId: workflowIdProp, locale, t, initialPrompt, initialMessages } = params
 
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const promptFromUrl = searchParams.get("prompt")
-  const [promptFromSessionStorage, setPromptFromSessionStorage] = React.useState<string | null>(null)
 
-  // Optional fallback: allow page-to-page navigation to pass a large prompt without putting it in the URL.
-  // This avoids URL-length limits (e.g. proxies / Node header limits) especially for percent-encoded UTF-8 text.
+  const chatIdRef = React.useRef(chatIdProp || crypto.randomUUID())
+  const stableChatId = chatIdProp || chatIdRef.current
+
+  const didAutoSendRef = React.useRef(false)
+  const initialHandoffRef = React.useRef<{ idempotencyKey: string; acknowledged: boolean } | null>(null)
+  const claimingInitialHandoffRef = React.useRef(false)
+  const initialStepsRef = React.useRef<WorkflowStep[] | null>(null)
+  const publicIdRef = React.useRef<string | null>(null)
+  const didCanonicalRedirectRef = React.useRef(false)
+  const lastStableChatIdRef = React.useRef<string | null>(null)
+
+  const [effectiveWorkflowId, setEffectiveWorkflowId] = React.useState<string | undefined>(workflowIdProp)
+  React.useEffect(() => setEffectiveWorkflowId(workflowIdProp), [workflowIdProp])
+
+  const [model, setModelState] = React.useState<string>(
+    () => String(params.initialModel ?? "").trim() || DEFAULT_CHAT_MODEL,
+  )
+
+  const shouldAutoContinueToolChain = React.useCallback(({ messages }: { messages: UIMessage[] }): boolean => {
+    if (lastAssistantMessageIsCompleteWithApprovalResponses({ messages })) return true
+
+    const last = messages[messages.length - 1]
+    if (!last || last.role !== "assistant") return false
+
+    const toolParts = last.parts.filter(isToolUIPart)
+
+    // Do NOT continue after the workflow has been persisted successfully.
+    const hasSavedWorkflow = toolParts.some((p) => {
+      const n = getToolName(p)
+      if (n !== "create_workflow_draft" && n !== "update_workflow_draft") return false
+      if (p.state !== "output-available") return false
+      const out = p.output
+      return out && typeof out === "object" && (out as Record<string, unknown>).ok === true
+    })
+    if (hasSavedWorkflow) return false
+
+    // Only auto-continue when the orchestrator flow is in progress.
+    // For non-orchestrator queries the server-side multi-step loop
+    // (stopWhen + prepareStep) handles tool execution completely
+    // within a single HTTP request — no client-side kick is needed.
+    const ORCHESTRATOR_TOOLS = new Set([
+      "set_plan",
+      "draft_step",
+      "finalize_draft",
+      "generate_input_spec",
+      "generate_output_spec",
+      "get_workflow",
+    ])
+    const hasCompletedOrchestratorTool = toolParts.some(
+      (p) => (p.state === "output-available" || p.state === "output-error") && ORCHESTRATOR_TOOLS.has(getToolName(p)),
+    )
+    return hasCompletedOrchestratorTool
+  }, [])
+
+  const setModel = React.useCallback(
+    (next: string) => {
+      setModelState(next)
+      if (!chatIdProp) return
+      apiFetchJson(`/api/chats/${encodeURIComponent(stableChatId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: next }),
+      }).catch((e) => {
+        if (e instanceof ApiError && e.code === "NOT_FOUND") return
+        toast.error(t("common.error"))
+      })
+    },
+    [chatIdProp, stableChatId, t],
+  )
+
+  const bodyRef = React.useRef({ chatId: stableChatId, workflowId: effectiveWorkflowId, locale, model })
   React.useEffect(() => {
-    // If `initialPrompt` is provided, do not read storage (dialog/modal flows).
-    if (initialPrompt) return
-    try {
-      const key = "maia.workflows.orchestrator.initialPrompt"
-      const v = sessionStorage.getItem(key)
-      if (!v) return
-      sessionStorage.removeItem(key)
-      setPromptFromSessionStorage(v)
-    } catch {
-      // ignore (storage blocked/unavailable)
-    }
-  }, [initialPrompt])
+    bodyRef.current = { chatId: stableChatId, workflowId: effectiveWorkflowId, locale, model }
+  }, [stableChatId, effectiveWorkflowId, locale, model])
 
-  const [messages, setMessages] = React.useState<UiMessage[]>([])
-  const [proposal, setProposal] = React.useState<ProposalState>(null)
-  const [plan, setPlan] = React.useState<PlanState>(null)
-  const [progress, setProgress] = React.useState<AgentProgressState>({ phase: "idle", doneCount: 0, activeIdx: null })
-  const [stages, setStages] = React.useState<AgentStageState>({
-    plan: "todo",
-    draft: "todo",
-    validate: "todo",
-    inputSpec: "todo",
-    outputsSpec: "todo",
+  const transport = React.useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: "/api/chat",
+        body: () => bodyRef.current,
+        fetch: async (input, init) => {
+          const res = await fetch(input, init)
+          const pid = res.headers.get("x-maia-chat-public-id") || res.headers.get("X-Maia-Chat-Public-Id")
+          if (pid && !publicIdRef.current) publicIdRef.current = pid
+          return res
+        },
+      }),
+    [],
+  )
+
+  const chat = useChat({
+    id: stableChatId,
+    transport,
+    messages: initialMessages,
+    experimental_throttle: 48,
+    sendAutomaticallyWhen: shouldAutoContinueToolChain,
+    onFinish: () => {
+      if (chatIdProp) return
+      if (didCanonicalRedirectRef.current) return
+      const pid = publicIdRef.current
+      if (!pid) return
+      didCanonicalRedirectRef.current = true
+      const wid = String(effectiveWorkflowId ?? workflowIdProp ?? "").trim()
+      const qs = wid ? `?workflowId=${encodeURIComponent(wid)}` : ""
+      router.replace(`/agent/${encodeURIComponent(pid)}${qs}`)
+    },
   })
-  const [hasAssistantOutput, setHasAssistantOutput] = React.useState(false)
-  const [input, setInput] = React.useState("")
-  const [pending, setPending] = React.useState(false)
-  const [saving, setSaving] = React.useState(false)
 
+  // Derive orchestrator state from AI SDK message parts
+  const plan = React.useMemo(() => extractPlanFromMessages(chat.messages), [chat.messages])
+  const draftStepsFromStream = React.useMemo(() => extractDraftStepsFromMessages(chat.messages), [chat.messages])
+  const proposal = React.useMemo(() => extractProposalFromMessages(chat.messages), [chat.messages])
+
+  const chatPending = chat.status === "submitted" || chat.status === "streaming"
+
+  const stageStatus = React.useMemo(() => deriveStageStatus(chat.messages, chatPending), [chat.messages, chatPending])
+
+  // Workflow panel state
   const [workflow, setWorkflow] = React.useState<WorkflowForPanel | null>(null)
   const [workflowLoading, setWorkflowLoading] = React.useState(false)
   const [selectedStepKey, setSelectedStepKey] = React.useState<string | null>(null)
   const [stepSheetOpen, setStepSheetOpen] = React.useState(false)
-  const [graphOverrideSteps, setGraphOverrideSteps] = React.useState<WorkflowStep[] | null>(null)
   const [dirty, setDirty] = React.useState(false)
-  const [agentRunLastEventId, setAgentRunLastEventId] = React.useState<number | null>(null)
-  const [agentRunError, setAgentRunError] = React.useState<AgentRunErrorState>(null)
+  const [saving, setSaving] = React.useState(false)
+  const [localStepOverrides, setLocalStepOverrides] = React.useState<WorkflowStep[] | null>(null)
 
+  // Refs
   const listRef = React.useRef<HTMLDivElement | null>(null)
   const inputRef = React.useRef<HTMLTextAreaElement | null>(null)
 
-  const streamExtraParams = React.useMemo(() => {
-    return agentRunLastEventId ? { fromId: String(agentRunLastEventId) } : undefined
-  }, [agentRunLastEventId])
+  // Sticky auto-scroll: only scroll when the user is already at the bottom
+  const isAtBottomRef = React.useRef(true)
+  const scrollCleanupRef = React.useRef<(() => void) | null>(null)
+  const scrollRafRef = React.useRef<number | null>(null)
+  const lastAutoScrollAtRef = React.useRef(0)
+  const pendingRef = React.useRef(false)
+  const scrollContainerRef = React.useCallback((node: HTMLDivElement | null) => {
+    scrollCleanupRef.current?.()
+    scrollCleanupRef.current = null
+    if (!node) return
+    const viewport = node.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')
+    if (!viewport) return
+    const THRESHOLD = 80
+    const onScroll = () => {
+      isAtBottomRef.current = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < THRESHOLD
+    }
+    viewport.addEventListener("scroll", onScroll, { passive: true })
+    onScroll()
+    scrollCleanupRef.current = () => viewport.removeEventListener("scroll", onScroll)
+  }, [])
+  React.useEffect(() => {
+    pendingRef.current = chatPending
+  }, [chatPending])
 
+  const scheduleAutoScroll = React.useCallback(() => {
+    if (!isAtBottomRef.current) return
+    if (scrollRafRef.current != null) return
+    scrollRafRef.current = window.requestAnimationFrame(() => {
+      scrollRafRef.current = null
+      if (!isAtBottomRef.current) return
+      const now = performance.now()
+      // Keep streaming scroll updates at ~20fps to avoid layout thrash.
+      if (pendingRef.current && now - lastAutoScrollAtRef.current < 50) return
+      lastAutoScrollAtRef.current = now
+      listRef.current?.scrollIntoView({
+        behavior: pendingRef.current ? "auto" : "smooth",
+        block: "end",
+      })
+    })
+  }, [])
+
+  type FileUIPart = Extract<UIMessage["parts"][number], { type: "file" }>
+
+  // Monaco theme
   const [isDarkTheme, setIsDarkTheme] = React.useState(false)
   React.useEffect(() => {
     const el = document.documentElement
@@ -154,12 +236,12 @@ export function useWorkflowAgentSession(params: {
   }, [])
   const monacoTheme = isDarkTheme ? MAIA_MONACO_THEME_DARK : MAIA_MONACO_THEME_LIGHT
 
-  // Load workflow snapshot for panel editing.
+  // Load workflow for edit mode
   React.useEffect(() => {
-    if (!workflowId) return
+    if (!effectiveWorkflowId) return
     let canceled = false
     setWorkflowLoading(true)
-    apiFetchJson<{ workflow?: WorkflowForPanel | null }>(`/api/workflows/${workflowId}`, { cache: "no-store" })
+    apiFetchJson<{ workflow?: WorkflowForPanel | null }>(`/api/workflows/${effectiveWorkflowId}`, { cache: "no-store" })
       .then((j) => {
         if (canceled) return
         const wf = (j?.workflow ?? null) as WorkflowForPanel | null
@@ -167,549 +249,242 @@ export function useWorkflowAgentSession(params: {
         setSelectedStepKey((prev) => prev ?? wf?.steps?.[0]?.stepKey ?? null)
         setDirty(false)
       })
-      .catch(() => {
-        // ignore; the UI shows a fallback state
-      })
+      .catch(() => {})
       .finally(() => {
-        if (canceled) return
-        setWorkflowLoading(false)
+        if (!canceled) setWorkflowLoading(false)
       })
     return () => {
       canceled = true
     }
-  }, [workflowId])
+  }, [effectiveWorkflowId])
 
-  const reloadTmrRef = React.useRef<number | null>(null)
   React.useEffect(() => {
+    scheduleAutoScroll()
     return () => {
-      if (reloadTmrRef.current) window.clearTimeout(reloadTmrRef.current)
-    }
-  }, [])
-
-  const loadAgentRun = React.useCallback(async () => {
-    if (!agentRunId) return
-    const j = await apiFetchJson<{
-      agentRun?: {
-        workflowId?: string | null
-        status?: string
-        lastEventId?: number | null
-        snapshotJson?: string
-        errorCode?: string | null
-        errorMessage?: string | null
-        errorMetaJson?: string | null
+      if (scrollRafRef.current != null) {
+        window.cancelAnimationFrame(scrollRafRef.current)
+        scrollRafRef.current = null
       }
-    }>(`/api/agent-runs/${encodeURIComponent(agentRunId)}`, { cache: "no-store" })
-    const ar = (j?.agentRun ?? null) as Record<string, unknown> | null
-    const st = typeof ar?.status === "string" ? String(ar.status) : null
-    setPending(st === "QUEUED" || st === "RUNNING")
-    const last =
-      typeof ar?.lastEventId === "number" && Number.isFinite(ar.lastEventId) ? Math.floor(ar.lastEventId) : null
-    setAgentRunLastEventId(last)
-
-    const errCode = typeof ar?.errorCode === "string" ? String(ar.errorCode) : null
-    const errMsg = typeof ar?.errorMessage === "string" ? String(ar.errorMessage) : null
-    const errMeta = typeof ar?.errorMetaJson === "string" ? String(ar.errorMetaJson) : null
-    setAgentRunError(
-      errCode || errMsg || errMeta ? { errorCode: errCode, errorMessage: errMsg, errorMetaJson: errMeta } : null,
-    )
-
-    const snapStr = typeof ar?.snapshotJson === "string" ? String(ar.snapshotJson) : "{}"
-    let snap: Record<string, unknown> = {}
-    try {
-      const parsed = JSON.parse(snapStr || "{}")
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) snap = parsed as Record<string, unknown>
-    } catch {
-      snap = {}
     }
+  }, [chat.messages, scheduleAutoScroll])
 
-    const msgs = Array.isArray(snap.messages) ? (snap.messages as UiMessage[]) : []
-    setMessages(msgs)
-    setHasAssistantOutput(Boolean(snap.hasAssistantOutput))
-    setPlan((snap.plan ?? null) as PlanState)
-    setProposal((snap.proposal ?? null) as ProposalState)
-    const draftSteps = Array.isArray(snap.draftSteps) ? (snap.draftSteps as WorkflowStep[]) : null
-    if (draftSteps && draftSteps.length) setGraphOverrideSteps(draftSteps)
+  // Pre-compute steps from initialMessages as a stable fallback
+  if (initialStepsRef.current === null && initialMessages?.length) {
+    const initProposal = extractProposalFromMessages(initialMessages)
+    const initProposalSteps = readDraftSteps(initProposal)
+    if (initProposalSteps?.length) {
+      initialStepsRef.current = initProposalSteps
+    } else {
+      const initDraftSteps = extractDraftStepsFromMessages(initialMessages)
+      initialStepsRef.current = initDraftSteps.length ? initDraftSteps : null
+    }
+  }
 
-    const hasPlan = !!(snap.plan && typeof snap.plan === "object")
-    const hasDraft = Array.isArray(draftSteps) && draftSteps.length > 0
-    const proposalObj =
-      snap.proposal && typeof snap.proposal === "object" ? (snap.proposal as Record<string, unknown>) : null
-    const hasProposal = !!proposalObj && "draft" in proposalObj && !!proposalObj["draft"]
-    setProgress({
-      phase: hasProposal ? "done" : hasDraft ? "drafting" : hasPlan ? "planning" : "idle",
-      doneCount: hasDraft ? draftSteps!.length : 0,
-      activeIdx: null,
-    })
-    setStages({
-      plan: hasPlan ? "done" : "todo",
-      draft: hasDraft ? (hasProposal ? "done" : "in_progress") : "todo",
-      validate: hasProposal ? "done" : "todo",
-      inputSpec: "todo",
-      outputsSpec: "todo",
-    })
-  }, [agentRunId])
+  // Steps for graph: local overrides > proposal draft > stream draft > initial fallback > workflow
+  const stepsForGraph = React.useMemo((): WorkflowStep[] => {
+    if (localStepOverrides) return localStepOverrides
+    const proposalSteps = readDraftSteps(proposal)
+    if (proposalSteps?.length) return proposalSteps
+    if (draftStepsFromStream.length) return draftStepsFromStream
+    if (initialStepsRef.current?.length) return initialStepsRef.current
+    return workflow?.steps ?? []
+  }, [localStepOverrides, proposal, draftStepsFromStream, workflow])
 
+  // Set dirty when draft steps stream in
   React.useEffect(() => {
-    if (!agentRunId) return
-    let canceled = false
-    void (async () => {
+    if (proposal?.ok || draftStepsFromStream.length > 0) setDirty(true)
+  }, [proposal, draftStepsFromStream])
+
+  // Capture workflowId after the agent saves via tool
+  React.useEffect(() => {
+    const savedId = extractSavedWorkflowIdFromMessages(chat.messages)
+    if (!savedId) return
+    setEffectiveWorkflowId((prev) => (prev === savedId ? prev : savedId))
+    setDirty(false)
+  }, [chat.messages])
+
+  const selectedStep = React.useMemo(
+    () => (selectedStepKey ? (stepsForGraph.find((s) => s.stepKey === selectedStepKey) ?? null) : null),
+    [stepsForGraph, selectedStepKey],
+  )
+
+  const pending = chatPending
+  const stop = chat.stop
+
+  // Reset per-chat state when switching chats without a full remount
+  React.useEffect(() => {
+    const prevChatId = lastStableChatIdRef.current
+    lastStableChatIdRef.current = stableChatId
+    // On first mount, there is no previous chat to tear down.
+    if (prevChatId == null) return
+    if (prevChatId === stableChatId) return
+
+    didAutoSendRef.current = false
+    initialHandoffRef.current = null
+    claimingInitialHandoffRef.current = false
+    initialStepsRef.current = null
+    publicIdRef.current = null
+    didCanonicalRedirectRef.current = false
+    setEffectiveWorkflowId(workflowIdProp)
+    setWorkflow(null)
+    setLocalStepOverrides(null)
+    setDirty(false)
+    setSelectedStepKey(null)
+    setStepSheetOpen(false)
+    try {
+      stop()
+    } catch {
+      /* ignore */
+    }
+  }, [stableChatId, stop])
+
+  // Send message
+  const send = React.useCallback(
+    (overrideText?: string, files?: FileUIPart[]) => {
+      const text = String(overrideText ?? "").trim()
+      const fs = Array.isArray(files) ? files : []
+      if (pending) return
+      if (!text && fs.length === 0) return
+      isAtBottomRef.current = true
+      if (text) {
+        chat.sendMessage({ text, files: fs.length ? fs : undefined })
+        return
+      }
+      chat.sendMessage({ files: fs })
+    },
+    [pending, chat],
+  )
+
+  const editUserMessage = React.useCallback(
+    async (messageId: string, nextText: string, nextFiles?: FileUIPart[]) => {
+      if (pendingRef.current) return false
+      const trimmedId = String(messageId || "").trim()
+      if (!trimmedId) return false
+
+      const current = chat.messages
+      const targetIdx = current.findIndex((m) => m.id === trimmedId && m.role === "user")
+      if (targetIdx < 0) return false
+
+      const target = current[targetIdx]!
+      const preservedOtherParts = target.parts.filter((p) => p.type !== "text" && p.type !== "file")
+      const normalizedText = String(nextText ?? "")
+      const normalizedFiles = (
+        Array.isArray(nextFiles) ? nextFiles : target.parts.filter((p): p is FileUIPart => p.type === "file")
+      )
+        .map((f) => ({
+          type: "file" as const,
+          url: String(f.url || "").trim(),
+          mediaType: String(f.mediaType || "application/octet-stream"),
+          filename: typeof f.filename === "string" ? f.filename : undefined,
+        }))
+        .filter((f) => f.url.length > 0)
+      const hasFilesOrOtherParts = normalizedFiles.length > 0 || preservedOtherParts.length > 0
+      if (!normalizedText.trim() && !hasFilesOrOtherParts) return false
+
+      const rewritten: UIMessage = {
+        ...target,
+        parts: [
+          ...normalizedFiles,
+          ...(normalizedText.trim() ? ([{ type: "text", text: normalizedText }] as UIMessage["parts"]) : []),
+          ...preservedOtherParts,
+        ] as UIMessage["parts"],
+      }
+
+      isAtBottomRef.current = true
+      chat.setMessages([...current.slice(0, targetIdx), rewritten])
       try {
-        await loadAgentRun()
+        await Promise.resolve(chat.regenerate())
       } catch {
+        return false
+      }
+      return true
+    },
+    [chat],
+  )
+
+  // Optional: auto-send a server-provided initialPrompt (used by workflow edit entry points)
+  React.useEffect(() => {
+    const prompt = (initialPrompt ?? "").trim()
+    if (!prompt) return
+    if (pending) return
+    if (didAutoSendRef.current) return
+    didAutoSendRef.current = true
+    send(prompt)
+  }, [initialPrompt, pending, send])
+
+  // Landing-page handoff: claim initial send payload from DB, then auto-send once.
+  React.useEffect(() => {
+    if (!chatIdProp) return
+    if (didAutoSendRef.current) return
+    if (pending) return
+    if (chat.messages.length > 0) return
+    if (claimingInitialHandoffRef.current) return
+
+    let canceled = false
+    claimingInitialHandoffRef.current = true
+    ;(async () => {
+      try {
+        const res = await apiFetchJson<{
+          handoff?: {
+            text?: string
+            files?: Array<{ url?: string; mediaType?: string; filename?: string }>
+            idempotencyKey?: string
+          } | null
+        }>(`/api/chats/${encodeURIComponent(stableChatId)}/initial-send`, { method: "GET" })
         if (canceled) return
+        const handoff = res?.handoff
+        if (!handoff) return
+
+        const text = String(handoff.text ?? "").trim()
+        const files = (Array.isArray(handoff.files) ? handoff.files : [])
+          .map((x) => ({
+            type: "file" as const,
+            url: typeof x?.url === "string" ? x.url : "",
+            mediaType: typeof x?.mediaType === "string" ? x.mediaType : "application/octet-stream",
+            filename: typeof x?.filename === "string" ? x.filename : undefined,
+          }))
+          .filter((f) => Boolean(f.url))
+        if (!text && files.length === 0) return
+
+        didAutoSendRef.current = true
+        initialHandoffRef.current = {
+          idempotencyKey: String(handoff.idempotencyKey ?? "").trim() || crypto.randomUUID(),
+          acknowledged: false,
+        }
+        send(text, files.length ? files : undefined)
+      } catch {
+        // Best effort; no toast for silent startup handoff.
+      } finally {
+        claimingInitialHandoffRef.current = false
       }
     })()
     return () => {
       canceled = true
+      // React Strict Mode (dev) runs mount effects twice with an immediate cleanup.
+      // Release the local lock so the second effect pass can still claim+send.
+      claimingInitialHandoffRef.current = false
     }
-  }, [agentRunId, loadAgentRun])
+  }, [chatIdProp, pending, chat.messages.length, stableChatId, send])
 
-  useTopicStream({
-    topic: agentRunId ? makeStreamTopic("agentRun", agentRunId) : null,
-    enabled: !!agentRunId,
-    cursorKey: agentRunId ? `maia.agentRunCursor:${agentRunId}` : undefined,
-    persistCursor: true,
-    extraParams: streamExtraParams,
-    onMessage: () => {
-      if (!agentRunId) return
-      if (reloadTmrRef.current) window.clearTimeout(reloadTmrRef.current)
-      reloadTmrRef.current = window.setTimeout(() => void loadAgentRun().catch(() => {}), 200)
-    },
-  })
-
+  // Mark DB handoff as consumed only after the first user message exists locally.
   React.useEffect(() => {
-    listRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
-  }, [messages])
+    if (!chatIdProp) return
+    if (!initialHandoffRef.current) return
+    if (initialHandoffRef.current.acknowledged) return
+    if (chat.messages.length === 0) return
+    const hasUserMessage = chat.messages.some((m) => m.role === "user")
+    if (!hasUserMessage) return
 
-  // Also scroll when progress/proposal changes; otherwise CTA blocks rendered near the bottom
-  // (e.g. "Save / Create workflow") can appear below the fold and look "missing".
-  React.useEffect(() => {
-    listRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
-  }, [proposal, progress.phase, progress.doneCount])
+    initialHandoffRef.current.acknowledged = true
+    apiFetchJson(`/api/chats/${encodeURIComponent(stableChatId)}/initial-send`, { method: "POST" }).catch(() => {
+      if (initialHandoffRef.current) initialHandoffRef.current.acknowledged = false
+    })
+  }, [chatIdProp, chat.messages, stableChatId])
 
-  const stepsForGraph = React.useMemo((): WorkflowStep[] => {
-    if (Array.isArray(graphOverrideSteps)) return graphOverrideSteps
-    const draftSteps = readDraftSteps(proposal)
-    if (Array.isArray(draftSteps)) return draftSteps
-    return workflow?.steps ?? []
-  }, [graphOverrideSteps, proposal, workflow])
-
-  const selectedStep = React.useMemo(() => {
-    if (!selectedStepKey) return null
-    return stepsForGraph.find((s) => s.stepKey === selectedStepKey) ?? null
-  }, [stepsForGraph, selectedStepKey])
-
-  const send = React.useCallback(
-    async (overrideText?: string) => {
-      const text = String(overrideText ?? input).trim()
-      if (!text || pending) return
-
-      // Create an AgentRun and navigate to its canonical URL.
-      try {
-        const queuedToastId = toast.loading(t("workflows.orchestrator.createWorkflowQueued"))
-        const nextMsgs: UiMessage[] = [...messages, { role: "user", content: text }]
-        const res = await apiFetchJson<{ agentRunId?: string }>("/api/agent-runs", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            type: "WORKFLOW_ORCHESTRATE",
-            workflowId,
-            locale,
-            messages: nextMsgs
-              .filter((m) => m.role === "user" || m.role === "assistant")
-              .map((m) => ({ role: m.role, content: m.content })),
-          }),
-        })
-        toast.dismiss(queuedToastId)
-        const id = typeof res?.agentRunId === "string" ? String(res.agentRunId) : ""
-        if (!id) return
-        router.push(`/agent/${encodeURIComponent(id)}`)
-      } catch (e) {
-        toast.error(
-          e instanceof ApiError
-            ? tError({ t, code: e.code, fallbackKey: "common.error" })
-            : e instanceof Error
-              ? e.message
-              : String(e),
-        )
-      }
-      return
-      /*
-      setInput("")
-      setPending(true)
-      setProposal(null)
-      setPlan(null)
-      setProgress({ phase: "idle", doneCount: 0, activeIdx: null })
-      setStages({ plan: "todo", draft: "todo", validate: "todo", inputSpec: "todo", outputsSpec: "todo" })
-      setHasAssistantOutput(false)
-      setGraphOverrideSteps(null)
-      // Some models emit draft_step before update_plan / before drafting signals; buffer until we're ready.
-      const bufferedDraftSteps: WorkflowStep[] = []
-      let hasPlan = false
-      let draftingStarted = false
-      let doneCount = 0
-      let planLen = 0
-      // Tracks whether we started a follow-up CreateInputSchemaAgent request in this send.
-      // Kept for future UX (e.g. preventing premature "done" UI), but currently not used elsewhere.
-      let didStartInputSpec = false
-      let phaseLocal: AgentProgressState["phase"] = "idle"
-
-      const applyDraftStep = (step: WorkflowStep) => {
-        setDirty(true)
-        setGraphOverrideSteps((prev) => {
-          const next = Array.isArray(prev) ? [...prev] : []
-          const idx = next.findIndex((s) => s.stepKey === step.stepKey)
-          if (idx >= 0) next[idx] = { ...next[idx], ...step }
-          else next.push(step)
-          return next
-        })
-        setSelectedStepKey((prev) => prev ?? step.stepKey)
-      }
-
-      const nextMsgs: UiMessage[] = [...messages, { role: "user", content: text }, { role: "assistant", content: "" }]
-      setMessages(nextMsgs)
-
-      const queuedToastId = toast.loading(t("workflows.orchestrator.createWorkflowQueued"))
-      let dismissedQueuedToast = false
-
-      try {
-        const res = await fetch("/api/agent/workflows/stream", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            workflowId,
-            locale,
-            messages: nextMsgs
-              .slice(0, -1)
-              .filter((m) => m.role === "user" || m.role === "assistant")
-              .map((m) => ({ role: m.role, content: m.content })),
-          }),
-        })
-
-        if (!res.ok || !res.body) {
-          const j: unknown = await res.json().catch(() => ({}))
-          const code = isRecord(j) && typeof j.code === "string" ? String(j.code) : "HTTP_ERROR"
-          throw new ApiError({
-            status: res.status,
-            code,
-            meta: isRecord(j) && isRecord(j.meta) ? (j.meta as Record<string, unknown>) : undefined,
-          })
-        }
-
-        const reader = res.body.getReader()
-        const decoder = new TextDecoder()
-        let carry = ""
-        let didReceiveTerminalEvent = false
-        let didReceiveErrorEvent = false
-        let shouldStopAfterBatch = false
-
-        while (true) {
-          const { value, done } = await reader.read()
-          if (done) break
-
-          // First bytes received → backend accepted the request and started streaming.
-          if (!dismissedQueuedToast) {
-            toast.dismiss(queuedToastId)
-            dismissedQueuedToast = true
-          }
-
-          carry += decoder.decode(value, { stream: true })
-          const parsed = parseSseChunk(carry)
-          carry = parsed.rest
-
-          shouldStopAfterBatch = false
-          for (const ev of parsed.events) {
-            if (ev.event === "delta") {
-              const delta = readRecordStringField(ev.data, "delta") ?? ""
-              if (!delta) continue
-              setHasAssistantOutput(true)
-              setMessages((prev) => {
-                const copy = [...prev]
-                const lastIdx = copy.length - 1
-                if (lastIdx >= 0 && copy[lastIdx]?.role === "assistant") {
-                  copy[lastIdx] = { ...copy[lastIdx], content: (copy[lastIdx].content ?? "") + delta }
-                }
-                return copy
-              })
-            } else if (ev.event === "plan") {
-              setPlan(ev.data as PlanState)
-              // Record that a plan exists, but do NOT advance UI phase here.
-              // UI phase transitions are driven by explicit ui_signal(plan, end).
-              const steps = isRecord(ev.data) && Array.isArray(ev.data.steps) ? ev.data.steps : null
-              hasPlan = Array.isArray(steps) && steps.length > 0
-              planLen = hasPlan && steps ? steps.length : 0
-              if (hasPlan && bufferedDraftSteps.length) {
-                // Only flush when drafting has started; otherwise keep buffer to preserve correct UI timing.
-                if (draftingStarted) {
-                  for (const step of bufferedDraftSteps.splice(0, bufferedDraftSteps.length)) {
-                    applyDraftStep(step)
-                    doneCount += 1
-                    setProgress((prev) => ({
-                      phase: "drafting",
-                      doneCount: doneCount,
-                      activeIdx: doneCount < planLen ? doneCount : null,
-                    }))
-                  }
-                }
-              }
-            } else if (ev.event === "proposal") {
-              setProposal(ev.data as ProposalState)
-              // Only clear streaming override if we received a valid draft (source of truth becomes proposal.draft).
-              if (isRecord(ev.data) && ev.data.draft) {
-                setGraphOverrideSteps(null)
-                setDirty(true)
-                // Proposal with a draft is terminal for this stream; mark done and stop reading.
-                doneCount = Math.max(doneCount, planLen)
-                setProgress({ phase: "done", activeIdx: null, doneCount })
-                // If we reached a validated draft, treat validation as complete even if we miss ui(validate,end).
-                setStages((prev) => ({
-                  ...prev,
-                  plan: prev.plan === "todo" ? "done" : prev.plan,
-                  draft: prev.draft === "todo" ? "done" : prev.draft === "in_progress" ? "done" : prev.draft,
-                  validate: prev.validate === "in_progress" ? "done" : prev.validate,
-                }))
-                didReceiveTerminalEvent = true
-                shouldStopAfterBatch = true
-              }
-            } else if (ev.event === "ui") {
-              const sig = (ev.data ?? {}) as AgentUiSignal
-              if (sig.phase === "plan" && sig.state === "start") {
-                if (process.env.NODE_ENV !== "production") console.debug("[agent-ui]", "plan:start")
-                // Do not allow late plan signals to regress state after drafting has begun.
-                if (
-                  phaseLocal === "drafting" ||
-                  phaseLocal === "validating" ||
-                  phaseLocal === "inputSpec" ||
-                  draftingStarted
-                ) {
-                  setStages((prev) => ({
-                    ...prev,
-                    plan: prev.plan === "todo" ? "done" : prev.plan === "in_progress" ? "done" : prev.plan,
-                  }))
-                } else {
-                  phaseLocal = "planning"
-                  setProgress({ phase: "planning", doneCount: 0, activeIdx: null })
-                  setStages((prev) => ({ ...prev, plan: "in_progress" }))
-                }
-              }
-              if (sig.phase === "plan" && sig.state === "end") {
-                if (process.env.NODE_ENV !== "production") console.debug("[agent-ui]", "plan:end")
-                if (
-                  phaseLocal === "drafting" ||
-                  phaseLocal === "validating" ||
-                  phaseLocal === "inputSpec" ||
-                  draftingStarted
-                ) {
-                  setStages((prev) => ({ ...prev, plan: prev.plan === "todo" ? "done" : "done" }))
-                } else {
-                  phaseLocal = "planned"
-                  setProgress((prev) => ({ ...prev, phase: "planned" }))
-                  setStages((prev) => ({ ...prev, plan: "done" }))
-                }
-              }
-              if (sig.phase === "draft" && sig.state === "start") {
-                if (process.env.NODE_ENV !== "production") console.debug("[agent-ui]", "draft:start")
-                draftingStarted = true
-                doneCount = 0
-                phaseLocal = "drafting"
-                setProgress((prev) => ({
-                  phase: "drafting",
-                  doneCount: 0,
-                  activeIdx: 0,
-                }))
-                setStages((prev) => ({
-                  ...prev,
-                  // Drafting implies planning is complete (even if plan ui events are missing).
-                  plan: prev.plan === "failed" ? "failed" : "done",
-                  draft: "in_progress",
-                }))
-                // If we already have plan + buffered steps, start applying them now (keeps ordering).
-                if (hasPlan && bufferedDraftSteps.length) {
-                  for (const step of bufferedDraftSteps.splice(0, bufferedDraftSteps.length)) {
-                    applyDraftStep(step)
-                    doneCount += 1
-                    setProgress({ phase: "drafting", doneCount, activeIdx: doneCount < planLen ? doneCount : null })
-                  }
-                }
-              }
-              if (sig.phase === "draft" && sig.state === "end") {
-                if (process.env.NODE_ENV !== "production") console.debug("[agent-ui]", "draft:end")
-                // The model claims drafting is complete. In practice it may still need time to assemble and validate
-                // the final payload. Show an explicit "validating" state to avoid the "all steps done but pending" confusion.
-                phaseLocal = "validating"
-                setProgress({ phase: "validating", doneCount: Math.max(doneCount, planLen), activeIdx: null })
-                setStages((prev) => ({ ...prev, draft: "done", validate: "in_progress" }))
-              }
-              if (sig.phase === "validate" && sig.state === "start") {
-                if (process.env.NODE_ENV !== "production") console.debug("[agent-ui]", "validate:start")
-                // Steps may already be fully drafted; do NOT interpret that as "done".
-                // This phase indicates server-side validation / finalization is in progress.
-                phaseLocal = "validating"
-                setProgress({ phase: "validating", doneCount: Math.max(doneCount, planLen), activeIdx: null })
-                setStages((prev) => ({ ...prev, validate: "in_progress" }))
-              }
-              if (sig.phase === "validate" && sig.state === "end") {
-                if (process.env.NODE_ENV !== "production") console.debug("[agent-ui]", "validate:end")
-                setStages((prev) => ({ ...prev, validate: "done" }))
-              }
-              if (sig.phase === "inputSpec" && sig.state === "start") {
-                if (process.env.NODE_ENV !== "production") console.debug("[agent-ui]", "inputSpec:start")
-                phaseLocal = "inputSpec"
-                setProgress({ phase: "inputSpec", doneCount: Math.max(doneCount, planLen), activeIdx: null })
-                setStages((prev) => ({ ...prev, inputSpec: "in_progress" }))
-              }
-              if (sig.phase === "inputSpec" && sig.state === "end") {
-                setStages((prev) => ({ ...prev, inputSpec: "done" }))
-              }
-              if (sig.phase === "outputsSpec" && sig.state === "start") {
-                if (process.env.NODE_ENV !== "production") console.debug("[agent-ui]", "outputsSpec:start")
-                phaseLocal = "outputsSpec"
-                setProgress({ phase: "outputsSpec", doneCount: Math.max(doneCount, planLen), activeIdx: null })
-                setStages((prev) => ({ ...prev, outputsSpec: "in_progress" }))
-              }
-              if (sig.phase === "outputsSpec" && sig.state === "end") {
-                setStages((prev) => ({ ...prev, outputsSpec: "done" }))
-              }
-            } else if (ev.event === "draft_step") {
-              const stepRaw = isRecord(ev.data) ? ev.data.step : null
-              const step = isRecord(stepRaw) ? (stepRaw as WorkflowStep) : null
-              if (!step?.stepKey) continue
-              if (!hasPlan || !draftingStarted) {
-                bufferedDraftSteps.push(step)
-                continue
-              }
-              // Apply any buffered steps first (should be rare once draftingStarted is true).
-              for (const s of bufferedDraftSteps.splice(0, bufferedDraftSteps.length)) applyDraftStep(s)
-              applyDraftStep(step)
-              doneCount += 1
-              // If we are drafting, planning is effectively complete (even if ui(plan,end) was missing).
-              setStages((prev) => ({
-                ...prev,
-                plan: prev.plan === "failed" ? "failed" : "done",
-                draft: prev.draft === "todo" ? "in_progress" : prev.draft,
-              }))
-              setProgress((prev) => {
-                // If we're currently validating, keep that phase; only update counts.
-                if (prev.phase === "validating" || prev.phase === "inputSpec" || prev.phase === "outputsSpec") {
-                  return { ...prev, doneCount, activeIdx: null }
-                }
-                return { phase: "drafting", doneCount, activeIdx: doneCount < planLen ? doneCount : null }
-              })
-              phaseLocal = "drafting"
-              // Deterministic transition: once we have all planned steps, move to validating stage
-              // even if the model forgets to emit ui(draft,end).
-              if (planLen > 0 && doneCount >= planLen) {
-                phaseLocal = "validating"
-                setStages((prev) => ({
-                  ...prev,
-                  draft: "done",
-                  validate: prev.validate === "todo" ? "in_progress" : prev.validate,
-                }))
-                setProgress({ phase: "validating", doneCount: Math.max(doneCount, planLen), activeIdx: null })
-              }
-            } else if (ev.event === "done") {
-              // Backend has finished streaming; finalize UI state eagerly.
-              doneCount = Math.max(doneCount, planLen)
-              // If we're still generating inputSpec/outputsSpec, do not flip to done prematurely.
-              setProgress((prev) => {
-                if (prev.phase === "inputSpec" || prev.phase === "outputsSpec") return prev
-                return { phase: "done", doneCount, activeIdx: null }
-              })
-              setStages((prev) => ({
-                ...prev,
-                plan: prev.plan === "todo" ? "done" : prev.plan,
-                draft: prev.draft === "todo" ? "done" : prev.draft === "in_progress" ? "done" : prev.draft,
-                validate: prev.validate === "in_progress" ? "done" : prev.validate,
-                inputSpec: prev.inputSpec === "in_progress" ? "done" : prev.inputSpec,
-                outputsSpec: prev.outputsSpec === "in_progress" ? "done" : prev.outputsSpec,
-              }))
-              didReceiveTerminalEvent = true
-              shouldStopAfterBatch = true
-            } else if (ev.event === "error") {
-              if (!dismissedQueuedToast) {
-                toast.dismiss(queuedToastId)
-                dismissedQueuedToast = true
-              }
-              const code = readRecordStringField(ev.data, "code") ?? "AGENT_STREAM_FAILED"
-              toast.error(tError({ t, code, fallbackKey: "common.error" }))
-              didReceiveErrorEvent = true
-              setStages((prev) => {
-                // Prefer explicit validation failure routing.
-                if (code === "WORKFLOW_VALIDATION_FAILED") return { ...prev, validate: "failed" }
-                if (phaseLocal === "inputSpec") return { ...prev, inputSpec: "failed" }
-                if (phaseLocal === "outputsSpec") return { ...prev, outputsSpec: "failed" }
-                if (phaseLocal === "validating") return { ...prev, validate: "failed" }
-                if (phaseLocal === "drafting") return { ...prev, draft: "failed" }
-                if (phaseLocal === "planning" || phaseLocal === "planned") return { ...prev, plan: "failed" }
-                return prev
-              })
-            }
-          }
-
-          // IMPORTANT: do not abort mid-batch; otherwise we can miss ui(validate,end) / done emitted right after proposal.
-          if (shouldStopAfterBatch) {
-            try {
-              await reader.cancel()
-            } catch {}
-            break
-          }
-        }
-
-        // If the stream ends without an explicit terminal event, do NOT mark the whole plan as done.
-        // This can happen due to network issues, model truncation, or server-side limits.
-        if (!didReceiveTerminalEvent) {
-          const isPartial = planLen > 0 && doneCount < planLen
-          setProgress((prev) => {
-            // If we never entered drafting, keep "planned"; otherwise keep "drafting".
-            if (prev.phase === "drafting")
-              return { phase: "drafting", doneCount, activeIdx: doneCount < planLen ? doneCount : null }
-            if (prev.phase === "planned" || prev.phase === "planning") return { ...prev, doneCount: 0, activeIdx: null }
-            return prev
-          })
-          if (!didReceiveErrorEvent && isPartial) {
-            toast.error(t("workflows.orchestrator.streamEndedEarly", { done: doneCount, total: planLen }))
-          }
-        }
-      } catch (e) {
-        if (!dismissedQueuedToast) toast.dismiss(queuedToastId)
-        toast.error(
-          e instanceof ApiError
-            ? tError({ t, code: e.code, fallbackKey: "common.error" })
-            : e instanceof Error
-              ? e.message
-              : String(e),
-        )
-      } finally {
-        setPending(false)
-        // Do not force "done" here; keep progress truthful and let explicit `done`/`proposal` events
-        // drive the terminal state. This prevents "phantom completion" for partial drafts.
-      }
-      */
-    },
-    [agentRunId, input, pending, messages, workflowId, locale, t, plan, stepsForGraph],
-  )
-
-  // Auto-send prompt exactly once.
-  // - Prefer `initialPrompt` (dialog/modal flows; do not touch URL)
-  // - Otherwise use `?prompt=` and then clean the URL (page flows)
-  const didAutoSendRef = React.useRef(false)
-  React.useEffect(() => {
-    if (didAutoSendRef.current) return
-    const prompt = (initialPrompt ?? promptFromUrl ?? promptFromSessionStorage)?.trim()
-    if (!prompt) return
-    if (pending) return
-    didAutoSendRef.current = true
-    const shouldCleanUrl = !initialPrompt && Boolean(promptFromUrl)
-    void send(prompt)
-    if (shouldCleanUrl) {
-      const basePath = workflowId ? `/workflows/${workflowId}/agent` : "/agent"
-      router.replace(basePath)
-    }
-  }, [initialPrompt, promptFromUrl, promptFromSessionStorage, workflowId, pending, router, send])
-
+  // Save workflow from current state
   const saveFromCurrentState = React.useCallback(
     async (opts?: { redirect?: boolean }) => {
-      const redirect = opts?.redirect ?? true
+      const redirect = opts?.redirect ?? false
       if (saving) return false
       setSaving(true)
       let didRedirect = false
@@ -757,9 +532,9 @@ export function useWorkflowAgentSession(params: {
           steps: stepsForGraph,
         }
 
-        const isUpdate = Boolean(workflowId)
+        const isUpdate = Boolean(effectiveWorkflowId)
         const json = await apiFetchJson<{ workflow?: { id?: string } }>(
-          isUpdate ? `/api/workflows/${workflowId}` : "/api/workflows",
+          isUpdate ? `/api/workflows/${effectiveWorkflowId}` : "/api/workflows",
           {
             method: isUpdate ? "PUT" : "POST",
             headers: { "Content-Type": "application/json" },
@@ -767,9 +542,11 @@ export function useWorkflowAgentSession(params: {
           },
         )
 
-        const id = isUpdate ? workflowId : typeof json?.workflow?.id === "string" ? json.workflow.id : null
+        const id = isUpdate ? effectiveWorkflowId : typeof json?.workflow?.id === "string" ? json.workflow.id : null
+        if (id && !effectiveWorkflowId) setEffectiveWorkflowId(id)
         setDirty(false)
         toast.success(t("common.saved"))
+
         if (redirect && id) {
           didRedirect = true
           router.push(`/workflows/${id}`)
@@ -785,48 +562,24 @@ export function useWorkflowAgentSession(params: {
         )
         return false
       } finally {
-        // If we're navigating away, keep UI disabled until the new page loads.
         if (!didRedirect) setSaving(false)
       }
     },
-    [saving, proposal, workflow, stepsForGraph, workflowId, locale, t],
+    [saving, proposal, workflow, stepsForGraph, effectiveWorkflowId, locale, t, router],
   )
-
-  const resetChat = React.useCallback(() => {
-    setMessages([])
-    setPlan(null)
-    setProposal(null)
-    setInput("")
-    setSelectedStepKey(null)
-    setStepSheetOpen(false)
-    setGraphOverrideSteps([])
-    setDirty(false)
-  }, [])
 
   const updateDraftStep = React.useCallback(
     (stepKey: string, patch: Partial<WorkflowStep>) => {
       const nextSteps = stepsForGraph.map((s) => (s.stepKey === stepKey ? { ...s, ...patch } : s))
       setDirty(true)
-      setProposal((prev) => {
-        if (!prev) return prev
-        const draft = isRecord(prev.draft) ? (prev.draft as Record<string, unknown>) : null
-        if (!draft || !Array.isArray(draft.steps)) return prev
-        return { ...prev, draft: { ...draft, steps: nextSteps } }
-      })
-      setWorkflow((prev) => {
-        if (!prev) return prev
-        const showingDraft = Array.isArray(readDraftSteps(proposal))
-        if (showingDraft) return prev
-        return { ...prev, steps: nextSteps }
-      })
+      setLocalStepOverrides(nextSteps)
     },
-    [stepsForGraph, proposal],
+    [stepsForGraph],
   )
 
   const renameDraftStepKey = React.useCallback(
     (oldKey: string, nextKey: string) => {
-      if (!nextKey) return
-      if (nextKey === oldKey) return
+      if (!nextKey || nextKey === oldKey) return
       if (stepsForGraph.some((s) => s.stepKey === nextKey)) return
       const nextSteps = stepsForGraph.map((s) => {
         if (s.stepKey === oldKey) return { ...s, stepKey: nextKey }
@@ -836,35 +589,31 @@ export function useWorkflowAgentSession(params: {
       })
       setDirty(true)
       setSelectedStepKey(nextKey)
-      setProposal((prev) => {
-        if (!prev) return prev
-        const draft = isRecord(prev.draft) ? (prev.draft as Record<string, unknown>) : null
-        if (!draft || !Array.isArray(draft.steps)) return prev
-        return { ...prev, draft: { ...draft, steps: nextSteps } }
-      })
-      setWorkflow((prev) => {
-        if (!prev) return prev
-        const showingDraft = Array.isArray(readDraftSteps(proposal))
-        if (showingDraft) return prev
-        return { ...prev, steps: nextSteps }
-      })
+      setLocalStepOverrides(nextSteps)
     },
-    [stepsForGraph, proposal],
+    [stepsForGraph],
   )
 
   return {
-    // refs used by UI
+    chatId: stableChatId,
     listRef,
+    scrollContainerRef,
     inputRef,
-
-    // editor config
     monacoTheme,
+    model,
+    setModel,
 
-    // workflow panel
+    // AI SDK chat state (standard)
+    messages: chat.messages,
+    status: chat.status,
+    error: chat.error,
+    stop: chat.stop,
+
+    // Workflow panel
     workflow,
     workflowLoading,
     stepsForGraph,
-    draftStepsProgress: Array.isArray(graphOverrideSteps) ? graphOverrideSteps : null,
+    draftStepsFromStream,
     isDirty: dirty,
     selectedStepKey,
     setSelectedStepKey,
@@ -872,23 +621,20 @@ export function useWorkflowAgentSession(params: {
     stepSheetOpen,
     setStepSheetOpen,
 
-    // chat session
-    messages,
-    proposal,
+    // Derived orchestrator state
     plan,
-    progress,
-    stages,
-    hasAssistantOutput,
-    agentRunError,
-    input,
-    setInput: (v: string) => setInput(v),
+    proposal,
     pending,
+    stageStatus,
     saving,
 
+    // Actions
     send,
+    sendMessage: chat.sendMessage,
     saveFromCurrentState,
-    resetChat,
     updateDraftStep,
     renameDraftStepKey,
+    editUserMessage,
+    addToolApprovalResponse: chat.addToolApprovalResponse,
   }
 }

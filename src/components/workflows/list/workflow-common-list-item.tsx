@@ -318,7 +318,7 @@ export function WorkflowCommonListItem(props: {
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem asChild>
-            <Link href={`/workflows/${w.id}/agent`} className="cursor-pointer">
+            <Link href={`/agent?workflowId=${encodeURIComponent(w.id)}`} className="cursor-pointer">
               <GradientBotIcon className="size-4 shrink-0" />
               <span className="bg-gradient-to-r from-fuchsia-500 via-violet-500 to-cyan-500 bg-clip-text text-transparent">
                 {t("workflows.aiOrchestrateAction")}

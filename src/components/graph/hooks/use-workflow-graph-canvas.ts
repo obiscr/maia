@@ -65,12 +65,16 @@ type CanvasContextMenuState = null | { kind: "edge"; source: string; target: str
 
 function buildEdges(steps: WorkflowGraphStep[]): Edge[] {
   const byKey = new Set(steps.map((s) => s.stepKey))
+  const seen = new Set<string>()
   const edges: Edge[] = []
   for (const s of steps) {
-    for (const d of s.deps ?? []) {
+    for (const d of new Set(s.deps ?? [])) {
       if (!byKey.has(d)) continue
+      const edgeId = `${d}->${s.stepKey}`
+      if (seen.has(edgeId)) continue
+      seen.add(edgeId)
       edges.push({
-        id: `${d}->${s.stepKey}`,
+        id: edgeId,
         source: d,
         target: s.stepKey,
         type: "smoothstep",

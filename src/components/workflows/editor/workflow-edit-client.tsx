@@ -581,7 +581,7 @@ export default function WorkflowEditClient({ workflowId }: { workflowId: string 
                 headerLeft={
                   <div className="flex flex-wrap items-center gap-2">
                     <AgentButton asChild size="sm">
-                      <Link href={`/workflows/${workflowId}/agent`}>
+                      <Link href={`/agent?workflowId=${encodeURIComponent(workflowId)}`}>
                         <Bot className="size-4" />
                         {t("workflows.aiOrchestrateAction")}
                       </Link>
@@ -843,7 +843,7 @@ export default function WorkflowEditClient({ workflowId }: { workflowId: string 
                 headerLeft={
                   <div className="flex flex-wrap items-center gap-2">
                     <AgentButton asChild size="sm">
-                      <Link href={`/workflows/${workflowId}/agent`}>
+                      <Link href={`/agent?workflowId=${encodeURIComponent(workflowId)}`}>
                         <Bot className="size-4" />
                         {t("workflows.aiOrchestrateAction")}
                       </Link>

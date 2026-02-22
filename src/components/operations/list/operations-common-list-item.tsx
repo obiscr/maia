@@ -43,6 +43,7 @@ export type OperationsListItemModel = {
   id: string
   status: string
   action: string
+  source?: string | null
   targetType?: string | null
   targetId?: string | null
   scope?: string | null
@@ -163,6 +164,7 @@ export function OperationsCommonListItem(props: {
   const requestId = op.audit?.requestId ? String(op.audit.requestId) : null
   const actor = op.audit?.actor ? String(op.audit.actor) : null
   const tenantId = op.audit?.tenantId ? String(op.audit.tenantId) : null
+  const source = op.source ? String(op.source) : null
 
   const metaItems = React.useMemo((): InlineItemRowItem[] => {
     const items: InlineItemRowItem[] = []
@@ -173,6 +175,13 @@ export function OperationsCommonListItem(props: {
         title: "Tenant",
         Icon: Building2,
         text: <span className="truncate">{tenantId}</span>,
+      })
+    if (source)
+      items.push({
+        key: "source",
+        title: "Source",
+        Icon: Activity,
+        text: <span className="truncate font-mono text-[11px] text-muted-foreground">{source}</span>,
       })
     if (responseStatus != null) {
       items.push({
@@ -193,7 +202,7 @@ export function OperationsCommonListItem(props: {
       })
     }
     return items
-  }, [actor, displayErrorCode, errorMessage, responseStatus, showErrorBadge, tenantId])
+  }, [actor, displayErrorCode, errorMessage, responseStatus, showErrorBadge, source, tenantId])
 
   const targetIcon = (() => {
     if (!targetType) return Activity

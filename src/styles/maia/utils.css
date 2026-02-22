@@ -25,4 +25,13 @@
     object-fit: cover;
     display: block;
   }
+
+  /* Hide scrollbars but keep scrolling enabled (cross-browser). */
+  .u-scrollbar-hidden {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge legacy */
+  }
+  .u-scrollbar-hidden::-webkit-scrollbar {
+    display: none; /* Chrome/Safari */
+  }
 }

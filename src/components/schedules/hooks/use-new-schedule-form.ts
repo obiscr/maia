@@ -31,7 +31,7 @@ export function useNewScheduleForm(params: { t: (key: string, vars?: Record<stri
   const [workflowId, _setWorkflowId] = useState<string>("")
   const [name, setName] = useState<string>("")
   const [kind, setKind] = useState<"CRON" | "INTERVAL">("CRON")
-  const [cron, setCron] = useState<string>("0 * * * *")
+  const [cron, setCron] = useState<string>("")
   const [timezone, setTimezone] = useState<string>("UTC")
   const [intervalMs, setIntervalMs] = useState<number>(60_000)
   const [misfirePolicy, setMisfirePolicy] = useState<"SKIP" | "FIRE_ONCE" | "CATCH_UP">("FIRE_ONCE")
@@ -162,7 +162,15 @@ export function useNewScheduleForm(params: { t: (key: string, vars?: Record<stri
   const workflowHasSteps =
     typeof workflowStepCount === "number" && Number.isFinite(workflowStepCount) && workflowStepCount > 0
   const canSubmit =
-    !!workflowId && !submitting && inputJsonOk && requiredOk && clientValidationIssues.length === 0 && workflowHasSteps
+    !!workflowId &&
+    !submitting &&
+    inputJsonOk &&
+    requiredOk &&
+    clientValidationIssues.length === 0 &&
+    workflowHasSteps &&
+    (kind === "CRON"
+      ? cron.trim().length > 0 && timezone.trim().length > 0
+      : Number.isFinite(intervalMs) && intervalMs >= 1000)
 
   function setInputJsonRaw(v: string) {
     setInputTouched(true)

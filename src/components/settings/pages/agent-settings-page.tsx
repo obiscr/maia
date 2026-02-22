@@ -25,20 +25,18 @@ import { apiFetchJson } from "@/lib/shared/http/api"
 import { tApiError } from "@/lib/shared/i18n/error"
 import { toast } from "@/lib/client/toast"
 import { SettingsFormSkeleton } from "@/components/settings/settings-skeletons"
+import { AVAILABLE_MODELS, groupModelsByProvider } from "@/lib/shared/models"
 
 type AgentSettingsStatus = {
   apiKeyConfigured: boolean
   model: string
 }
 
-type ModelInfo = { id: string; name: string; provider: string }
-
 type AgentSettingsResponse = {
   settings: AgentSettingsStatus
-  models: ModelInfo[]
 }
 
-const DEFAULTS: AgentSettingsStatus = { apiKeyConfigured: false, model: "openai/gpt-5.2-codex" }
+const DEFAULTS: AgentSettingsStatus = { apiKeyConfigured: false, model: "anthropic/claude-opus-4.6" }
 
 export default function AgentSettingsPage() {
   const { t } = useI18n()
@@ -50,7 +48,6 @@ export default function AgentSettingsPage() {
   const [apiKeyClearRequested, setApiKeyClearRequested] = useState(false)
   const [model, setModel] = useState(DEFAULTS.model)
   const [showKey, setShowKey] = useState(false)
-  const [availableModels, setAvailableModels] = useState<ModelInfo[]>([])
 
   useEffect(() => {
     let cancelled = false
@@ -71,7 +68,6 @@ export default function AgentSettingsPage() {
         setLastSavedApiKeyDraft("")
         setApiKeyClearRequested(false)
         setModel(s.model)
-        setAvailableModels(json.models ?? [])
       } catch {
         if (!cancelled) toast.error(t("common.loadFailed"))
       } finally {
@@ -86,30 +82,7 @@ export default function AgentSettingsPage() {
 
   const dirty = model !== initial.model || apiKeyClearRequested || apiKeyDraft.trim() !== lastSavedApiKeyDraft
 
-  const groupedModels = useMemo(() => {
-    const currentModel = String(model ?? "").trim()
-    const models = availableModels.slice()
-
-    if (currentModel && !models.some((m) => m.id === currentModel)) {
-      models.unshift({ id: currentModel, name: currentModel, provider: "Custom" })
-    }
-
-    const byProvider = new Map<string, ModelInfo[]>()
-    const providerOrder: string[] = []
-    for (const m of models) {
-      const provider = String(m.provider ?? "").trim() || "Other"
-      if (!byProvider.has(provider)) {
-        byProvider.set(provider, [])
-        providerOrder.push(provider)
-      }
-      byProvider.get(provider)!.push(m)
-    }
-
-    return providerOrder.map((provider) => ({
-      provider,
-      models: byProvider.get(provider)!,
-    }))
-  }, [availableModels, model])
+  const groupedModels = useMemo(() => groupModelsByProvider(AVAILABLE_MODELS, model), [model])
 
   async function save() {
     if (saving) return
@@ -139,7 +112,6 @@ export default function AgentSettingsPage() {
       setLastSavedApiKeyDraft("")
       setApiKeyClearRequested(false)
       setModel(s.model)
-      setAvailableModels(json.models ?? availableModels)
       toast.success(t("common.saved"))
     } catch (e) {
       toast.error(tApiError({ t, err: e, fallbackKey: "settings.agent.saveFailed" }))

@@ -3,65 +3,323 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { ArrowUp, Bot, Pencil, Plus, Save, Trash2Icon } from "lucide-react"
+import { Bot, History, Pencil, Plus, Save, Trash2Icon } from "lucide-react"
+import type { UIMessage } from "ai"
 
 import { useI18n } from "@/components/i18n-provider"
-import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "@/components/ui/input-group"
+import { PromptComposer } from "@/components/agent/prompt-composer"
 import { cn } from "@/lib/utils"
-import { ChatMarkdown } from "@/components/common/markdown/chat-markdown"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Card } from "@/components/ui/card"
 import { SectionCard } from "@/components/common/section-card"
 import { WorkflowGraphCanvasWrapper } from "@/components/graph/workflow-graph-canvas-wrapper"
 import { useWorkflowAgentSession } from "@/components/workflows/agent/use-workflow-agent-session"
-import { WorkflowAgentProgressCompact } from "@/components/workflows/agent/workflow-agent-progress-compact"
 import { setupMaiaMonaco, maiaMonacoOptions } from "@/lib/client/monaco"
 import { StandardActionDialog } from "@/components/common/standard-action-dialog"
 import { WorkflowQuickExamples } from "@/components/workflows/common/workflow-quick-examples"
-import { WorkflowAgentStageCard } from "@/components/workflows/agent/workflow-agent-stage-card"
 import { MaiaMonacoEditor } from "@/components/common/maia-monaco-editor"
 import { StandardPageHeader } from "@/components/common/standard-page-header"
 import { DetailPageLayout } from "@/components/common/detail-page-layout"
 import { useIsMobile } from "@/hooks/use-mobile"
-import { ErrorAlert } from "@/components/common/error-alert"
-import { resolveAgentRunDisplayError } from "@/lib/shared/error-display/adapters/agent-run"
+import { toast } from "@/lib/client/toast"
+import { HeaderActions } from "@/components/common/header-actions"
+import { MessageParts } from "@/components/workflows/agent/message-parts"
+import { ImagePreviewDialog, type ImagePreviewItem } from "@/components/workflows/agent/image-preview-dialog"
+import { UserMessage } from "@/components/workflows/agent/user-message"
+import { AVAILABLE_MODELS, groupModelsByProvider } from "@/lib/shared/models"
+import { apiFetchJson } from "@/lib/shared/http/api"
+import { tApiError } from "@/lib/shared/i18n/error"
+import { ChatHistorySheet, type ChatHistoryItem } from "@/components/workflows/agent/chat-history-sheet"
 
-export default function WorkflowAgentClient(props: { agentRunId?: string | null; workflowId?: string }) {
+// ---------------------------------------------------------------------------
+// Message rendering
+// ---------------------------------------------------------------------------
+
+type FileUIPart = Extract<UIMessage["parts"][number], { type: "file" }>
+type UploadedChatImage = { url: string; mediaType: string; filename?: string }
+type GraphStep = { stepKey: string; name: string; deps: string[] }
+type OrchestratorProgress = {
+  plan?: { title?: string | null; steps?: Array<{ name: string; description: string }> } | null
+  draftStepsCount: number
+  done: boolean
+} | null
+
+const GRAPH_CONTROLS = { interaction: false, layout: true, fit: true, zoom: true } as const
+const CHAT_HISTORY_PAGE_SIZE = 20
+type AgentSettingsResponse = {
+  settings: { apiKeyConfigured: boolean; model: string }
+}
+
+async function uploadChatImages(params: {
+  chatId: string
+  files: File[]
+  signal?: AbortSignal
+}): Promise<UploadedChatImage[]> {
+  const picked = (Array.isArray(params.files) ? params.files : []).filter((f) =>
+    String(f.type || "")
+      .toLowerCase()
+      .startsWith("image/"),
+  )
+  if (!picked.length) return []
+  const fd = new FormData()
+  for (const f of picked) fd.append("files", f)
+  const res = await fetch(`/api/chats/${encodeURIComponent(params.chatId)}/attachments`, {
+    method: "POST",
+    body: fd,
+    signal: params.signal,
+  })
+  const json = await res.json().catch(() => null)
+  if (!res.ok) {
+    throw new Error(typeof json?.code === "string" ? json.code : `HTTP ${res.status}`)
+  }
+  const returned: Array<{ url?: string; mediaType?: string; filename?: string }> = Array.isArray(json?.files)
+    ? json.files
+    : []
+  const out: UploadedChatImage[] = []
+  for (const r of returned) {
+    const url = typeof r.url === "string" ? r.url : ""
+    if (!url) continue
+    out.push({
+      url,
+      mediaType: typeof r.mediaType === "string" && r.mediaType ? r.mediaType : "application/octet-stream",
+      filename: typeof r.filename === "string" && r.filename ? r.filename : undefined,
+    })
+  }
+  return out
+}
+
+const GraphCanvas = React.memo(function GraphCanvas(props: {
+  workflowId?: string
+  steps: GraphStep[]
+  onEditStep: (stepKey: string) => void
+  className?: string
+}) {
+  return (
+    <WorkflowGraphCanvasWrapper
+      mode="view"
+      frame={false}
+      workflowId={props.workflowId}
+      forceAutoFit
+      showLayoutMenu={!!props.workflowId}
+      allowCustomLayout={!!props.workflowId}
+      showLayoutReset={false}
+      controls={GRAPH_CONTROLS}
+      steps={props.steps}
+      onEditStep={props.onEditStep}
+      className={props.className}
+    />
+  )
+})
+
+const ChatMessageRow = React.memo(function ChatMessageRow(props: {
+  message: UIMessage
+  pending: boolean
+  isStreaming?: boolean
+  isLive?: boolean
+  t: (k: string) => string
+  model: string
+  groupedModels: Array<{ provider: string; models: Array<{ id: string; name: string; provider: string }> }>
+  onModelChange: (model: string) => void
+  onOpenImagePreview: (item: ImagePreviewItem) => void
+  orchestratorProgress: OrchestratorProgress
+  onEditUserMessage: (
+    messageId: string,
+    text: string,
+    files: FileUIPart[],
+    removedFiles: FileUIPart[],
+  ) => Promise<boolean>
+  onPickImagesForEdit: (files: File[]) => Promise<FileUIPart[]>
+  onToolApprovalResponse: (input: { id: string; approved: boolean; reason?: string }) => void
+}) {
+  const { message, t } = props
+  const isUser = message.role === "user"
+
+  if (!isUser) {
+    return (
+      <div>
+        <MessageParts
+          message={message}
+          isStreaming={Boolean(props.isStreaming)}
+          isLast={Boolean(props.isLive)}
+          t={t}
+          onToolApprovalResponse={props.onToolApprovalResponse}
+          orchestratorProgress={props.isLive ? props.orchestratorProgress : null}
+        />
+      </div>
+    )
+  }
+
+  return (
+    <UserMessage
+      message={message}
+      t={t}
+      pending={props.pending || Boolean(props.isStreaming)}
+      model={props.model}
+      groupedModels={props.groupedModels}
+      onModelChange={props.onModelChange}
+      onOpenImagePreview={props.onOpenImagePreview}
+      onEditMessage={props.onEditUserMessage}
+      onPickImages={props.onPickImagesForEdit}
+    />
+  )
+})
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
+export default function WorkflowAgentClient(props: {
+  chatId?: string | null
+  workflowId?: string
+  initialModel?: string
+  initialMessages?: UIMessage[]
+  initialPrompt?: string
+}) {
   const { t, locale } = useI18n()
   const router = useRouter()
   const isMobile = useIsMobile()
   const workflowId = props.workflowId
-  const session = useWorkflowAgentSession({ agentRunId: props.agentRunId ?? null, workflowId, locale, t })
+  const session = useWorkflowAgentSession({
+    chatId: props.chatId ?? null,
+    workflowId,
+    locale,
+    t,
+    initialPrompt: props.initialPrompt,
+    initialMessages: props.initialMessages,
+    initialModel: props.initialModel,
+  })
   const selectedStep = session.selectedStep
   const stepKeyInputId = React.useId()
   const stepNameInputId = React.useId()
   const stepTimeoutInputId = React.useId()
   const [newChatConfirmOpen, setNewChatConfirmOpen] = React.useState(false)
+  const [chatHistoryOpen, setChatHistoryOpen] = React.useState(false)
+  const [chatHistoryItems, setChatHistoryItems] = React.useState<ChatHistoryItem[]>([])
+  const [chatHistoryLoading, setChatHistoryLoading] = React.useState(false)
+  const [chatHistoryLoadingMore, setChatHistoryLoadingMore] = React.useState(false)
+  const [chatHistoryOffset, setChatHistoryOffset] = React.useState(0)
+  const [chatHistoryHasMore, setChatHistoryHasMore] = React.useState(true)
   const [mobileTab, setMobileTab] = React.useState<"chat" | "canvas">("chat")
+  const [composerValue, setComposerValue] = React.useState("")
+  const [modelsLoading, setModelsLoading] = React.useState(() => !String(props.initialModel ?? "").trim())
 
   const composerTextareaRef = React.useRef<HTMLTextAreaElement | null>(null)
-  const [composerExpanded, setComposerExpanded] = React.useState(false)
 
-  // Product-y behavior:
-  // - Default height is compact (2 grid rows).
-  // - If content starts to exceed the compact size (newline/wrap overflow), expand to 3 rows.
-  // - Collapse back only when cleared (avoids oscillation).
+  const groupedModels = React.useMemo(() => groupModelsByProvider(AVAILABLE_MODELS, session.model), [session.model])
+
   React.useEffect(() => {
-    const trimmed = session.input.trim()
-    if (!trimmed) {
-      if (composerExpanded) setComposerExpanded(false)
+    if (String(props.initialModel ?? "").trim()) {
+      setModelsLoading(false)
       return
     }
-    if (!composerExpanded && session.input.includes("\n")) {
-      setComposerExpanded(true)
+    let cancelled = false
+    async function loadAgentSettings() {
+      try {
+        const json = await apiFetchJson<AgentSettingsResponse>("/api/settings/agent", { method: "GET" })
+        if (cancelled) return
+        const m = String(json?.settings?.model ?? "").trim()
+        if (m) session.setModel(m)
+      } catch {
+        // ignore – chat/session already has a fallback model
+      } finally {
+        if (!cancelled) setModelsLoading(false)
+      }
     }
-  }, [session.input, composerExpanded])
+    void loadAgentSettings()
+    return () => {
+      cancelled = true
+    }
+  }, [props.initialModel, session.setModel])
+
+  type ComposerAttachment = {
+    id: string
+    filename: string
+    mediaType: string
+    previewUrl: string
+    uploading: boolean
+    uploadedUrl?: string
+    error?: string
+    abort?: AbortController
+  }
+  const [composerAttachments, setComposerAttachments] = React.useState<ComposerAttachment[]>([])
+  const composerAttachmentsRef = React.useRef<ComposerAttachment[]>([])
+  React.useEffect(() => {
+    composerAttachmentsRef.current = composerAttachments
+  }, [composerAttachments])
+
+  React.useEffect(() => {
+    return () => {
+      for (const a of composerAttachmentsRef.current) {
+        try {
+          URL.revokeObjectURL(a.previewUrl)
+        } catch {}
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const anyUploading = composerAttachments.some((a) => a.uploading)
+  const anyFailed = composerAttachments.some((a) => a.error)
+
+  const [imagePreview, setImagePreview] = React.useState<ImagePreviewItem | null>(null)
+  const closePreview = React.useCallback(() => setImagePreview(null), [])
+  const openPreviewSingle = React.useCallback((item: ImagePreviewItem) => setImagePreview(item), [])
+
+  const onDownloadPreview = React.useCallback(() => {
+    const it = imagePreview
+    if (!it) return
+    const a = document.createElement("a")
+    a.href = it.src
+    a.download = it.filename || "image"
+    a.rel = "noreferrer"
+    a.click()
+  }, [imagePreview])
+
+  const onOpenPreviewInNewTab = React.useCallback(() => {
+    const it = imagePreview
+    if (!it) return
+    window.open(it.src, "_blank", "noreferrer")
+  }, [imagePreview])
+
+  const onCopyPreview = React.useCallback(async () => {
+    const it = imagePreview
+    if (!it) return
+
+    // Prefer copying the image data when supported; fall back to copying the URL.
+    try {
+      const clipboard = navigator.clipboard as unknown as {
+        write?: (items: unknown[]) => Promise<void>
+        writeText?: (text: string) => Promise<void>
+      }
+      const hasClipboardItem =
+        typeof (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem !== "undefined"
+      if (clipboard?.write && hasClipboardItem) {
+        const res = await fetch(it.src)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const blob = await res.blob()
+        const type = blob.type || it.mediaType || "image/png"
+        const ClipboardItemCtor = (
+          globalThis as unknown as { ClipboardItem: new (data: Record<string, Blob>) => unknown }
+        ).ClipboardItem
+        await clipboard.write([new ClipboardItemCtor({ [type]: blob })])
+        toast.success(t("common.copied"))
+        return
+      }
+      if (clipboard?.writeText) {
+        await clipboard.writeText(it.src)
+        toast.success(t("common.copied"))
+        return
+      }
+      throw new Error("Clipboard unavailable")
+    } catch {
+      toast.error(t("common.copyActionFailed"))
+    }
+  }, [imagePreview, t])
 
   const setComposerRef = React.useCallback(
     (node: HTMLTextAreaElement | null) => {
@@ -71,10 +329,7 @@ export default function WorkflowAgentClient(props: { agentRunId?: string | null;
     [session.inputRef],
   )
 
-  const startNewChat = React.useCallback(() => {
-    router.push("/agent")
-  }, [router])
-
+  const startNewChat = React.useCallback(() => router.push("/agent"), [router])
   const onNewChatClick = React.useCallback(() => {
     if (session.pending || session.saving) return
     if (session.isDirty) {
@@ -84,24 +339,456 @@ export default function WorkflowAgentClient(props: { agentRunId?: string | null;
     startNewChat()
   }, [session.pending, session.saving, session.isDirty, startNewChat])
 
+  const loadChatHistory = React.useCallback(
+    async (reset: boolean) => {
+      if (reset) setChatHistoryLoading(true)
+      else setChatHistoryLoadingMore(true)
+      try {
+        const offset = reset ? 0 : chatHistoryOffset
+        const json = await apiFetchJson<{
+          items?: Array<{
+            id?: string
+            publicId?: string
+            title?: string
+            createdAt?: string
+            updatedAt?: string
+          }>
+          nextOffset?: number
+          hasMore?: boolean
+        }>(`/api/chats?limit=${CHAT_HISTORY_PAGE_SIZE}&offset=${offset}`, { cache: "no-store" })
+
+        const incoming = (Array.isArray(json?.items) ? json.items : [])
+          .map((it) => ({
+            id: String(it?.id ?? ""),
+            publicId: String(it?.publicId ?? ""),
+            title: String(it?.title ?? ""),
+            createdAt: String(it?.createdAt ?? ""),
+            updatedAt: String(it?.updatedAt ?? ""),
+          }))
+          .filter((it) => it.id && it.publicId)
+
+        setChatHistoryItems((prev) => (reset ? incoming : [...prev, ...incoming]))
+        setChatHistoryOffset(
+          typeof json?.nextOffset === "number" && Number.isFinite(json.nextOffset)
+            ? json.nextOffset
+            : offset + incoming.length,
+        )
+        setChatHistoryHasMore(Boolean(json?.hasMore))
+      } catch (e) {
+        toast.error(tApiError({ t, err: e, fallbackKey: "common.loadFailed" }))
+      } finally {
+        if (reset) setChatHistoryLoading(false)
+        else setChatHistoryLoadingMore(false)
+      }
+    },
+    [chatHistoryOffset, t],
+  )
+
+  const onOpenHistorySheet = React.useCallback(() => {
+    setChatHistoryOpen(true)
+    if (!chatHistoryItems.length && !chatHistoryLoading) {
+      void loadChatHistory(true)
+    }
+  }, [chatHistoryItems.length, chatHistoryLoading, loadChatHistory])
+
+  const onOpenHistoryChat = React.useCallback(
+    (chatPublicId: string) => {
+      setChatHistoryOpen(false)
+      router.push(`/agent/${encodeURIComponent(chatPublicId)}`)
+    },
+    [router],
+  )
+
+  const onRenameHistoryChat = React.useCallback(async (chatId: string, title: string) => {
+    await apiFetchJson(`/api/chats/${encodeURIComponent(chatId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    })
+    setChatHistoryItems((prev) =>
+      prev.map((it) => (it.id === chatId ? { ...it, title, updatedAt: new Date().toISOString() } : it)),
+    )
+  }, [])
+
+  const onDeleteHistoryChat = React.useCallback(async (chatId: string) => {
+    await apiFetchJson(`/api/chats/${encodeURIComponent(chatId)}`, { method: "DELETE" })
+    setChatHistoryItems((prev) => prev.filter((it) => it.id !== chatId))
+    setChatHistoryOffset((prev) => Math.max(0, prev - 1))
+  }, [])
+
+  const onSend = React.useCallback(() => {
+    const text = composerValue.trim()
+    if (session.pending) return
+    if (anyUploading) {
+      toast.error(t("workflows.orchestrator.attachments.uploadingToast"))
+      return
+    }
+    if (anyFailed) {
+      toast.error(t("workflows.orchestrator.attachments.removeFailedToast"))
+      return
+    }
+    const files: FileUIPart[] = composerAttachments
+      .map((a) =>
+        a.uploadedUrl
+          ? ({
+              type: "file",
+              url: a.uploadedUrl,
+              mediaType: a.mediaType,
+              filename: a.filename,
+            } as FileUIPart)
+          : null,
+      )
+      .filter((x): x is FileUIPart => Boolean(x))
+
+    if (!text && files.length === 0) return
+    session.send(text, files)
+    setComposerValue("")
+    setComposerAttachments((prev) => {
+      for (const a of prev) {
+        try {
+          URL.revokeObjectURL(a.previewUrl)
+        } catch {}
+      }
+      return []
+    })
+  }, [composerValue, session, composerAttachments, anyUploading, anyFailed, t])
+
+  const uploadPickedImages = React.useCallback(
+    async (files: File[]) => {
+      const toAdd = (Array.isArray(files) ? files : []).filter((f) =>
+        String(f.type || "")
+          .toLowerCase()
+          .startsWith("image/"),
+      )
+      if (!toAdd.length) return
+
+      const abort = new AbortController()
+      const newOnes: ComposerAttachment[] = toAdd.map((f) => ({
+        id: crypto.randomUUID(),
+        filename: f.name || t("workflows.orchestrator.attachments.fallbackImageName"),
+        mediaType: f.type || "application/octet-stream",
+        previewUrl: URL.createObjectURL(f),
+        uploading: true,
+        abort,
+      }))
+
+      setComposerAttachments((prev) => [...prev, ...newOnes])
+      try {
+        const returned = await uploadChatImages({ chatId: session.chatId, files: toAdd, signal: abort.signal })
+        setComposerAttachments((prev) => {
+          let i = 0
+          return prev.map((a) => {
+            const isNew = newOnes.some((n) => n.id === a.id)
+            if (!isNew) return a
+            const r = returned[i++] ?? null
+            return {
+              ...a,
+              uploading: false,
+              uploadedUrl: r?.url || undefined,
+              mediaType: r?.mediaType || a.mediaType,
+              filename: r?.filename || a.filename,
+              error: r?.url ? undefined : (a.error ?? "UPLOAD_FAILED"),
+            }
+          })
+        })
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") {
+          setComposerAttachments((prev) => prev.filter((a) => !newOnes.some((n) => n.id === a.id)))
+          return
+        }
+        const msg = e instanceof Error ? e.message : String(e)
+        setComposerAttachments((prev) =>
+          prev.map((a) => (newOnes.some((n) => n.id === a.id) ? { ...a, uploading: false, error: msg } : a)),
+        )
+        toast.error(msg)
+      }
+    },
+    [session.chatId, t],
+  )
+
+  const uploadPickedImagesForEdit = React.useCallback(
+    async (files: File[]): Promise<FileUIPart[]> => {
+      try {
+        const returned = await uploadChatImages({ chatId: session.chatId, files })
+        return returned.map((r) => {
+          return {
+            type: "file" as const,
+            url: r.url,
+            mediaType: r.mediaType,
+            filename: r.filename,
+          } as FileUIPart
+        })
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : String(e))
+        return []
+      }
+    },
+    [session.chatId],
+  )
+
+  const removeAttachment = React.useCallback(
+    (id: string) => {
+      let removedUploadedUrl = ""
+      setComposerAttachments((prev) => {
+        const item = prev.find((x) => x.id === id)
+        if (item) {
+          removedUploadedUrl = String(item.uploadedUrl || "").trim()
+          try {
+            item.abort?.abort()
+          } catch {}
+          try {
+            URL.revokeObjectURL(item.previewUrl)
+          } catch {}
+        }
+        return prev.filter((x) => x.id !== id)
+      })
+      if (!removedUploadedUrl) return
+      // Fire-and-forget cleanup: never block user interactions on attachment deletion.
+      void fetch(`/api/chats/${encodeURIComponent(session.chatId)}/attachments`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          files: [{ url: removedUploadedUrl }],
+        }),
+      }).catch(() => {})
+    },
+    [session.chatId],
+  )
+
   const stepSheetContentRef = React.useRef<HTMLDivElement | null>(null)
   const title = workflowId ? t("workflows.orchestrator.titleEdit") : t("workflows.orchestrator.titleNew")
   const subtitle = workflowId ? t("workflows.orchestrator.subtitleEdit") : t("workflows.orchestrator.subtitleNew")
-  const chatSpan = composerExpanded ? "row-span-4 lg:row-span-7" : "row-span-5 lg:row-span-8"
-  const composerSpan = composerExpanded ? "row-span-3" : "row-span-2"
-  const agentRunErrorCode = session.agentRunError
-    ? resolveAgentRunDisplayError({
-        errorCode: session.agentRunError.errorCode,
-        errorMessage: session.agentRunError.errorMessage,
-        errorMetaJson: session.agentRunError.errorMetaJson,
-      }).displayCode
-    : null
+  const chatSpan = "row-span-5 lg:row-span-8"
+  const composerSpan = "row-span-2"
+  const graphSteps = React.useMemo(
+    () => session.stepsForGraph.map((s) => ({ stepKey: s.stepKey, name: s.name, deps: s.deps })),
+    [session.stepsForGraph],
+  )
+  const onEditGraphStep = React.useCallback(
+    (stepKey: string) => {
+      session.setSelectedStepKey(stepKey)
+      session.setStepSheetOpen(true)
+    },
+    [session.setSelectedStepKey, session.setStepSheetOpen],
+  )
+  const onEditUserMessage = React.useCallback(
+    async (messageId: string, text: string, files: FileUIPart[], removedFiles: FileUIPart[]) => {
+      const ok = await session.editUserMessage(messageId, text, files)
+      if (!ok) {
+        toast.error(t("common.error"))
+        return false
+      }
+      if (removedFiles.length > 0) {
+        window.setTimeout(() => {
+          void fetch(`/api/chats/${encodeURIComponent(session.chatId)}/attachments`, {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              files: removedFiles.map((f) => ({ url: String(f.url || "") })),
+            }),
+          }).catch(() => {})
+        }, 800)
+      }
+      return ok
+    },
+    [session.chatId, session.editUserMessage, t],
+  )
+
+  // ---------------------------------------------------------------------------
+  // Shared chat panel content
+  // ---------------------------------------------------------------------------
+  function renderChatContent() {
+    return (
+      <>
+        {session.messages.length === 0 ? (
+          <div className="absolute inset-0 grid place-items-center p-6">
+            <div className="w-full max-w-2xl">
+              <div className="mb-5 flex flex-col items-center justify-center gap-3 text-center">
+                <div className="flex size-10 items-center justify-center rounded-lg bg-muted text-foreground">
+                  <Bot className="h-5 w-5" aria-hidden="true" />
+                </div>
+                <div className="text-lg font-semibold">{t("workflows.emptyTitle")}</div>
+              </div>
+              <WorkflowQuickExamples
+                count={6}
+                layout="wrap"
+                behavior="fill"
+                className="justify-center"
+                onPick={(text) => {
+                  setComposerValue(text)
+                  requestAnimationFrame(() => composerTextareaRef.current?.focus())
+                }}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {(() => {
+              const allMessages = session.messages
+              const streamingLast = session.pending ? allMessages[allMessages.length - 1] : null
+              const historyMessages = streamingLast ? allMessages.slice(0, -1) : allMessages
+              const orchestratorProgress = session.stageStatus.isOrchestrator
+                ? {
+                    plan: session.plan,
+                    draftStepsCount: session.draftStepsFromStream.length,
+                    done: session.stageStatus.validate === "done",
+                  }
+                : null
+
+              type RenderItem = { msg: UIMessage; idx: number; opts?: { streaming?: boolean; live?: boolean } }
+              const renderMessage = (item: RenderItem) => (
+                <ChatMessageRow
+                  key={item.msg.id || `msg-${item.idx}`}
+                  message={item.msg}
+                  pending={session.pending}
+                  isStreaming={Boolean(item.opts?.streaming)}
+                  isLive={Boolean(item.opts?.live)}
+                  t={t}
+                  model={session.model}
+                  groupedModels={groupedModels}
+                  onModelChange={session.setModel}
+                  onOpenImagePreview={openPreviewSingle}
+                  orchestratorProgress={orchestratorProgress}
+                  onEditUserMessage={onEditUserMessage}
+                  onPickImagesForEdit={uploadPickedImagesForEdit}
+                  onToolApprovalResponse={session.addToolApprovalResponse}
+                />
+              )
+
+              const historyVisible = historyMessages.filter((msg) => msg.role !== "system")
+              const streamingVisible = streamingLast && streamingLast.role !== "system" ? streamingLast : null
+              const items: RenderItem[] = [
+                ...historyVisible.map((msg, idx) => ({ msg, idx })),
+                ...(streamingVisible
+                  ? [{ msg: streamingVisible, idx: historyVisible.length, opts: { streaming: true, live: true } }]
+                  : []),
+              ]
+
+              type UserGroup = { user: RenderItem; rest: RenderItem[] }
+              type GroupedEntry =
+                | { kind: "single"; item: RenderItem }
+                | { kind: "group"; group: UserGroup }
+                | { kind: "non-user-block"; items: RenderItem[] }
+              const grouped: GroupedEntry[] = []
+              let currentGroup: UserGroup | null = null
+              let leadingNonUser: RenderItem[] = []
+
+              for (const item of items) {
+                if (item.msg.role === "user") {
+                  if (leadingNonUser.length > 0) {
+                    grouped.push({ kind: "non-user-block", items: leadingNonUser })
+                    leadingNonUser = []
+                  }
+                  if (currentGroup) grouped.push({ kind: "group", group: currentGroup })
+                  currentGroup = { user: item, rest: [] }
+                  continue
+                }
+                if (currentGroup) {
+                  currentGroup.rest.push(item)
+                } else {
+                  leadingNonUser.push(item)
+                }
+              }
+              if (leadingNonUser.length === 1) grouped.push({ kind: "single", item: leadingNonUser[0]! })
+              if (leadingNonUser.length > 1) grouped.push({ kind: "non-user-block", items: leadingNonUser })
+              if (currentGroup) grouped.push({ kind: "group", group: currentGroup })
+
+              return (
+                <>
+                  {grouped.map((entry, i) => {
+                    if (entry.kind === "single") return renderMessage(entry.item)
+                    if (entry.kind === "non-user-block") {
+                      return (
+                        <div key={`non-user-block-${i}`} className="space-y-3">
+                          {entry.items.map((item) => renderMessage(item))}
+                        </div>
+                      )
+                    }
+                    const { user, rest } = entry.group
+                    return (
+                      <div key={user.msg.id || `user-group-${i}`} className="space-y-3">
+                        <div className="sticky top-0 z-10 bg-background">
+                          <UserMessage
+                            message={user.msg}
+                            t={t}
+                            pending={session.pending || Boolean(user.opts?.streaming)}
+                            model={session.model}
+                            groupedModels={groupedModels}
+                            onModelChange={session.setModel}
+                            onOpenImagePreview={openPreviewSingle}
+                            onEditMessage={onEditUserMessage}
+                            onPickImages={uploadPickedImagesForEdit}
+                          />
+                        </div>
+                        {rest.map((item) => renderMessage(item))}
+                      </div>
+                    )
+                  })}
+                </>
+              )
+            })()}
+
+            {/* Error display */}
+            {session.error && (
+              <div className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
+                {session.error.message}
+              </div>
+            )}
+
+            <div ref={session.listRef} />
+          </div>
+        )}
+      </>
+    )
+  }
+
+  function renderComposer() {
+    return (
+      <PromptComposer
+        t={t}
+        value={composerValue}
+        onValueChange={setComposerValue}
+        textareaRef={setComposerRef}
+        pending={session.pending}
+        saving={session.saving}
+        anyUploading={anyUploading}
+        model={session.model}
+        onModelChange={session.setModel}
+        groupedModels={groupedModels}
+        modelsLoading={modelsLoading}
+        attachments={composerAttachments}
+        onPickImages={uploadPickedImages}
+        onRemoveAttachment={removeAttachment}
+        onAttachmentClick={(a) => {
+          openPreviewSingle({ src: a.previewUrl, filename: a.filename, mediaType: a.mediaType })
+        }}
+        mode="send-or-stop"
+        pendingIndicator="square"
+        onSubmit={onSend}
+        onStop={session.stop}
+        disableSubmitWhenIdle={!composerValue.trim() && composerAttachments.length === 0}
+      />
+    )
+  }
 
   return (
     <DetailPageLayout
       variant="fill"
       modals={
         <>
+          {imagePreview ? (
+            <ImagePreviewDialog
+              open={true}
+              onOpenChange={(open) => {
+                if (!open) closePreview()
+              }}
+              item={imagePreview}
+              onDownload={onDownloadPreview}
+              onCopy={onCopyPreview}
+              onOpenInNewTab={onOpenPreviewInNewTab}
+              t={t}
+            />
+          ) : null}
           <StandardActionDialog
             open={newChatConfirmOpen}
             onOpenChange={setNewChatConfirmOpen}
@@ -141,7 +828,6 @@ export default function WorkflowAgentClient(props: { agentRunId?: string | null;
               },
             ]}
           />
-
           <Sheet open={session.stepSheetOpen} onOpenChange={session.setStepSheetOpen}>
             <SheetContent
               side="right"
@@ -152,10 +838,9 @@ export default function WorkflowAgentClient(props: { agentRunId?: string | null;
                 requestAnimationFrame(() => {
                   const root = stepSheetContentRef.current
                   if (!root) return
-                  const first =
-                    (root.querySelector(
-                      "input:not([disabled]), textarea:not([disabled]), select:not([disabled])",
-                    ) as HTMLElement | null) ?? null
+                  const first = root.querySelector(
+                    "input:not([disabled]), textarea:not([disabled])",
+                  ) as HTMLElement | null
                   first?.focus()
                 })
               }}
@@ -166,14 +851,12 @@ export default function WorkflowAgentClient(props: { agentRunId?: string | null;
                 </SheetTitle>
                 <SheetDescription className="sr-only">{t("workflows.orchestrator.stepSelectHint")}</SheetDescription>
               </SheetHeader>
-
               {!selectedStep ? (
                 <div className="px-4 pt-4 text-sm text-muted-foreground">
                   {t("workflows.orchestrator.stepSelectHint")}
                 </div>
               ) : (
                 <div className="min-h-0 flex flex-1 flex-col gap-4 px-4 pb-4 pt-4">
-                  {/* Step form (match WorkflowEditClient sheet) */}
                   <FieldGroup className="shrink-0 gap-3">
                     <Field className="gap-1">
                       <FieldLabel htmlFor={stepKeyInputId}>{t("workflows.stepKey")}</FieldLabel>
@@ -183,7 +866,6 @@ export default function WorkflowAgentClient(props: { agentRunId?: string | null;
                         onChange={(e) => session.renameDraftStepKey(selectedStep.stepKey, e.target.value)}
                       />
                     </Field>
-
                     <Field className="gap-1">
                       <FieldLabel htmlFor={stepNameInputId}>{t("workflows.name")}</FieldLabel>
                       <Input
@@ -192,7 +874,6 @@ export default function WorkflowAgentClient(props: { agentRunId?: string | null;
                         onChange={(e) => session.updateDraftStep(selectedStep.stepKey, { name: e.target.value })}
                       />
                     </Field>
-
                     <Field className="gap-1">
                       <FieldLabel htmlFor={stepTimeoutInputId}>{t("workflows.timeoutMs")}</FieldLabel>
                       <Input
@@ -207,8 +888,6 @@ export default function WorkflowAgentClient(props: { agentRunId?: string | null;
                       />
                     </Field>
                   </FieldGroup>
-
-                  {/* Script editor (fills remaining space) */}
                   <div className="min-h-0 flex flex-1 flex-col">
                     <SectionCard className="flex flex-col">
                       <div className="border-b bg-muted/10 px-3 py-2 text-sm font-medium">
@@ -234,9 +913,57 @@ export default function WorkflowAgentClient(props: { agentRunId?: string | null;
               )}
             </SheetContent>
           </Sheet>
+          <ChatHistorySheet
+            open={chatHistoryOpen}
+            onOpenChange={setChatHistoryOpen}
+            locale={locale}
+            items={chatHistoryItems}
+            loading={chatHistoryLoading}
+            hasMore={chatHistoryHasMore}
+            loadingMore={chatHistoryLoadingMore}
+            onLoadMore={() => loadChatHistory(false)}
+            onOpenChat={onOpenHistoryChat}
+            onRenameChat={onRenameHistoryChat}
+            onDeleteChat={onDeleteHistoryChat}
+          />
         </>
       }
-      header={<StandardPageHeader title={title} description={subtitle} />}
+      header={
+        <StandardPageHeader
+          title={title}
+          description={subtitle}
+          right={
+            <HeaderActions
+              iconOnlyBelow="md"
+              overflow={false}
+              overflowAlign="end"
+              sections={[
+                {
+                  key: "main",
+                  items: [
+                    {
+                      key: "new-chat",
+                      label: t("agent.chat.newChat"),
+                      icon: <Plus className="size-4" aria-hidden="true" />,
+                      onClick: onNewChatClick,
+                      pinned: true,
+                      variant: "default",
+                    },
+                    {
+                      key: "chat-history",
+                      label: t("agent.chat.history.action"),
+                      icon: <History className="size-4" aria-hidden="true" />,
+                      onClick: onOpenHistorySheet,
+                      pinned: true,
+                      variant: "secondary",
+                    },
+                  ],
+                },
+              ]}
+            />
+          }
+        />
+      }
       bodyClassName="min-h-0 flex-1 overflow-hidden"
     >
       <div className="min-h-0 flex-1 overflow-hidden">
@@ -246,7 +973,6 @@ export default function WorkflowAgentClient(props: { agentRunId?: string | null;
             onValueChange={(v) => setMobileTab(v as "chat" | "canvas")}
             className="flex h-full min-h-0 flex-col gap-3"
           >
-            {/* Segmented control: Chat / Canvas */}
             <div className="shrink-0">
               <TabsList className="w-full">
                 <TabsTrigger value="chat" className="flex-1">
@@ -257,282 +983,27 @@ export default function WorkflowAgentClient(props: { agentRunId?: string | null;
                 </TabsTrigger>
               </TabsList>
             </div>
-
             <TabsContent value="chat" className="min-h-0 flex-1">
               <div className="grid h-full min-h-0 grid-rows-7 gap-3">
-                {/* Chat */}
                 <Card className={cn("min-h-0 overflow-hidden p-0 shadow-none rounded-md", chatSpan)}>
-                  <div className="flex h-full min-h-0 flex-col">
-                    <ScrollArea className="relative h-full min-h-0 flex-1 bg-background p-3">
-                      {session.messages.length === 0 ? (
-                        <div className="absolute inset-0 grid place-items-center p-6">
-                          <div className="w-full max-w-2xl">
-                            {/* Match the Workflows empty-state visual language (figure 2): icon + title */}
-                            <div className="mb-5 flex flex-col items-center justify-center gap-3 text-center">
-                              <div className="flex size-10 items-center justify-center rounded-lg bg-muted text-foreground">
-                                <Bot className="h-5 w-5" aria-hidden="true" />
-                              </div>
-                              <div className="text-lg font-semibold">{t("workflows.emptyTitle")}</div>
-                            </div>
-
-                            <WorkflowQuickExamples
-                              count={6}
-                              layout="wrap"
-                              behavior="fill"
-                              className="justify-center"
-                              onPick={(text) => {
-                                session.setInput(text)
-                                requestAnimationFrame(() => session.inputRef.current?.focus())
-                              }}
-                            />
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {session.messages.map((m, idx) => (
-                            <div key={idx} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
-                              <div
-                                className={cn(
-                                  // Robust wrapping for long unbroken strings (URLs/tokens/base64) to prevent horizontal layout overflow.
-                                  "min-w-0 max-w-full overflow-x-hidden rounded-md px-3 py-2 text-sm",
-                                  m.role === "user" ? "bg-primary text-primary-foreground" : "",
-                                )}
-                              >
-                                {m.role === "assistant" ? (
-                                  <ChatMarkdown
-                                    markdown={
-                                      session.pending && idx === session.messages.length - 1
-                                        ? m.content || t("workflows.orchestrator.thinking")
-                                        : m.content || ""
-                                    }
-                                    streaming={session.pending && idx === session.messages.length - 1}
-                                    className="maia-mdx"
-                                  />
-                                ) : (
-                                  <div className="whitespace-pre-wrap break-all">{m.content}</div>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-
-                          {session.hasAssistantOutput ? (
-                            <div className="pt-1">
-                              <div className="space-y-2">
-                                {session.stages.plan !== "todo" ? (
-                                  <WorkflowAgentStageCard
-                                    label={
-                                      session.stages.plan === "in_progress"
-                                        ? t("workflows.orchestrator.generatingPlan")
-                                        : t("workflows.orchestrator.progress.planLabel")
-                                    }
-                                    status={session.stages.plan}
-                                    doneText={t("workflows.orchestrator.progress.doneBadge")}
-                                  />
-                                ) : null}
-
-                                {/* Step list card (existing, keep as-is). */}
-                                {session.plan && session.stages.plan === "done" ? (
-                                  <WorkflowAgentProgressCompact
-                                    title={String(
-                                      (session.plan &&
-                                        typeof session.plan === "object" &&
-                                        "title" in session.plan &&
-                                        typeof (session.plan as { title?: unknown }).title === "string" &&
-                                        (session.plan as { title?: string }).title) ??
-                                        t("common.entities.workflow"),
-                                    )}
-                                    generatingPlanText={t("workflows.orchestrator.generatingPlan")}
-                                    generatingStepText={t("workflows.orchestrator.progress.generatingStep")}
-                                    completedCountText={t("workflows.orchestrator.progress.completedCount")}
-                                    plan={session.plan}
-                                    draftStepsCount={session.progress.doneCount}
-                                    done={session.progress.phase === "done"}
-                                  />
-                                ) : null}
-
-                                {session.stages.validate !== "todo" ? (
-                                  <WorkflowAgentStageCard
-                                    label={
-                                      session.stages.validate === "in_progress"
-                                        ? t("workflows.orchestrator.progress.validating")
-                                        : t("workflows.orchestrator.progress.validateLabel")
-                                    }
-                                    status={session.stages.validate}
-                                    doneText={t("workflows.orchestrator.progress.doneBadge")}
-                                    failedText={t("common.statusValues.failed")}
-                                  />
-                                ) : null}
-
-                                {session.stages.inputSpec !== "todo" ? (
-                                  <WorkflowAgentStageCard
-                                    label={
-                                      session.stages.inputSpec === "in_progress"
-                                        ? t("workflows.orchestrator.progress.generatingInputSpec")
-                                        : t("workflows.orchestrator.progress.inputSpecLabel")
-                                    }
-                                    status={session.stages.inputSpec}
-                                    doneText={t("workflows.orchestrator.progress.doneBadge")}
-                                    failedText={t("common.statusValues.failed")}
-                                  />
-                                ) : null}
-
-                                {session.stages.outputsSpec !== "todo" ? (
-                                  <WorkflowAgentStageCard
-                                    label={
-                                      session.stages.outputsSpec === "in_progress"
-                                        ? t("workflows.orchestrator.progress.generatingOutputsSpec")
-                                        : t("workflows.orchestrator.progress.outputsSpecLabel")
-                                    }
-                                    status={session.stages.outputsSpec}
-                                    doneText={t("workflows.orchestrator.progress.doneBadge")}
-                                    failedText={t("common.statusValues.failed")}
-                                  />
-                                ) : null}
-                              </div>
-                            </div>
-                          ) : null}
-
-                          {session.isDirty && session.stepsForGraph.length > 0 && !session.pending ? (
-                            <div className="pt-2">
-                              <div className="rounded-md border bg-muted/10 p-3">
-                                <div className="text-sm font-medium">
-                                  {session.proposal?.draft
-                                    ? t("workflows.orchestrator.proposalReadyTitle")
-                                    : t("workflows.orchestrator.draftReadyTitle")}
-                                </div>
-                                <div className="mt-1 text-xs text-muted-foreground">
-                                  {session.proposal?.draft
-                                    ? t("workflows.orchestrator.proposalReadyDescription")
-                                    : t("workflows.orchestrator.draftReadyDescription")}
-                                </div>
-                                <div className="mt-2">
-                                  <Button
-                                    onClick={() => void session.saveFromCurrentState()}
-                                    disabled={session.pending || session.saving}
-                                    size="sm"
-                                    className="w-full"
-                                  >
-                                    {session.saving ? <Spinner className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-                                    {session.saving
-                                      ? t("common.saving")
-                                      : workflowId
-                                        ? t("common.saveAction")
-                                        : t("workflows.orchestrator.applyCreateAction")}
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          ) : null}
-
-                          <div ref={session.listRef} />
-                        </div>
-                      )}
+                  <div className="flex h-full min-h-0 flex-col" ref={session.scrollContainerRef}>
+                    <ScrollArea className="relative h-full min-h-0 flex-1 bg-background p-3 [&_[data-slot=scroll-area-viewport]>div]:!block">
+                      {renderChatContent()}
                     </ScrollArea>
-                    {agentRunErrorCode ? (
-                      <div className="shrink-0 bg-background px-3 pb-3">
-                        <ErrorAlert
-                          code={agentRunErrorCode}
-                          variant="destructive"
-                          actions={[
-                            {
-                              key: "agentPreferences",
-                              label: `${t("common.entities.agent")} ${t("common.settings")}`,
-                              onClick: () => router.push("/preference/agent"),
-                            },
-                          ]}
-                        />
-                      </div>
-                    ) : null}
                   </div>
                 </Card>
-
-                {/* Composer */}
                 <Card className={cn("min-h-0 overflow-hidden p-0 shadow-none rounded-md", composerSpan)}>
-                  <div className="flex h-full min-h-0 flex-col bg-background">
-                    <InputGroup
-                      className={cn(
-                        "min-h-0 flex-1",
-                        "has-[>textarea]:h-auto h-auto",
-                        "!border-0 !shadow-none !bg-transparent dark:!bg-transparent",
-                        "has-[[data-slot=input-group-control]:focus-visible]:!border-0 has-[[data-slot=input-group-control]:focus-visible]:!ring-0",
-                      )}
-                    >
-                      <InputGroupTextarea
-                        ref={setComposerRef}
-                        value={session.input}
-                        onChange={(e) => session.setInput(e.target.value)}
-                        placeholder={t("workflows.orchestrator.composerPlaceholder")}
-                        className={cn(
-                          // Fill the card area and scroll internally (do NOT grow the page).
-                          "min-h-0 flex-1 w-full px-3 text-base md:text-sm",
-                          "py-3 resize-none rounded-none border-0 bg-transparent shadow-none focus-visible:ring-0 dark:bg-transparent",
-                          "overflow-y-auto",
-                        )}
-                        // Override the base Textarea `field-sizing-content` behavior so content never expands layout.
-                        style={{ fieldSizing: "fixed" } as React.CSSProperties}
-                        disabled={session.pending}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                            e.preventDefault()
-                            void session.send()
-                          }
-                        }}
-                      />
-
-                      <InputGroupAddon align="block-end" className="order-last w-full justify-between px-3 pb-3">
-                        <InputGroupButton
-                          variant="outline"
-                          size="icon-xs"
-                          className="size-8 rounded-full p-0"
-                          aria-label={t("workflows.orchestrator.newChat")}
-                          onClick={onNewChatClick}
-                          disabled={session.pending || session.saving}
-                        >
-                          <Plus className="size-5" />
-                        </InputGroupButton>
-
-                        <InputGroupButton
-                          variant="default"
-                          size="icon-xs"
-                          className="size-8 rounded-full p-0"
-                          onClick={() => void session.send()}
-                          disabled={session.pending || !session.input.trim()}
-                          aria-label={t("workflows.orchestrator.sendAction")}
-                        >
-                          {session.pending ? <Spinner className="size-5" /> : <ArrowUp className="size-5" />}
-                          <span className="sr-only">{t("workflows.orchestrator.sendAction")}</span>
-                        </InputGroupButton>
-                      </InputGroupAddon>
-                    </InputGroup>
-                  </div>
+                  {renderComposer()}
                 </Card>
               </div>
             </TabsContent>
-
             <TabsContent value="canvas" className="min-h-0 flex-1">
               <SectionCard className="h-full min-h-0 overflow-hidden text-card-foreground">
                 <div className="relative h-full">
-                  <WorkflowGraphCanvasWrapper
-                    mode="view"
-                    frame={false}
+                  <GraphCanvas
                     workflowId={workflowId}
-                    forceAutoFit
-                    // Agent new: no workflowId => no persisted layout, keep UI minimal (zoom + fit only).
-                    // Agent edit: workflowId present => allow LR/TB/CUSTOM to view user's saved layout presets.
-                    showLayoutMenu={!!workflowId}
-                    allowCustomLayout={!!workflowId}
-                    showLayoutReset={false}
-                    controls={{
-                      interaction: false,
-                      layout: true,
-                      fit: true,
-                      zoom: true,
-                    }}
-                    steps={session.stepsForGraph.map((s) => ({ stepKey: s.stepKey, name: s.name, deps: s.deps }))}
-                    onEditStep={(k) => {
-                      session.setSelectedStepKey(k)
-                      session.setStepSheetOpen(true)
-                    }}
+                    steps={graphSteps}
+                    onEditStep={onEditGraphStep}
                     className="h-full"
                   />
                 </div>
@@ -541,282 +1012,26 @@ export default function WorkflowAgentClient(props: { agentRunId?: string | null;
           </Tabs>
         ) : (
           <div className="grid h-full min-h-0 grid-rows-10 gap-3 lg:grid-cols-12 xl:grid-cols-10 lg:grid-rows-1">
-            {/* Canvas */}
             <SectionCard className="min-h-0 row-span-3 text-card-foreground lg:col-span-7 xl:col-span-7 lg:row-span-1">
               <div className="relative h-full">
-                <WorkflowGraphCanvasWrapper
-                  mode="view"
-                  frame={false}
+                <GraphCanvas
                   workflowId={workflowId}
-                  forceAutoFit
-                  // Agent new: no workflowId => no persisted layout, keep UI minimal (zoom + fit only).
-                  // Agent edit: workflowId present => allow LR/TB/CUSTOM to view user's saved layout presets.
-                  showLayoutMenu={!!workflowId}
-                  allowCustomLayout={!!workflowId}
-                  showLayoutReset={false}
-                  controls={{
-                    interaction: false,
-                    layout: true,
-                    fit: true,
-                    zoom: true,
-                  }}
-                  steps={session.stepsForGraph.map((s) => ({ stepKey: s.stepKey, name: s.name, deps: s.deps }))}
-                  onEditStep={(k) => {
-                    session.setSelectedStepKey(k)
-                    session.setStepSheetOpen(true)
-                  }}
+                  steps={graphSteps}
+                  onEditStep={onEditGraphStep}
                   className="h-full"
                 />
               </div>
             </SectionCard>
-
-            {/* Right side: chat + composer */}
             <div className="min-h-0 row-span-7 grid grid-rows-7 gap-3 lg:col-span-5 xl:col-span-3 lg:row-span-1 lg:grid-rows-10">
-              {/* Chat */}
               <Card className={cn("min-h-0 overflow-hidden p-0 shadow-none rounded-md", chatSpan)}>
-                <div className="flex h-full min-h-0 flex-col">
-                  <ScrollArea className="relative h-full min-h-0 flex-1 bg-background p-3">
-                    {session.messages.length === 0 ? (
-                      <div className="absolute inset-0 grid place-items-center p-6">
-                        <div className="w-full max-w-2xl">
-                          {/* Match the Workflows empty-state visual language (figure 2): icon + title */}
-                          <div className="mb-5 flex flex-col items-center justify-center gap-3 text-center">
-                            <div className="flex size-10 items-center justify-center rounded-lg bg-muted text-foreground">
-                              <Bot className="h-5 w-5" aria-hidden="true" />
-                            </div>
-                            <div className="text-lg font-semibold">{t("workflows.emptyTitle")}</div>
-                          </div>
-
-                          <WorkflowQuickExamples
-                            count={6}
-                            layout="wrap"
-                            behavior="fill"
-                            className="justify-center"
-                            onPick={(text) => {
-                              session.setInput(text)
-                              requestAnimationFrame(() => session.inputRef.current?.focus())
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {session.messages.map((m, idx) => (
-                          <div key={idx} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
-                            <div
-                              className={cn(
-                                // Robust wrapping for long unbroken strings (URLs/tokens/base64) to prevent horizontal layout overflow.
-                                "min-w-0 max-w-full overflow-x-hidden rounded-md px-3 py-2 text-sm",
-                                m.role === "user" ? "bg-primary text-primary-foreground" : "",
-                              )}
-                            >
-                              {m.role === "assistant" ? (
-                                <ChatMarkdown
-                                  markdown={
-                                    session.pending && idx === session.messages.length - 1
-                                      ? m.content || t("workflows.orchestrator.thinking")
-                                      : m.content || ""
-                                  }
-                                  streaming={session.pending && idx === session.messages.length - 1}
-                                  className="maia-mdx"
-                                />
-                              ) : (
-                                <div className="whitespace-pre-wrap break-all">{m.content}</div>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-
-                        {session.hasAssistantOutput ? (
-                          <div className="pt-1">
-                            <div className="space-y-2">
-                              {session.stages.plan !== "todo" ? (
-                                <WorkflowAgentStageCard
-                                  label={
-                                    session.stages.plan === "in_progress"
-                                      ? t("workflows.orchestrator.generatingPlan")
-                                      : t("workflows.orchestrator.progress.planLabel")
-                                  }
-                                  status={session.stages.plan}
-                                  doneText={t("workflows.orchestrator.progress.doneBadge")}
-                                />
-                              ) : null}
-
-                              {/* Step list card (existing, keep as-is). */}
-                              {session.plan && session.stages.plan === "done" ? (
-                                <WorkflowAgentProgressCompact
-                                  title={String(
-                                    (session.plan &&
-                                      typeof session.plan === "object" &&
-                                      "title" in session.plan &&
-                                      typeof (session.plan as { title?: unknown }).title === "string" &&
-                                      (session.plan as { title?: string }).title) ??
-                                      t("common.entities.workflow"),
-                                  )}
-                                  generatingPlanText={t("workflows.orchestrator.generatingPlan")}
-                                  generatingStepText={t("workflows.orchestrator.progress.generatingStep")}
-                                  completedCountText={t("workflows.orchestrator.progress.completedCount")}
-                                  plan={session.plan}
-                                  draftStepsCount={session.progress.doneCount}
-                                  done={session.progress.phase === "done"}
-                                />
-                              ) : null}
-
-                              {session.stages.validate !== "todo" ? (
-                                <WorkflowAgentStageCard
-                                  label={
-                                    session.stages.validate === "in_progress"
-                                      ? t("workflows.orchestrator.progress.validating")
-                                      : t("workflows.orchestrator.progress.validateLabel")
-                                  }
-                                  status={session.stages.validate}
-                                  doneText={t("workflows.orchestrator.progress.doneBadge")}
-                                  failedText={t("common.statusValues.failed")}
-                                />
-                              ) : null}
-
-                              {session.stages.inputSpec !== "todo" ? (
-                                <WorkflowAgentStageCard
-                                  label={
-                                    session.stages.inputSpec === "in_progress"
-                                      ? t("workflows.orchestrator.progress.generatingInputSpec")
-                                      : t("workflows.orchestrator.progress.inputSpecLabel")
-                                  }
-                                  status={session.stages.inputSpec}
-                                  doneText={t("workflows.orchestrator.progress.doneBadge")}
-                                  failedText={t("common.statusValues.failed")}
-                                />
-                              ) : null}
-
-                              {session.stages.outputsSpec !== "todo" ? (
-                                <WorkflowAgentStageCard
-                                  label={
-                                    session.stages.outputsSpec === "in_progress"
-                                      ? t("workflows.orchestrator.progress.generatingOutputsSpec")
-                                      : t("workflows.orchestrator.progress.outputsSpecLabel")
-                                  }
-                                  status={session.stages.outputsSpec}
-                                  doneText={t("workflows.orchestrator.progress.doneBadge")}
-                                  failedText={t("common.statusValues.failed")}
-                                />
-                              ) : null}
-                            </div>
-                          </div>
-                        ) : null}
-
-                        {session.isDirty && session.stepsForGraph.length > 0 && !session.pending ? (
-                          <div className="pt-2">
-                            <div className="rounded-md border bg-muted/10 p-3">
-                              <div className="text-sm font-medium">
-                                {session.proposal?.draft
-                                  ? t("workflows.orchestrator.proposalReadyTitle")
-                                  : t("workflows.orchestrator.draftReadyTitle")}
-                              </div>
-                              <div className="mt-1 text-xs text-muted-foreground">
-                                {session.proposal?.draft
-                                  ? t("workflows.orchestrator.proposalReadyDescription")
-                                  : t("workflows.orchestrator.draftReadyDescription")}
-                              </div>
-                              <div className="mt-2">
-                                <Button
-                                  onClick={() => void session.saveFromCurrentState()}
-                                  disabled={session.pending || session.saving}
-                                  size="sm"
-                                  className="w-full"
-                                >
-                                  {session.saving ? <Spinner className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-                                  {session.saving
-                                    ? t("common.saving")
-                                    : workflowId
-                                      ? t("common.saveAction")
-                                      : t("workflows.orchestrator.applyCreateAction")}
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        ) : null}
-
-                        <div ref={session.listRef} />
-                      </div>
-                    )}
+                <div className="flex h-full min-h-0 flex-col" ref={session.scrollContainerRef}>
+                  <ScrollArea className="relative h-full min-h-0 flex-1 bg-background p-3 [&_[data-slot=scroll-area-viewport]>div]:!block">
+                    {renderChatContent()}
                   </ScrollArea>
-                  {agentRunErrorCode ? (
-                    <div className="shrink-0 bg-background px-3 pb-3">
-                      <ErrorAlert
-                        code={agentRunErrorCode}
-                        variant="destructive"
-                        actions={[
-                          {
-                            key: "agentPreferences",
-                            label: `${t("common.entities.agent")} ${t("common.settings")}`,
-                            onClick: () => router.push("/preference/agent"),
-                          },
-                        ]}
-                      />
-                    </div>
-                  ) : null}
                 </div>
               </Card>
-
-              {/* Composer */}
               <Card className={cn("min-h-0 overflow-hidden p-0 shadow-none rounded-md", composerSpan)}>
-                <div className="flex h-full min-h-0 flex-col bg-background">
-                  <InputGroup
-                    className={cn(
-                      "min-h-0 flex-1",
-                      "has-[>textarea]:h-auto h-auto",
-                      "!border-0 !shadow-none !bg-transparent dark:!bg-transparent",
-                      "has-[[data-slot=input-group-control]:focus-visible]:!border-0 has-[[data-slot=input-group-control]:focus-visible]:!ring-0",
-                    )}
-                  >
-                    <InputGroupTextarea
-                      ref={setComposerRef}
-                      value={session.input}
-                      onChange={(e) => session.setInput(e.target.value)}
-                      placeholder={t("workflows.orchestrator.composerPlaceholder")}
-                      className={cn(
-                        // Fill the card area and scroll internally (do NOT grow the page).
-                        "min-h-0 flex-1 w-full px-3 text-base md:text-sm",
-                        "py-3 resize-none rounded-none border-0 bg-transparent shadow-none focus-visible:ring-0 dark:bg-transparent",
-                        "overflow-y-auto",
-                      )}
-                      // Override the base Textarea `field-sizing-content` behavior so content never expands layout.
-                      style={{ fieldSizing: "fixed" } as React.CSSProperties}
-                      disabled={session.pending}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                          e.preventDefault()
-                          void session.send()
-                        }
-                      }}
-                    />
-
-                    <InputGroupAddon align="block-end" className="order-last w-full justify-between px-3 pb-3">
-                      <InputGroupButton
-                        variant="outline"
-                        size="icon-xs"
-                        className="size-7 rounded-full p-0"
-                        aria-label={t("workflows.orchestrator.newChat")}
-                        onClick={onNewChatClick}
-                        disabled={session.pending || session.saving}
-                      >
-                        <Plus className="size-5" />
-                      </InputGroupButton>
-
-                      <InputGroupButton
-                        variant="default"
-                        size="icon-xs"
-                        className="size-7 rounded-full p-0"
-                        onClick={() => void session.send()}
-                        disabled={session.pending || !session.input.trim()}
-                        aria-label={t("workflows.orchestrator.sendAction")}
-                      >
-                        {session.pending ? <Spinner className="size-5" /> : <ArrowUp className="size-5" />}
-                        <span className="sr-only">{t("workflows.orchestrator.sendAction")}</span>
-                      </InputGroupButton>
-                    </InputGroupAddon>
-                  </InputGroup>
-                </div>
+                {renderComposer()}
               </Card>
             </div>
           </div>

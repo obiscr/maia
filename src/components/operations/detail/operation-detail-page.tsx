@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useParams } from "next/navigation"
-import { Activity, Clock3, Hash, Layers, ListChecks, Play, WorkflowIcon } from "lucide-react"
+import { Activity, Clock3, Hash, Layers, ListChecks, Play, User, WorkflowIcon } from "lucide-react"
 
 import { CopyableIdBadge } from "@/components/common/copyable-id-badge"
 import { HeaderSubbar } from "@/components/common/header-subbar"
@@ -34,6 +34,7 @@ type OperationDetail = {
   publicNumber: number
   status: string
   action: string
+  source: string | null
   scope: string | null
   targetType: string | null
   targetId: string | null
@@ -117,6 +118,7 @@ export default function OperationDetailPage() {
         const patch: Partial<OperationDetail> & Record<string, unknown> = {}
         if (typeof d.status === "string") patch.status = d.status
         if (typeof d.action === "string") patch.action = d.action
+        if (typeof d.source === "string" || d.source === null) patch.source = d.source
         if (typeof d.scope === "string" || d.scope === null) patch.scope = d.scope
         if (typeof d.targetType === "string" || d.targetType === null) patch.targetType = d.targetType
         if (typeof d.targetId === "string" || d.targetId === null) patch.targetId = d.targetId
@@ -368,13 +370,16 @@ export default function OperationDetailPage() {
               />
               <TwoLineMiniCard
                 title={t("operations.detail.action")}
-                titleRight={<Activity className="size-4" aria-hidden="true" />}
                 value={String(op.action ?? "—")}
                 valueClassName="font-mono text-sm"
               />
               <TwoLineMiniCard
+                title={t("operations.detail.source")}
+                value={op.source ? String(op.source) : "—"}
+                valueClassName="font-mono text-sm"
+              />
+              <TwoLineMiniCard
                 title={t("operations.detail.target")}
-                titleRight={<Activity className="size-4" aria-hidden="true" />}
                 value={
                   op.targetId ? (
                     <span className="font-mono text-sm">{String(target?.displayId ?? op.targetId)}</span>
@@ -386,7 +391,6 @@ export default function OperationDetailPage() {
               />
               <TwoLineMiniCard
                 title={t("operations.detail.responseStatus")}
-                titleRight={<Activity className="size-4" aria-hidden="true" />}
                 value={responseStatus != null ? `HTTP ${String(responseStatus)}` : "—"}
                 valueClassName="font-mono text-sm"
               />
@@ -413,31 +417,27 @@ export default function OperationDetailPage() {
               />
               <TwoLineMiniCard
                 title={t("operations.detail.scope")}
-                titleRight={<Activity className="size-4" aria-hidden="true" />}
                 value={op.scope ? String(op.scope) : "—"}
                 valueClassName="font-mono text-sm"
               />
               <TwoLineMiniCard
                 title={t("operations.detail.actor")}
-                titleRight={<Activity className="size-4" aria-hidden="true" />}
+                titleRight={<User className="size-4" aria-hidden="true" />}
                 value={op.audit?.actor ? String(op.audit.actor) : "—"}
                 valueClassName="font-mono text-sm"
               />
               <TwoLineMiniCard
                 title={t("operations.detail.tenant")}
-                titleRight={<Activity className="size-4" aria-hidden="true" />}
                 value={op.audit?.tenantId ? String(op.audit.tenantId) : "—"}
                 valueClassName="font-mono text-sm"
               />
               <TwoLineMiniCard
                 title={t("operations.detail.requestId")}
-                titleRight={<Hash className="size-4" aria-hidden="true" />}
                 value={op.audit?.requestId ? String(op.audit.requestId) : "—"}
                 valueClassName="font-mono text-sm"
               />
               <TwoLineMiniCard
                 title={t("operations.detail.progress")}
-                titleRight={<Activity className="size-4" aria-hidden="true" />}
                 value={progressText}
                 valueClassName="font-mono text-sm"
                 truncate={true}

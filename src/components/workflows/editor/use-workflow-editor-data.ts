@@ -99,7 +99,6 @@ export function useWorkflowEditorData(params: {
   const [inputSpecSheetOpen, setInputSpecSheetOpen] = React.useState(false)
   const [inputSpecAiPending, setInputSpecAiPending] = React.useState(false)
   const [inputSpecAiErr, setInputSpecAiErr] = React.useState<string | null>(null)
-  const [inputSpecAgentRunId, setInputSpecAgentRunId] = React.useState<string | null>(null)
 
   const [outputsSpecJson, setOutputsSpecJson] = React.useState<string>("")
   const [outputsSpecDraftJson, setOutputsSpecDraftJson] = React.useState<string>("")
@@ -108,7 +107,6 @@ export function useWorkflowEditorData(params: {
   const [outputsSpecSheetOpen, setOutputsSpecSheetOpen] = React.useState(false)
   const [outputsSpecAiPending, setOutputsSpecAiPending] = React.useState(false)
   const [outputsSpecAiErr, setOutputsSpecAiErr] = React.useState<string | null>(null)
-  const [outputsSpecAgentRunId, setOutputsSpecAgentRunId] = React.useState<string | null>(null)
 
   const [metaSheetOpen, setMetaSheetOpen] = React.useState(false)
   const [metaSavePending, setMetaSavePending] = React.useState(false)
@@ -133,12 +131,7 @@ export function useWorkflowEditorData(params: {
     setLoading(true)
     try {
       const json = await apiFetchJson<{
-        workflow: Workflow & {
-          agentRunLastError?:
-            | { type?: string; errorMessage?: string | null; errorCode?: string | null }
-            | null
-            | undefined
-        }
+        workflow: Workflow
       }>(`/api/workflows/${workflowId}`, {
         cache: "no-store",
       })
@@ -161,16 +154,6 @@ export function useWorkflowEditorData(params: {
       setOutputsSpecJson(savedOutputsSpec)
       setOutputsSpecDraftJson(savedOutputsSpec)
       setOutputsSpecErr(null)
-      // Surface latest failed agent run (weak/no-UI flows) as an inline alert for the next visit.
-      const ar = json.workflow.agentRunLastError
-      if (ar && typeof ar === "object") {
-        const type = String(ar.type ?? "")
-        const msg = String(ar.errorMessage ?? ar.errorCode ?? "").trim()
-        if (msg) {
-          if (type === "WORKFLOW_INPUTSPEC") setInputSpecAiErr(msg)
-          if (type === "WORKFLOW_OUTPUTSSPEC") setOutputsSpecAiErr(msg)
-        }
-      }
       setLoading(false)
       return json.workflow
     } catch (e) {
@@ -267,79 +250,7 @@ export function useWorkflowEditorData(params: {
     },
   })
 
-  // --- Weak/no-UI AI runs: inputSpec / outputsSpec ---
-  const checkAgentRun = React.useCallback(
-    async (agentRunId: string) => {
-      const j = await apiFetchJson<{
-        agentRun?: { status?: string; errorMessage?: string | null; errorCode?: string | null }
-      }>(`/api/agent-runs/${encodeURIComponent(agentRunId)}`, { cache: "no-store" })
-      const ar = j.agentRun ?? null
-      const st = typeof ar?.status === "string" ? String(ar.status) : ""
-      if (st === "SUCCEEDED") {
-        await refreshWorkflowSilently({ keepDraftIfDirty: true })
-        return { done: true, ok: true as const }
-      }
-      if (st === "FAILED") {
-        const msg = String(ar?.errorMessage ?? ar?.errorCode ?? "AGENT_RUN_FAILED")
-        return { done: true, ok: false as const, msg }
-      }
-      return { done: false, ok: false as const }
-    },
-    [refreshWorkflowSilently],
-  )
-
-  useTopicStream({
-    topic: inputSpecAgentRunId ? makeStreamTopic("agentRun", inputSpecAgentRunId) : null,
-    enabled: !!inputSpecAgentRunId,
-    extraParams: { from: "latest" },
-    persistCursor: false,
-    onMessage: () => {
-      const id = inputSpecAgentRunId
-      if (!id) return
-      void (async () => {
-        try {
-          const res = await checkAgentRun(id)
-          if (!res.done) return
-          if (res.ok) {
-            // After apply, reflect in draft editor.
-            const saved = ((wf?.inputSpec ?? "") as string).trim()
-            if (saved) setInputSpecDraftJson(saved)
-            setInputSpecErr(null)
-          } else {
-            setInputSpecAiErr(res.msg ?? t("workflows.orchestrator.errors.failed"))
-          }
-        } finally {
-          setInputSpecAgentRunId(null)
-        }
-      })()
-    },
-  })
-
-  useTopicStream({
-    topic: outputsSpecAgentRunId ? makeStreamTopic("agentRun", outputsSpecAgentRunId) : null,
-    enabled: !!outputsSpecAgentRunId,
-    extraParams: { from: "latest" },
-    persistCursor: false,
-    onMessage: () => {
-      const id = outputsSpecAgentRunId
-      if (!id) return
-      void (async () => {
-        try {
-          const res = await checkAgentRun(id)
-          if (!res.done) return
-          if (res.ok) {
-            const saved = ((wf?.outputsSpec ?? "") as string).trim()
-            if (saved) setOutputsSpecDraftJson(saved)
-            setOutputsSpecErr(null)
-          } else {
-            setOutputsSpecAiErr(res.msg ?? t("workflows.orchestrator.errors.failed"))
-          }
-        } finally {
-          setOutputsSpecAgentRunId(null)
-        }
-      })()
-    },
-  })
+  // Input/outputs spec AI generation is now synchronous (no background agent runs).
 
   React.useEffect(() => {
     if (!metaSheetOpen) return
@@ -761,22 +672,24 @@ export function useWorkflowEditorData(params: {
 
     try {
       toast.info(t("workflows.orchestrator.createInputSpecQueued"))
-      const created = await apiFetchJson<{ agentRunId?: string }>("/api/agent-runs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "WORKFLOW_INPUTSPEC",
-          workflowId,
-          locale,
-          instructions:
-            "Infer params from how scripts read input.initialInput. Keep required minimal. Provide 1-3 examples (most common first).",
-        }),
-      })
-      const id = typeof created?.agentRunId === "string" ? String(created.agentRunId) : ""
-      if (!id) throw new Error("Missing agentRunId")
-      setInputSpecAgentRunId(id)
-      // Trigger a refresh soon; engine will auto-apply inputSpec to workflow.
-      void refreshWorkflowSilently({ keepDraftIfDirty: true })
+      const res = await apiFetchJson<{ inputSpec?: string }>(
+        `/api/workflows/${encodeURIComponent(workflowId)}/generate-input-spec`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            locale,
+            instructions:
+              "Infer params from how scripts read input.initialInput. Keep required minimal. Provide 1-3 examples (most common first).",
+          }),
+        },
+      )
+      const spec = typeof res?.inputSpec === "string" ? res.inputSpec : ""
+      if (spec) {
+        setInputSpecDraftJson(spec)
+        setInputSpecErr(null)
+      }
+      await refreshWorkflowSilently({ keepDraftIfDirty: true })
     } catch (e) {
       setInputSpecAiErr(
         e instanceof ApiError
@@ -797,20 +710,23 @@ export function useWorkflowEditorData(params: {
 
     try {
       toast.info(t("workflows.orchestrator.createOutputsSpecQueued"))
-      const created = await apiFetchJson<{ agentRunId?: string }>("/api/agent-runs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "WORKFLOW_OUTPUTSSPEC",
-          workflowId,
-          locale,
-          instructions: "Infer stable named outputs from step outputs. Prefer 1-5 outputs.",
-        }),
-      })
-      const id = typeof created?.agentRunId === "string" ? String(created.agentRunId) : ""
-      if (!id) throw new Error("Missing agentRunId")
-      setOutputsSpecAgentRunId(id)
-      void refreshWorkflowSilently({ keepDraftIfDirty: true })
+      const res = await apiFetchJson<{ outputsSpec?: string }>(
+        `/api/workflows/${encodeURIComponent(workflowId)}/generate-outputs-spec`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            locale,
+            instructions: "Infer stable named outputs from step outputs. Prefer 1-5 outputs.",
+          }),
+        },
+      )
+      const spec = typeof res?.outputsSpec === "string" ? res.outputsSpec : ""
+      if (spec) {
+        setOutputsSpecDraftJson(spec)
+        setOutputsSpecErr(null)
+      }
+      await refreshWorkflowSilently({ keepDraftIfDirty: true })
     } catch (e) {
       setOutputsSpecAiErr(
         e instanceof ApiError

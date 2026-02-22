@@ -45,7 +45,7 @@ export function WorkflowGraphCanvasOverlay(props: {
           <div className="flex flex-wrap items-center gap-2">
             {props.workflowId ? (
               <AgentButton asChild size="sm">
-                <Link href={`/workflows/${props.workflowId}/agent`}>
+                <Link href={`/agent?workflowId=${encodeURIComponent(props.workflowId)}`}>
                   <Bot className="size-4" />
                   {t("workflows.aiOrchestrateAction")}
                 </Link>
