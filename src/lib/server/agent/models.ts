@@ -4,13 +4,13 @@ import { DEFAULT_CHAT_MODEL } from "@/lib/shared/models"
 
 export const DEFAULT_OPENROUTER_MODEL = DEFAULT_CHAT_MODEL
 
-export const ROUTER_MODEL = "openai/gpt-4.1-mini"
+export const CHAT_TITLE_GENERATION_MODEL = "x-ai/grok-4.1-fast"
+export const CRON_GENERATION_MODEL = "x-ai/grok-4.1-fast"
 
 const MODEL_MAX_OUTPUT_TOKENS: Record<string, number> = {
   "anthropic/claude-opus-4.6": 32768,
   "anthropic/claude-sonnet-4.6": 16384,
   "anthropic/claude-sonnet-4.5": 16384,
-  "anthropic/claude-haiku-4.5": 16384,
   "openai/gpt-5.2-pro": 32768,
   "openai/gpt-5.2": 16384,
   "openai/gpt-5.2-codex": 32768,

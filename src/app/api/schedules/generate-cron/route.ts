@@ -5,6 +5,7 @@ import { withApiObservability } from "@/lib/server/observability"
 import { requireRequestAuth } from "@/lib/server/authz"
 import { getAgentSettingsForUser } from "@/lib/server/maia/agent-settings"
 import { createOpenRouterModel } from "@/lib/server/agent/openrouter"
+import { CRON_GENERATION_MODEL } from "@/lib/server/agent/models"
 import { generateCronExpression } from "@/lib/server/chat/tools"
 import { zodIssues } from "@/lib/shared/http/zod"
 
@@ -30,7 +31,7 @@ export const POST = withApiObservability(async (req: Request) => {
   const settings = await getAgentSettingsForUser(auth.userId, { touchApiKeyLastUsed: true })
   if (!settings.apiKey) return fail({ status: 422, code: "AGENT_API_KEY_MISSING" })
 
-  const model = createOpenRouterModel({ apiKey: settings.apiKey, model: settings.model })
+  const model = createOpenRouterModel({ apiKey: settings.apiKey, model: CRON_GENERATION_MODEL })
   const result = await generateCronExpression({ prompt: body.prompt, locale: body.locale, model })
 
   if (result.ok) return ok({ cron: result.cron })
