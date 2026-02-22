@@ -106,25 +106,6 @@ enum OperationStatus {
   FAILED
 }
 
-enum AgentRunStatus {
-  QUEUED
-  RUNNING
-  SUCCEEDED
-  FAILED
-  CANCELED
-}
-
-enum AgentRunType {
-  /// Full UI: orchestrate/generate a workflow draft (plan + draft steps + validate + (optional) input/outputs spec).
-  WORKFLOW_ORCHESTRATE
-  /// No/weak UI: generate inputSpec for an existing workflow (may auto-apply).
-  WORKFLOW_INPUTSPEC
-  /// No/weak UI: generate outputsSpec for an existing workflow (may auto-apply).
-  WORKFLOW_OUTPUTSSPEC
-  /// No/weak UI: generate a CRON expression (future use).
-  CRON_EXPRESSION
-}
-
 enum UserRole {
   ADMIN
   MEMBER
@@ -350,10 +331,8 @@ model User {
   batchesUpdated   Batch[] @relation("BatchUpdatedBy")
   batchesTriggered Batch[] @relation("BatchTriggeredBy")
 
-  agentRunsOwned     AgentRun[] @relation("AgentRunOwner")
-  agentRunsCreated   AgentRun[] @relation("AgentRunCreatedBy")
-  agentRunsUpdated   AgentRun[] @relation("AgentRunUpdatedBy")
-  agentRunsTriggered AgentRun[] @relation("AgentRunTriggeredBy")
+  chats              Chat[]
+  chatInitialSends   ChatInitialSend[]
 
   @@index([updatedAt])
 }
@@ -639,7 +618,7 @@ model Workflow {
   deps          WorkflowStepDep[]
   versions      WorkflowVersion[]
   runs          Run[]
-  agentRuns     AgentRun[]
+  chats        Chat[]
   schedules     Schedule[]
   batches       Batch[]
   jobRuns       JobRun[]
@@ -1165,66 +1144,6 @@ model StreamEvent {
 
 /// Agent runs are first-class, resumable, replayable AI tasks.
 ///
-/// Design goals:
-/// - Routeable via publicId (e.g. `/agent/<publicId>`)
-/// - Streaming via StreamEvent topic `agentRun:<publicId>` (replay + cursor)
-/// - SnapshotJson provides fast reload + supports weak/no-UI "apply" flows
-/// - Operation links provide consistent error surfacing + audit/history
-model AgentRun {
-  id           String        @id
-  publicId     String        @unique
-  publicNumber Int
-
-  type         AgentRunType
-  status       AgentRunStatus @default(QUEUED)
-
-  /// Optional binding to an existing workflow (edit/augment flows).
-  workflowId   String?
-  workflow     Workflow?     @relation(fields: [workflowId], references: [publicId], onDelete: Restrict)
-
-  ownerUserId       String?
-  createdByUserId String?
-  updatedByUserId   String?
-  triggeredByUserId String?
-
-  ownerUser       User? @relation("AgentRunOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
-  createdByUser   User? @relation("AgentRunCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  updatedByUser   User? @relation("AgentRunUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
-  triggeredByUser User? @relation("AgentRunTriggeredBy", fields: [triggeredByUserId], references: [id], onDelete: SetNull)
-
-  /// The operation that created/owns this run (used for global history + error surfacing).
-  operationId  String?
-  operation    Operation?    @relation(fields: [operationId], references: [id], onDelete: SetNull)
-
-  /// Normalized request payload (JSON string). Keep it small; large artifacts should live elsewhere.
-  inputJson    String        @default("{}")
-
-  /// Materialized UI state / result snapshot (JSON string).
-  snapshotJson String        @default("{}")
-
-  /// Best-effort pointer to the last StreamEvent id written for this run's topic.
-  lastEventId  Int?
-
-  /// Failure details (mirrors Operation error fields for local reads).
-  errorCode     String?
-  errorMessage  String?
-  errorMetaJson String?
-  errorAt       DateTime?
-
-  startedAt    DateTime?
-  finishedAt   DateTime?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-
-  @@index([status, createdAt])
-  @@index([createdByUserId, createdAt])
-  @@index([ownerUserId, createdAt])
-  @@index([updatedByUserId, updatedAt])
-  @@index([triggeredByUserId, createdAt])
-  @@index([workflowId, createdAt])
-  @@index([operationId])
-}
-
 /// Platform API: operations are first-class resources for asynchronous/side-effecting commands.
 /// Pair with IdempotencyRecord so clients can safely retry POST requests.
 model Operation {
@@ -1233,6 +1152,8 @@ model Operation {
   publicNumber        Int
   status              OperationStatus @default(PENDING)
   action              String
+  /// Operation origin channel: ui | agent | mcp
+  source              String?
   scope               String?
   targetType          String?
   targetId            String?
@@ -1265,7 +1186,6 @@ model Operation {
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
 
-  agentRuns           AgentRun[]
   idempotencyRecords  IdempotencyRecord[]
 
   @@index([status, createdAt])
@@ -1293,4 +1213,82 @@ model IdempotencyRecord {
 model PublicIdCounter {
   key        String @id
   nextNumber Int
+}
+
+/// AI chat sessions using the standard AI SDK `useChat` / `streamText` pattern.
+/// Messages are stored as a JSON-serialized array of AI SDK `UIMessage` objects.
+model Chat {
+  id           String    @id @default(uuid())
+
+  publicNumber Int       @default(0)
+  publicId     String    @unique @default("")
+
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Optional binding to an existing workflow (edit/augment flows).
+  workflowId   String?
+  workflow     Workflow?  @relation(fields: [workflowId], references: [publicId], onDelete: SetNull)
+
+  title        String    @default("")
+
+  /// AI model used for this chat, e.g. "anthropic/claude-opus-4.6".
+  model        String?
+
+  /// Resolved agent profile for this chat (cached after first classification).
+  /// e.g. "workflow.orchestrator" | "general.tools"
+  profileId    String?
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  messages     Message[]
+  initialSend  ChatInitialSend?
+
+  @@index([userId, updatedAt])
+  @@index([workflowId])
+}
+
+/// One-shot handoff payload for starting a chat with an initial user turn.
+/// Stored server-side to keep URLs clean and support resilient retries.
+model ChatInitialSend {
+  id             String   @id @default(uuid())
+
+  chatId          String   @unique
+  chat            Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// JSON payload: { text: string, files: Array<{url,mediaType,filename?}> }
+  payloadJson     String
+
+  /// Stable key for dedupe and observability across retries.
+  idempotencyKey  String
+
+  /// Lease timestamp for "in-flight first send"; expires after a short TTL.
+  claimedAt       DateTime?
+  consumedAt      DateTime?
+  expiresAt       DateTime
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([expiresAt, consumedAt])
+}
+
+model Message {
+  id          String   @id @default(uuid())
+
+  chatId      String
+  chat        Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  role        String
+  parts       String   @default("[]")
+  attachments String   @default("[]")
+
+  createdAt   DateTime @default(now())
+
+  @@index([chatId, createdAt])
 }

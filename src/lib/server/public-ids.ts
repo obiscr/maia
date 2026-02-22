@@ -2,7 +2,7 @@ import "server-only"
 
 import { Prisma, type PrismaClient } from "@prisma/client"
 
-export type PublicIdKind = "workflow" | "run" | "job" | "schedule" | "batch" | "operation" | "agentRun" | "user"
+export type PublicIdKind = "workflow" | "run" | "job" | "schedule" | "batch" | "operation" | "user" | "chat"
 
 const PREFIX_BY_KIND: Record<PublicIdKind, string> = {
   workflow: "wf",
@@ -11,8 +11,8 @@ const PREFIX_BY_KIND: Record<PublicIdKind, string> = {
   schedule: "sch",
   batch: "bat",
   operation: "op",
-  agentRun: "ar",
   user: "usr",
+  chat: "ch",
 }
 
 const COUNTER_KEY_BY_KIND: Record<PublicIdKind, string> = {
@@ -22,8 +22,8 @@ const COUNTER_KEY_BY_KIND: Record<PublicIdKind, string> = {
   schedule: "schedule",
   batch: "batch",
   operation: "operation",
-  agentRun: "agentRun",
   user: "user",
+  chat: "chat",
 }
 
 export function normalizePublicId(raw: string) {
