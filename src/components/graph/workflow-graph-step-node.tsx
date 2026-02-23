@@ -3,6 +3,7 @@
 import * as React from "react"
 import {
   Braces,
+  CheckCircle2,
   Clock,
   Lightbulb,
   MoreVertical,
@@ -14,6 +15,7 @@ import {
   Trash2Icon,
   ListTree,
   X,
+  XCircle,
 } from "lucide-react"
 import { Handle, Position, type NodeProps } from "reactflow"
 
@@ -57,7 +59,7 @@ export type WorkflowGraphStepNodeData = {
   durationMs?: number | null
   highlight?: boolean
   otherFailedStepsCount?: number
-  planState?: "plan" | "draft" | "complete"
+  planState?: "plan" | "draft" | "complete" | "error"
   isDraftLoading?: boolean
   /** Optional: enable node right-click context menu. Default false. */
   enableContextMenu?: boolean
@@ -78,7 +80,7 @@ export const WorkflowGraphStepNode = React.memo(function WorkflowGraphStepNode(
   const { t } = useI18n()
   const { stepKey, name, depsCount, mode, status, durationMs, highlight, planState, isDraftLoading } = props.data
   const isSelected = props.selected === true
-  const isPlanOrDraft = planState === "plan" || planState === "draft"
+  const isPlanOrDraft = planState === "plan" || planState === "draft" || planState === "error"
   const canEdit = mode === "edit" && !!props.data.onEdit && !!props.data.onDelete && !isPlanOrDraft
   const deps = Array.isArray(props.data.deps) ? props.data.deps.map(String).filter(Boolean) : []
   const canRunActions = mode === "view" && (!!props.data.onRetry || !!props.data.onRestartFrom) && !isPlanOrDraft
@@ -459,7 +461,9 @@ export const WorkflowGraphStepNode = React.memo(function WorkflowGraphStepNode(
       ? { label: t("agent.node.plan"), variant: "outline" as const, icon: Lightbulb }
       : planState === "draft"
         ? { label: t("agent.node.draft"), variant: "secondary" as const, icon: null }
-        : null
+        : planState === "error"
+          ? { label: t("agent.node.error"), variant: "destructive" as const, icon: null }
+          : null
 
   const nodeInner = (
     <div
@@ -526,6 +530,14 @@ export const WorkflowGraphStepNode = React.memo(function WorkflowGraphStepNode(
         {planState === "draft" && isDraftLoading ? (
           <div className="flex items-center">
             <GradientLoaderIcon className="h-4 w-4 animate-spin will-change-transform" />
+          </div>
+        ) : planState === "error" ? (
+          <div className="flex items-center">
+            <XCircle className="h-4 w-4 text-destructive" />
+          </div>
+        ) : planState === "complete" ? (
+          <div className="flex items-center">
+            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
           </div>
         ) : canEdit ? (
           <div className="flex items-center gap-1">

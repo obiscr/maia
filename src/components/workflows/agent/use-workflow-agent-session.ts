@@ -8,6 +8,7 @@ import {
   isToolUIPart,
   getToolName,
   lastAssistantMessageIsCompleteWithApprovalResponses,
+  lastAssistantMessageIsCompleteWithToolCalls,
   type UIMessage,
 } from "ai"
 
@@ -63,6 +64,7 @@ export function useWorkflowAgentSession(params: {
   const stableChatId = chatIdProp || chatIdRef.current
 
   const didAutoSendRef = React.useRef(false)
+  const didAttemptInitialHandoffRef = React.useRef(false)
   const initialHandoffRef = React.useRef<{ idempotencyKey: string; acknowledged: boolean } | null>(null)
   const claimingInitialHandoffRef = React.useRef(false)
   const initialStepsRef = React.useRef<WorkflowStep[] | null>(null)
@@ -83,39 +85,13 @@ export function useWorkflowAgentSession(params: {
   const [mode, setModeState] = React.useState<AgentMode>(() => params.initialMode ?? DEFAULT_AGENT_MODE)
 
   const shouldAutoContinueToolChain = React.useCallback(({ messages }: { messages: UIMessage[] }): boolean => {
-    if (lastAssistantMessageIsCompleteWithApprovalResponses({ messages })) return true
-
-    const last = messages[messages.length - 1]
-    if (!last || last.role !== "assistant") return false
-
-    const toolParts = last.parts.filter(isToolUIPart)
-
-    // Do NOT continue after the workflow has been persisted successfully.
-    const hasSavedWorkflow = toolParts.some((p) => {
-      const n = getToolName(p)
-      if (n !== "create_workflow" && n !== "update_workflow") return false
-      if (p.state !== "output-available") return false
-      const out = p.output
-      return out && typeof out === "object" && (out as Record<string, unknown>).ok === true
-    })
-    if (hasSavedWorkflow) return false
-
-    // Only auto-continue when the orchestrator flow is in progress.
-    // For non-orchestrator queries the server-side multi-step loop
-    // (stopWhen + prepareStep) handles tool execution completely
-    // within a single HTTP request — no client-side kick is needed.
-    const ORCHESTRATOR_TOOLS = new Set([
-      "create_plan",
-      "define_step",
-      "validate_draft",
-      "generate_input_spec",
-      "generate_output_spec",
-      "load_workflow",
-    ])
-    const hasCompletedOrchestratorTool = toolParts.some(
-      (p) => (p.state === "output-available" || p.state === "output-error") && ORCHESTRATOR_TOOLS.has(getToolName(p)),
+    // AI SDK best practice: auto-continue when all tool results are available.
+    // - lastAssistantMessageIsCompleteWithToolCalls: handles addToolOutput (plan_ready, suggest_mode_switch, etc.)
+    // - lastAssistantMessageIsCompleteWithApprovalResponses: handles addToolApprovalResponse (tool approval flow)
+    return (
+      lastAssistantMessageIsCompleteWithToolCalls({ messages }) ||
+      lastAssistantMessageIsCompleteWithApprovalResponses({ messages })
     )
-    return hasCompletedOrchestratorTool
   }, [])
 
   const setModel = React.useCallback(
@@ -229,21 +205,56 @@ export function useWorkflowAgentSession(params: {
     return { streamingStepKey: null, isActive: false }
   }, [chat.messages, chatPending])
 
-  // Track which steps have fully completed (output-available) vs merely drafted (input-available).
-  // extractDraftStepsFromMessages includes input-available for graph data, but planState should
-  // only transition to "complete" at output-available.
-  const completedDefineStepKeys = React.useMemo((): Set<string> => {
-    const keys = new Set<string>()
-    for (const msg of chat.messages) {
+  // Track define_step lifecycle for the CURRENT user turn only.
+  // AI SDK streams tool parts incrementally; by scoping to the latest user turn we avoid
+  // historical define_step outputs from older turns masking loading/check states in edits.
+  const { completedDefineStepKeys, failedDefineStepKeys, redraftingStepKeys } = React.useMemo(() => {
+    const completed = new Set<string>()
+    const failed = new Set<string>()
+    const redrafting = new Set<string>()
+
+    const lastUserMsgIdx = (() => {
+      for (let i = chat.messages.length - 1; i >= 0; i--) {
+        if (chat.messages[i]?.role === "user") return i
+      }
+      return -1
+    })()
+    const turnMessages = lastUserMsgIdx >= 0 ? chat.messages.slice(lastUserMsgIdx + 1) : chat.messages
+
+    // Collect the last define_step state per stepKey (ordered by message/part appearance).
+    const lastStateByKey = new Map<string, string>()
+    const lastOutputByKey = new Map<string, Record<string, unknown> | null>()
+    for (const msg of turnMessages) {
       for (const part of msg.parts) {
-        if (isToolUIPart(part) && getToolName(part) === "define_step" && part.state === "output-available") {
-          const inp = isRecord(part.input) ? (part.input as Record<string, unknown>) : null
-          const step = isRecord(inp?.step) ? (inp.step as Record<string, unknown>) : null
-          if (step && typeof step.stepKey === "string") keys.add(step.stepKey)
-        }
+        if (!isToolUIPart(part) || getToolName(part) !== "define_step") continue
+        const inp = isRecord(part.input) ? (part.input as Record<string, unknown>) : null
+        const step = isRecord(inp?.step) ? (inp.step as Record<string, unknown>) : null
+        const key = step && typeof step.stepKey === "string" ? step.stepKey : null
+        if (!key) continue
+        lastStateByKey.set(key, part.state)
+        lastOutputByKey.set(
+          key,
+          part.state === "output-available" && isRecord(part.output) ? (part.output as Record<string, unknown>) : null,
+        )
       }
     }
-    return keys
+
+    for (const [key, state] of lastStateByKey) {
+      if (state === "output-available") {
+        const output = lastOutputByKey.get(key)
+        if (output && output.ok === false) {
+          failed.add(key)
+        } else {
+          completed.add(key)
+        }
+      } else if (state === "output-denied" || state === "output-error") {
+        failed.add(key)
+      } else if (state === "input-streaming" || state === "input-available") {
+        redrafting.add(key)
+      }
+    }
+
+    return { completedDefineStepKeys: completed, failedDefineStepKeys: failed, redraftingStepKeys: redrafting }
   }, [chat.messages])
 
   // Workflow panel state
@@ -418,6 +429,15 @@ export function useWorkflowAgentSession(params: {
         }
         return [...mergedDraftSteps, ...remaining]
       }
+      // Edit mode: merge streamed drafts with original workflow steps so that
+      // unmodified steps remain visible on the canvas.
+      if (workflow?.steps?.length) {
+        const draftByKey = new Map(draftStepsFromStream.map((s) => [s.stepKey, s]))
+        const merged = workflow.steps.map((original) => draftByKey.get(original.stepKey) ?? original)
+        const originalKeys = new Set(workflow.steps.map((s) => s.stepKey))
+        const added = draftStepsFromStream.filter((s) => !originalKeys.has(s.stepKey))
+        return [...merged, ...added]
+      }
       return draftStepsFromStream
     }
     if (planPreviewSteps) {
@@ -434,43 +454,40 @@ export function useWorkflowAgentSession(params: {
     return workflow?.steps ?? []
   }, [localStepOverrides, proposal, draftStepsFromStream, planPreviewSteps, workflow])
 
-  // Compute planState for each step node on the canvas.
-  // A step is "complete" only after its define_step reaches output-available (server confirmed).
-  // Steps at input-available are still "draft" with a spinner.
-  // `isDefineStepActive` covers the first-step edge case where the tool call header is seen
-  // but stepKey hasn't been parsed from the partial JSON yet.
-  const planStateByKey = React.useMemo((): Record<string, "plan" | "draft" | "complete"> => {
-    if (!planPreviewSteps) return {}
-    const previewKeys = new Set(planPreviewSteps.map((s) => s.stepKey))
-    const hasDraftActivity = draftStepsFromStream.length > 0 || isDefineStepActive
-    const hasProposal = Boolean(readDraftSteps(proposal)?.length)
-    if (hasProposal) return {}
-
-    const result: Record<string, "plan" | "draft" | "complete"> = {}
-    for (const step of stepsForGraph) {
-      if (completedDefineStepKeys.has(step.stepKey)) {
-        result[step.stepKey] = "complete"
-      } else if (previewKeys.has(step.stepKey)) {
-        result[step.stepKey] = hasDraftActivity ? "draft" : "plan"
-      }
-    }
-    return result
-  }, [planPreviewSteps, completedDefineStepKeys, draftStepsFromStream, isDefineStepActive, proposal, stepsForGraph])
+  // Current-turn define_step activity only (AI SDK tool-part lifecycle).
+  // This avoids historical draft state from older turns leaking into
+  // the loading indicator right after the next user send.
+  const hasCurrentTurnDefineActivity = React.useMemo(() => {
+    return (
+      isDefineStepActive ||
+      completedDefineStepKeys.size > 0 ||
+      failedDefineStepKeys.size > 0 ||
+      redraftingStepKeys.size > 0
+    )
+  }, [isDefineStepActive, completedDefineStepKeys, failedDefineStepKeys, redraftingStepKeys])
 
   const isDraftLoadingByKey = React.useMemo((): Record<string, boolean> => {
     // Primary: we know the exact stepKey being streamed
     if (streamingDefineStepKey) {
       return { [streamingDefineStepKey]: true }
     }
+    // Show loading for any step currently being redrafted (AI fixing a previously completed step)
+    if (chatPending && redraftingStepKeys.size > 0) {
+      const result: Record<string, boolean> = {}
+      for (const key of redraftingStepKeys) result[key] = true
+      return result
+    }
     // Fallback: define_step is active (tool call header seen) but stepKey not yet
     // parseable from partial JSON, OR we're between auto-continue streams.
-    // Show spinner on the first uncompleted plan step by order.
+    // Show spinner on the first uncompleted step by order.
     if (!chatPending) return {}
-    if (!planPreviewSteps || planPreviewSteps.length === 0) return {}
-    const hasAnyDefineStep = completedDefineStepKeys.size > 0 || draftStepsFromStream.length > 0 || isDefineStepActive
+    const hasAnyDefineStep = hasCurrentTurnDefineActivity
     if (!hasAnyDefineStep) return {}
-    for (const step of planPreviewSteps) {
-      if (!completedDefineStepKeys.has(step.stepKey)) {
+
+    const candidateSteps = planPreviewSteps ?? stepsForGraph
+    if (candidateSteps.length === 0) return {}
+    for (const step of candidateSteps) {
+      if (!completedDefineStepKeys.has(step.stepKey) && !failedDefineStepKeys.has(step.stepKey)) {
         return { [step.stepKey]: true }
       }
     }
@@ -480,7 +497,56 @@ export function useWorkflowAgentSession(params: {
     chatPending,
     planPreviewSteps,
     completedDefineStepKeys,
-    draftStepsFromStream,
+    failedDefineStepKeys,
+    redraftingStepKeys,
+    hasCurrentTurnDefineActivity,
+    isDefineStepActive,
+    stepsForGraph,
+  ])
+
+  // Compute planState for each step node from the same tool-part source used by loading.
+  // This keeps node icon transitions consistent with AI SDK streaming states.
+  const planStateByKey = React.useMemo((): Record<string, "plan" | "draft" | "complete" | "error"> => {
+    // Edit mode (no plan): only touched steps get state badges/icons.
+    if (!planPreviewSteps) {
+      const result: Record<string, "plan" | "draft" | "complete" | "error"> = {}
+      for (const step of stepsForGraph) {
+        if (failedDefineStepKeys.has(step.stepKey)) {
+          result[step.stepKey] = "error"
+        } else if (isDraftLoadingByKey[step.stepKey] || redraftingStepKeys.has(step.stepKey)) {
+          result[step.stepKey] = "draft"
+        } else if (completedDefineStepKeys.has(step.stepKey)) {
+          result[step.stepKey] = "complete"
+        }
+      }
+      return result
+    }
+
+    // Create mode (has plan): plan → draft → complete/error progression.
+    const previewKeys = new Set(planPreviewSteps.map((s) => s.stepKey))
+    const hasDraftActivity = hasCurrentTurnDefineActivity
+    const result: Record<string, "plan" | "draft" | "complete" | "error"> = {}
+
+    for (const step of stepsForGraph) {
+      if (failedDefineStepKeys.has(step.stepKey)) {
+        result[step.stepKey] = "error"
+      } else if (isDraftLoadingByKey[step.stepKey] || redraftingStepKeys.has(step.stepKey)) {
+        result[step.stepKey] = "draft"
+      } else if (completedDefineStepKeys.has(step.stepKey)) {
+        result[step.stepKey] = "complete"
+      } else if (previewKeys.has(step.stepKey)) {
+        result[step.stepKey] = hasDraftActivity ? "draft" : "plan"
+      }
+    }
+    return result
+  }, [
+    planPreviewSteps,
+    stepsForGraph,
+    failedDefineStepKeys,
+    isDraftLoadingByKey,
+    redraftingStepKeys,
+    completedDefineStepKeys,
+    hasCurrentTurnDefineActivity,
     isDefineStepActive,
   ])
 
@@ -514,6 +580,7 @@ export function useWorkflowAgentSession(params: {
     if (prevChatId === stableChatId) return
 
     didAutoSendRef.current = false
+    didAttemptInitialHandoffRef.current = false
     initialHandoffRef.current = null
     claimingInitialHandoffRef.current = false
     initialStepsRef.current = null
@@ -550,6 +617,10 @@ export function useWorkflowAgentSession(params: {
     },
     [pending, chat],
   )
+  const latestSendRef = React.useRef(send)
+  React.useEffect(() => {
+    latestSendRef.current = send
+  }, [send])
 
   const editUserMessage = React.useCallback(
     async (messageId: string, nextText: string, nextFiles?: FileUIPart[]) => {
@@ -612,6 +683,7 @@ export function useWorkflowAgentSession(params: {
   // Landing-page handoff: claim initial send payload from DB, then auto-send once.
   React.useEffect(() => {
     if (!chatIdProp) return
+    if (didAttemptInitialHandoffRef.current) return
     if (didAutoSendRef.current) return
     if (pending) return
     if (chat.messages.length > 0) return
@@ -648,10 +720,13 @@ export function useWorkflowAgentSession(params: {
           idempotencyKey: String(handoff.idempotencyKey ?? "").trim() || crypto.randomUUID(),
           acknowledged: false,
         }
-        send(text, files.length ? files : undefined)
+        latestSendRef.current(text, files.length ? files : undefined)
       } catch {
         // Best effort; no toast for silent startup handoff.
       } finally {
+        // Keep this one-attempt-per-chat after async completes so Strict Mode's
+        // throwaway pass can retry while normal re-renders stay idempotent.
+        if (!canceled) didAttemptInitialHandoffRef.current = true
         claimingInitialHandoffRef.current = false
       }
     })()
@@ -661,7 +736,7 @@ export function useWorkflowAgentSession(params: {
       // Release the local lock so the second effect pass can still claim+send.
       claimingInitialHandoffRef.current = false
     }
-  }, [chatIdProp, pending, chat.messages.length, stableChatId, send])
+  }, [chatIdProp, pending, chat.messages.length, stableChatId])
 
   // Mark DB handoff as consumed only after the first user message exists locally.
   React.useEffect(() => {
@@ -696,6 +771,19 @@ export function useWorkflowAgentSession(params: {
             .map((w) => w.slice(0, 1).toUpperCase() + w.slice(1))
             .join(" ")
 
+        const baselineDepsByKey = new Map(
+          (workflow?.steps ?? []).map((s) => [String(s.stepKey), Array.isArray(s.deps) ? s.deps.map(String) : []]),
+        )
+        const guardedSteps = stepsForGraph.map((s) => {
+          if (!effectiveWorkflowId) return s
+          const currentDeps = Array.isArray(s.deps) ? s.deps.map(String).filter(Boolean) : []
+          if (currentDeps.length > 0) return { ...s, deps: currentDeps }
+          const baselineDeps = baselineDepsByKey.get(String(s.stepKey)) ?? []
+          // Edit-mode safeguard: if deps are accidentally emptied, preserve original deps.
+          if (baselineDeps.length > 0) return { ...s, deps: baselineDeps }
+          return { ...s, deps: currentDeps }
+        })
+
         const payload = {
           name: (() => {
             const raw =
@@ -726,7 +814,7 @@ export function useWorkflowAgentSession(params: {
           envJson: typeof draft?.envJson === "string" ? String(draft.envJson) : "{}",
           inputSpec: typeof draft?.inputSpec === "string" ? String(draft.inputSpec) : undefined,
           outputsSpec: typeof draft?.outputsSpec === "string" ? String(draft.outputsSpec) : undefined,
-          steps: stepsForGraph,
+          steps: guardedSteps,
         }
 
         const isUpdate = Boolean(effectiveWorkflowId)
@@ -838,6 +926,7 @@ export function useWorkflowAgentSession(params: {
     updateDraftStep,
     renameDraftStepKey,
     editUserMessage,
+    addToolOutput: chat.addToolOutput,
     addToolApprovalResponse: chat.addToolApprovalResponse,
   }
 }

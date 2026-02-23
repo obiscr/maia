@@ -48,7 +48,7 @@ export type WorkflowGraphStep = {
   stepKey: string
   name: string
   deps?: string[]
-  planState?: "plan" | "draft" | "complete"
+  planState?: "plan" | "draft" | "complete" | "error"
   isDraftLoading?: boolean
 }
 

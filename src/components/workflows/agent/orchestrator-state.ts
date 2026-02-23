@@ -28,7 +28,7 @@ export type WorkflowForPanel = {
 
 export type ProposalState = { ok?: boolean; draft?: unknown; warnings?: string[]; toolCallId?: string } | null
 
-export type OrchestratorPlanStep = { name: string; description: string }
+export type OrchestratorPlanStep = { stepKey?: string; name: string; description: string }
 export type OrchestratorPlan = { title: string | null; steps: OrchestratorPlanStep[] }
 
 export type PlanPreviewStep = {
@@ -54,7 +54,8 @@ function readOrchestratorPlanInput(input: unknown): OrchestratorPlan | null {
     const name = typeof step?.name === "string" ? step.name.trim() : ""
     const description = typeof step?.description === "string" ? step.description.trim() : ""
     if (!name) return null
-    steps.push({ name, description })
+    const stepKey = typeof step?.stepKey === "string" ? step.stepKey.trim() : undefined
+    steps.push({ ...(stepKey ? { stepKey } : {}), name, description })
   }
 
   return {
