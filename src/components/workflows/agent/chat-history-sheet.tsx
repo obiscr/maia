@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { Check, MoreHorizontal, Pencil, Search, Trash2, X } from "lucide-react"
+import { Bot, Check, ListTodo, MessageCircleDashed, MoreHorizontal, Pencil, Search, Trash2, X } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 
 import { useI18n } from "@/components/i18n-provider"
 import { StandardActionDialog } from "@/components/common/standard-action-dialog"
@@ -17,11 +18,19 @@ import { formatPublicIdForDisplay } from "@/lib/shared/format/id"
 import { formatAbsoluteTime } from "@/lib/shared/format/time"
 import type { Locale } from "@/lib/shared/i18n/constants"
 import { tApiError } from "@/lib/shared/i18n/error"
+import { AGENT_MODE_I18N_KEYS, isAgentMode, type AgentMode } from "@/lib/shared/agent/modes"
+
+const MODE_ICONS: Record<AgentMode, LucideIcon> = {
+  agent: Bot,
+  chat: MessageCircleDashed,
+  plan: ListTodo,
+}
 
 export type ChatHistoryItem = {
   id: string
   publicId: string
   title: string
+  agentMode?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -181,6 +190,8 @@ export function ChatHistorySheet(props: {
                   const isEditing = editingId === it.id
                   const busy = savingId === it.id
                   const title = (it.title || "").trim() || t("agent.chat.newChat")
+                  const modeLabelKey =
+                    it.agentMode && isAgentMode(it.agentMode) ? AGENT_MODE_I18N_KEYS[it.agentMode] : null
                   return (
                     <div
                       key={it.id}
@@ -211,12 +222,25 @@ export function ChatHistorySheet(props: {
                               }}
                             />
                           ) : (
-                            <div className="truncate text-sm font-medium">{title}</div>
+                            <div className="flex items-center gap-2">
+                              {modeLabelKey
+                                ? (() => {
+                                    const ModeIcon = MODE_ICONS[it.agentMode as AgentMode]
+                                    return (
+                                      <span className="inline-flex shrink-0 items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground">
+                                        <ModeIcon className="size-3" />
+                                        {t(modeLabelKey)}
+                                      </span>
+                                    )
+                                  })()
+                                : null}
+                              <span className="truncate text-sm font-medium">{title}</span>
+                            </div>
                           )}
-                          <div className="mt-1 text-xs text-muted-foreground">
+                          <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
                             <span className="font-mono">{formatPublicIdForDisplay(it.publicId)}</span>
                             <span> • </span>
-                            {formatAbsoluteTime(it.updatedAt, { locale: props.locale as Locale })}
+                            <span>{formatAbsoluteTime(it.updatedAt, { locale: props.locale as Locale })}</span>
                           </div>
                         </div>
 

@@ -48,6 +48,8 @@ export type WorkflowGraphStep = {
   stepKey: string
   name: string
   deps?: string[]
+  planState?: "plan" | "draft" | "complete"
+  isDraftLoading?: boolean
 }
 
 export type WorkflowGraphCanvasUiState = {
@@ -307,6 +309,8 @@ export function useWorkflowGraphCanvas(args: {
       } else {
         if (evt.shiftKey || evt.metaKey || evt.ctrlKey) return
       }
+      const data = n.data as WorkflowGraphStepNodeData | undefined
+      if (data?.planState === "plan" || data?.planState === "draft") return
       args.onEditStep(String(n.id))
     },
     [args.onEditStep, showToolbar],
@@ -407,7 +411,9 @@ export function useWorkflowGraphCanvas(args: {
             durationMs: args.stepDurationMsByKey?.[s.stepKey],
             highlight: highlight.has(s.stepKey),
             otherFailedStepsCount: Math.max(0, failedKeys.size - (failedKeys.has(s.stepKey) ? 1 : 0)),
-            onEdit: args.onEditStep,
+            planState: s.planState,
+            isDraftLoading: s.isDraftLoading,
+            onEdit: s.planState === "plan" || s.planState === "draft" ? undefined : args.onEditStep,
             onDelete: args.onDeleteStep,
             onRetry: args.onRetryStep,
             onRerunStep: args.onRerunStep,
@@ -500,21 +506,20 @@ export function useWorkflowGraphCanvas(args: {
     syncFromSteps({ layout: true, preset: layoutPreset })
   }, [args.steps.length, layoutSig, layoutPreset, syncFromSteps])
 
+  // Unified sync: detect structural changes and apply dagre layout atomically in the
+  // same setNodes pass that introduces new nodes. This avoids a race between a "data-only"
+  // sync (new nodes at 0,0) and a subsequent "layout" sync that could be skipped or delayed.
   React.useEffect(() => {
     if (!didInitialLayoutRef.current) return
-    syncFromSteps({ layout: false })
-  }, [args.steps, syncFromSteps])
 
-  // In view mode, when the graph structure changes (steps/deps), re-run dagre layout.
-  // This prevents "all new nodes at (0,0)" overlap during streaming updates (e.g. agent proposal drafts).
-  React.useEffect(() => {
-    if (!didInitialLayoutRef.current) return
-    if (args.mode !== "view") return
-    if (!args.steps.length) return
-    if (layoutSig === lastLayoutSigRef.current) return
-    lastLayoutSigRef.current = layoutSig
-    syncFromSteps({ layout: true, preset: layoutPreset })
-  }, [args.mode, args.steps.length, layoutSig, layoutPreset, syncFromSteps])
+    const structureChanged = layoutSig !== lastLayoutSigRef.current
+    if (structureChanged) {
+      lastLayoutSigRef.current = layoutSig
+    }
+
+    const needsLayout = structureChanged && args.mode === "view" && args.steps.length > 0
+    syncFromSteps({ layout: needsLayout, preset: layoutPreset })
+  }, [args.steps, args.mode, layoutSig, layoutPreset, syncFromSteps])
 
   // Extra safety: in view mode we should never end up with a "partial viewport" while steps exist.
   // If nodes are present but not all of them are mounted/visible due to timing, force a re-fit.

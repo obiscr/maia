@@ -4,7 +4,6 @@ import * as React from "react"
 import { ChevronDown, ChevronRight, CheckCircle2, Circle, XCircle, ListTree } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useI18n } from "@/components/i18n-provider"
 import { getToolName } from "ai"
@@ -102,10 +101,11 @@ type ToolCategory =
   | "generic"
 
 function categorize(toolName: string): ToolCategory {
-  if (toolName === "set_plan") return "orchestrator_plan"
-  if (toolName === "draft_step") return "orchestrator_step"
-  if (toolName === "finalize_draft") return "orchestrator_finalize"
-  if (toolName === "create_workflow_draft" || toolName === "update_workflow_draft") return "orchestrator_persist"
+  if (toolName === "create_plan") return "orchestrator_plan"
+  if (toolName === "define_step") return "orchestrator_step"
+  if (toolName === "validate_draft") return "orchestrator_finalize"
+  if (toolName === "create_workflow" || toolName === "update_workflow") return "orchestrator_persist"
+  if (toolName === "load_workflow") return "read"
   if (toolName === "generate_input_spec" || toolName === "generate_output_spec") return "orchestrator_spec"
 
   const n = rawToI18nKey(toolName)
@@ -153,6 +153,10 @@ function shouldShowDetails(category: ToolCategory, state: string): boolean {
   if (category === "orchestrator_spec") return false
   if (category === "write" && state === "output-available") return false
   return true
+}
+
+function isTrivialOutput(output: Record<string, unknown> | null | undefined): boolean {
+  return output != null && output.ok === true && Object.keys(output).length === 1
 }
 
 // ---------------------------------------------------------------------------
@@ -247,12 +251,7 @@ const ToolStatusIcon = React.memo(function ToolStatusIcon(props: {
 // Main component
 // ---------------------------------------------------------------------------
 
-export function WorkflowAgentInlineToolCall(props: {
-  part: ToolPart
-  plannedName?: string
-  isStreaming?: boolean
-  onToolApprovalResponse?: (input: { id: string; approved: boolean; reason?: string }) => void
-}) {
+export function WorkflowAgentInlineToolCall(props: { part: ToolPart; plannedName?: string; isStreaming?: boolean }) {
   const { t } = useI18n()
   const part = props.part
   const rawName = getToolName(part as Parameters<typeof getToolName>[0])
@@ -297,7 +296,8 @@ export function WorkflowAgentInlineToolCall(props: {
   const i18n = resolveI18n(t, rawName, stateKey, Object.keys(vars).length ? vars : undefined)
   const displayLabel = `${t("toolCalls.title")}: ${i18n.label}`
 
-  const showDetailSection = shouldShowDetails(category, isError ? "output-error" : part.state)
+  const showDetailSection =
+    shouldShowDetails(category, isError ? "output-error" : part.state) && !isTrivialOutput(outputRecord)
   const hasOutput = isDone && part.output != null
   const hasError = isError && (part.errorText != null || part.output != null)
   const hasInput = part.input != null
@@ -317,15 +317,7 @@ export function WorkflowAgentInlineToolCall(props: {
     (category === "orchestrator_plan" && (isDone || part.state === "input-available")) ||
     (category === "orchestrator_step" && (isDone || part.state === "input-available"))
 
-  const approvalId = React.useMemo(() => {
-    const approval = (part as unknown as { approval?: unknown }).approval
-    if (!approval || typeof approval !== "object") return null
-    const id = (approval as { id?: unknown }).id
-    return typeof id === "string" && id.trim() ? id : null
-  }, [part])
-  const canRespondApproval = Boolean(part.state === "approval-requested" && approvalId && props.onToolApprovalResponse)
-
-  const hasExpandable = hasJsonToShow || hasOrchestratorBody || canRespondApproval
+  const hasExpandable = hasJsonToShow || hasOrchestratorBody
   const detailPayload = React.useMemo(() => {
     if (!hasJsonToShow) return null
     if (isError) return errorPayload
@@ -354,7 +346,6 @@ export function WorkflowAgentInlineToolCall(props: {
     prevErrorRef.current = isError
 
     if (hasUserToggledRef.current) return
-    if (hasExpandable && part.state === "approval-requested") setOpen(true)
     if (!wasDone && isDone && hasExpandable) setOpen(true)
     if (!wasError && isError && hasExpandable) setOpen(true)
   }, [isDone, isError, hasExpandable, part.state])
@@ -402,30 +393,6 @@ export function WorkflowAgentInlineToolCall(props: {
 
       {open && hasExpandable ? (
         <div className="border-t space-y-2 bg-background">
-          {canRespondApproval ? (
-            <div className="px-2 pt-2 flex items-center gap-2">
-              <Button
-                size="sm"
-                onClick={() => {
-                  if (!approvalId) return
-                  props.onToolApprovalResponse?.({ id: approvalId, approved: true })
-                }}
-              >
-                Approve
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  if (!approvalId) return
-                  props.onToolApprovalResponse?.({ id: approvalId, approved: false })
-                }}
-              >
-                Deny
-              </Button>
-            </div>
-          ) : null}
-
           {category === "orchestrator_plan" ? <PlanCard part={part} /> : null}
           {category === "orchestrator_step" ? <StepCard part={part} /> : null}
 

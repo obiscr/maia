@@ -15,6 +15,7 @@ import {
   type PromptComposerModelGroup,
 } from "@/components/agent/prompt-composer"
 import { AgentMissingApiKeyAlert } from "@/components/agent/agent-missing-api-key-alert"
+import type { AgentMode } from "@/lib/shared/agent/modes"
 
 export function AgentWelcomeEmpty(props: {
   t: TFunction
@@ -30,12 +31,15 @@ export function AgentWelcomeEmpty(props: {
   model: string
   setModel: (m: string) => void
   groupedModels: PromptComposerModelGroup[]
-  modelsLoading?: boolean
+  settingsLoading?: boolean
 
   attachments: Array<PromptComposerAttachment & { uploadedUrl?: string }>
   removeAttachment: (id: string) => void
   uploadPickedImages: (files: File[]) => void | Promise<void>
   anyUploading?: boolean
+
+  agentMode?: AgentMode
+  onAgentModeChange?: (mode: AgentMode) => void
 }) {
   const {
     t,
@@ -49,7 +53,7 @@ export function AgentWelcomeEmpty(props: {
     model,
     setModel,
     groupedModels,
-    modelsLoading = false,
+    settingsLoading = false,
     attachments,
     removeAttachment,
     uploadPickedImages,
@@ -151,10 +155,12 @@ export function AgentWelcomeEmpty(props: {
                 model={model}
                 onModelChange={setModel}
                 groupedModels={groupedModels}
-                modelsLoading={modelsLoading}
+                settingsLoading={settingsLoading}
                 attachments={attachments}
                 onPickImages={uploadPickedImages}
                 onRemoveAttachment={removeAttachment}
+                agentMode={props.agentMode}
+                onAgentModeChange={props.onAgentModeChange}
                 variant="landing"
                 onAttachmentClick={(a) => {
                   const att = attachments.find((x) => x.id === a.id)

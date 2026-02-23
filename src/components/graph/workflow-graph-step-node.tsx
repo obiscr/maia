@@ -4,6 +4,7 @@ import * as React from "react"
 import {
   Braces,
   Clock,
+  Lightbulb,
   MoreVertical,
   Pencil,
   RefreshCcw,
@@ -43,6 +44,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useI18n } from "@/components/i18n-provider"
 import { formatDurationMs } from "@/lib/shared/format/time"
 import { runStatusUiSpec, toCanonicalRunStatus } from "@/lib/shared/run-status"
+import { GradientLoaderIcon } from "@/components/icons/GradientLoaderIcon"
 import { cn } from "@/lib/utils"
 
 export type WorkflowGraphStepNodeData = {
@@ -55,6 +57,8 @@ export type WorkflowGraphStepNodeData = {
   durationMs?: number | null
   highlight?: boolean
   otherFailedStepsCount?: number
+  planState?: "plan" | "draft" | "complete"
+  isDraftLoading?: boolean
   /** Optional: enable node right-click context menu. Default false. */
   enableContextMenu?: boolean
   onEdit?: (stepKey: string) => void
@@ -72,11 +76,12 @@ export const WorkflowGraphStepNode = React.memo(function WorkflowGraphStepNode(
   props: NodeProps<WorkflowGraphStepNodeData>,
 ) {
   const { t } = useI18n()
-  const { stepKey, name, depsCount, mode, status, durationMs, highlight } = props.data
+  const { stepKey, name, depsCount, mode, status, durationMs, highlight, planState, isDraftLoading } = props.data
   const isSelected = props.selected === true
-  const canEdit = mode === "edit" && !!props.data.onEdit && !!props.data.onDelete
+  const isPlanOrDraft = planState === "plan" || planState === "draft"
+  const canEdit = mode === "edit" && !!props.data.onEdit && !!props.data.onDelete && !isPlanOrDraft
   const deps = Array.isArray(props.data.deps) ? props.data.deps.map(String).filter(Boolean) : []
-  const canRunActions = mode === "view" && (!!props.data.onRetry || !!props.data.onRestartFrom)
+  const canRunActions = mode === "view" && (!!props.data.onRetry || !!props.data.onRestartFrom) && !isPlanOrDraft
   const canRetry = !!props.data.onRetry && toCanonicalRunStatus(status || "") === "FAILED"
   // Product rule: "Rerun this step" should only appear for SUCCEEDED steps.
   // Failed steps should show only Retry + Restart-from.
@@ -449,9 +454,20 @@ export const WorkflowGraphStepNode = React.memo(function WorkflowGraphStepNode(
   // If we re-enable tooltips for the context menu in the future, keep this to avoid unused warnings.
   void hasOtherFailedSteps
 
+  const planBadge =
+    planState === "plan"
+      ? { label: t("agent.node.plan"), variant: "outline" as const, icon: Lightbulb }
+      : planState === "draft"
+        ? { label: t("agent.node.draft"), variant: "secondary" as const, icon: null }
+        : null
+
   const nodeInner = (
     <div
-      className={cn("box-border w-[250px] rounded-lg bg-background p-2 shadow-none border", statusCls)}
+      className={cn(
+        "box-border w-[250px] rounded-lg bg-background p-2 shadow-none",
+        isPlanOrDraft ? "border-2 border-dashed" : "border border-solid",
+        statusCls,
+      )}
       style={style}
     >
       {/* Handles are required for edges to render correctly on custom nodes */}
@@ -470,6 +486,14 @@ export const WorkflowGraphStepNode = React.memo(function WorkflowGraphStepNode(
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold">{name || stepKey}</div>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            {planBadge ? (
+              <Badge variant={planBadge.variant} className="h-5 px-2 text-[11px]">
+                <span className="inline-flex items-center gap-1">
+                  {planBadge.icon ? <planBadge.icon className="h-3 w-3" aria-hidden="true" /> : null}
+                  <span>{planBadge.label}</span>
+                </span>
+              </Badge>
+            ) : null}
             <Badge variant="secondary" className="h-5 px-2 font-mono text-[11px]">
               {stepKey}
             </Badge>
@@ -499,7 +523,11 @@ export const WorkflowGraphStepNode = React.memo(function WorkflowGraphStepNode(
           </div>
         </div>
 
-        {canEdit ? (
+        {planState === "draft" && isDraftLoading ? (
+          <div className="flex items-center">
+            <GradientLoaderIcon className="h-4 w-4 animate-spin will-change-transform" />
+          </div>
+        ) : canEdit ? (
           <div className="flex items-center gap-1">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { ArrowUp, Download, FileText, Plus, Square, X } from "lucide-react"
+import { ArrowUp, Bot, Download, FileText, MessageCircleDashed, Plus, Square, X, ListTodo } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 
 import { Spinner } from "@/components/ui/spinner"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -17,6 +18,19 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { type AgentMode, AGENT_MODES, AGENT_MODE_I18N_KEYS } from "@/lib/shared/agent/modes"
+
+const COMPOSER_PLACEHOLDER_KEYS: Record<AgentMode, string> = {
+  agent: "workflows.orchestrator.composerPlaceholderAgent",
+  chat: "workflows.orchestrator.composerPlaceholderChat",
+  plan: "workflows.orchestrator.composerPlaceholderPlan",
+}
+
+const MODE_ICONS: Record<AgentMode, LucideIcon> = {
+  agent: Bot,
+  chat: MessageCircleDashed,
+  plan: ListTodo,
+}
 
 const loadedAttachmentThumbSrcCache = new Set<string>()
 
@@ -196,7 +210,11 @@ export function PromptComposer(props: {
   model?: string
   onModelChange?: (m: string) => void
   groupedModels?: PromptComposerModelGroup[]
-  modelsLoading?: boolean
+  settingsLoading?: boolean
+
+  agentMode?: AgentMode
+  onAgentModeChange?: (mode: AgentMode) => void
+  showModeSelector?: boolean
 
   attachments: PromptComposerAttachment[]
   onPickImages?: (files: File[]) => void | Promise<void>
@@ -233,7 +251,10 @@ export function PromptComposer(props: {
     model,
     onModelChange,
     groupedModels = [],
-    modelsLoading = false,
+    settingsLoading = false,
+    agentMode,
+    onAgentModeChange,
+    showModeSelector = true,
     attachments,
     onPickImages,
     onRemoveAttachment,
@@ -531,13 +552,16 @@ export function PromptComposer(props: {
   }
 
   function renderTextareaAndAddon() {
+    const placeholderKey = agentMode
+      ? COMPOSER_PLACEHOLDER_KEYS[agentMode]
+      : "workflows.orchestrator.composerPlaceholder"
     return (
       <>
         <InputGroupTextarea
           ref={setTextareaRef}
           value={value}
           onChange={(e) => onValueChange(e.target.value)}
-          placeholder={t("workflows.orchestrator.composerPlaceholder")}
+          placeholder={t(placeholderKey)}
           className={cn(
             isAutoSizing
               ? cn(
@@ -568,65 +592,100 @@ export function PromptComposer(props: {
         />
 
         {!isMessageEdit || messageEditActions ? (
-          <InputGroupAddon align="block-end" className="order-last w-full justify-between px-3 pb-3">
+          <InputGroupAddon align="block-end" className="@container order-last w-full justify-between px-3 pb-3">
             <div className="flex items-center gap-2 min-w-0">
               {!isMessageEdit || messageEditShowLeftControls ? (
                 <>
-                  {showModelSelector ? (
-                    modelsLoading ? (
-                      <Skeleton className="h-7 w-34 rounded-full bg-background/40" />
+                  {showModeSelector && agentMode && onAgentModeChange ? (
+                    settingsLoading ? (
+                      <Skeleton className="h-7 w-34 rounded-full bg-accent/80 dark:bg-background/40" />
                     ) : (
-                      <Select value={model} onValueChange={onModelChange} disabled={pending || saving}>
+                      <Select
+                        value={agentMode}
+                        onValueChange={(v) => onAgentModeChange(v as AgentMode)}
+                        disabled={pending || saving}
+                      >
                         <SelectTrigger
-                          className={cn("!h-7 rounded-full px-2 text-xs shadow-none", "w-fit max-w-[55vw]")}
-                          aria-label={t("settings.agent.model")}
+                          className={cn("!h-7 rounded-full px-2 text-xs shadow-none", "w-fit max-w-[30vw]")}
+                          aria-label={t("agent.mode.label")}
                         >
-                          <SelectValue placeholder={t("settings.agent.modelPlaceholder")} />
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent align="start">
-                          {groupedModels.map((g, idx) => (
-                            <SelectGroup key={g.provider}>
-                              <SelectLabel>{g.provider}</SelectLabel>
-                              {g.models.map((m) => (
-                                <SelectItem key={m.id} value={m.id}>
-                                  {m.name}
-                                </SelectItem>
-                              ))}
-                              {idx < groupedModels.length - 1 ? <SelectSeparator /> : null}
-                            </SelectGroup>
-                          ))}
+                          {AGENT_MODES.map((m) => {
+                            const Icon = MODE_ICONS[m]
+                            const modeLabelKey = AGENT_MODE_I18N_KEYS[m]
+                            return (
+                              <SelectItem key={m} value={m}>
+                                <Icon className="size-4" />
+                                {t(modeLabelKey)}
+                              </SelectItem>
+                            )
+                          })}
                         </SelectContent>
                       </Select>
                     )
                   ) : null}
 
-                  {showImageUploadButton ? (
-                    <>
-                      <InputGroupButton
-                        variant="outline"
-                        size="icon-xs"
-                        className="size-7 rounded-full p-0"
-                        aria-label={t("workflows.orchestrator.attachments.uploadImageAriaLabel")}
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={pending || saving}
-                      >
-                        <Plus className="size-5" />
-                      </InputGroupButton>
+                  <div className="hidden @[280px]:contents">
+                    {showModelSelector ? (
+                      settingsLoading ? (
+                        <Skeleton className="h-7 w-34 rounded-full bg-accent/80 dark:bg-background/40" />
+                      ) : (
+                        <Select value={model} onValueChange={onModelChange} disabled={pending || saving}>
+                          <SelectTrigger
+                            className={cn("!h-7 rounded-full px-2 text-xs shadow-none", "w-fit max-w-[55vw]")}
+                            aria-label={t("settings.agent.model")}
+                          >
+                            <SelectValue placeholder={t("settings.agent.modelPlaceholder")} />
+                          </SelectTrigger>
+                          <SelectContent align="start">
+                            {groupedModels.map((g, idx) => (
+                              <SelectGroup key={g.provider}>
+                                <SelectLabel>{g.provider}</SelectLabel>
+                                {g.models.map((m) => (
+                                  <SelectItem key={m.id} value={m.id}>
+                                    {m.name}
+                                  </SelectItem>
+                                ))}
+                                {idx < groupedModels.length - 1 ? <SelectSeparator /> : null}
+                              </SelectGroup>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )
+                    ) : null}
+                  </div>
 
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        className="hidden"
-                        onChange={(e) => {
-                          const picked = Array.from(e.target.files ?? [])
-                          e.currentTarget.value = ""
-                          void onPickImages?.(picked)
-                        }}
-                      />
-                    </>
-                  ) : null}
+                  <div className="hidden @[360px]:contents">
+                    {showImageUploadButton ? (
+                      <>
+                        <InputGroupButton
+                          variant="outline"
+                          size="icon-xs"
+                          className="size-7 rounded-full p-0"
+                          aria-label={t("workflows.orchestrator.attachments.uploadImageAriaLabel")}
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={pending || saving}
+                        >
+                          <Plus className="size-5" />
+                        </InputGroupButton>
+
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          className="hidden"
+                          onChange={(e) => {
+                            const picked = Array.from(e.target.files ?? [])
+                            e.currentTarget.value = ""
+                            void onPickImages?.(picked)
+                          }}
+                        />
+                      </>
+                    ) : null}
+                  </div>
                 </>
               ) : null}
             </div>

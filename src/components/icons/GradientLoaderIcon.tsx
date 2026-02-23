@@ -1,29 +1,27 @@
 import * as React from "react"
 
-export function GradientLoaderIcon(props: React.ComponentPropsWithoutRef<"svg">) {
-  const gradId = React.useId()
-  const { className, ...rest } = props
+const GRADIENT_STYLE: React.CSSProperties = {
+  borderRadius: "50%",
+  background:
+    "conic-gradient(transparent 0deg 30deg, #d946ef 60deg, #8b5cf6 180deg, #06b6d4 330deg, transparent 360deg)",
+  WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px))",
+  mask: "radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px))",
+}
+
+/**
+ * Gradient arc spinner using pure CSS (conic-gradient + mask).
+ * Unlike an SVG-based approach, a plain div with transform animation is
+ * reliably promoted to a GPU compositor layer, so the spin stays smooth
+ * even when the main thread is busy with streaming React updates.
+ */
+export function GradientLoaderIcon(props: React.ComponentPropsWithoutRef<"div">) {
+  const { className, style, ...rest } = props
   return (
-    <svg
-      {...rest}
-      viewBox="0 0 24 24"
+    <div
       aria-hidden="true"
+      {...rest}
       className={className}
-      fill="none"
-      stroke={`url(#${gradId})`}
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <defs>
-        <linearGradient id={gradId} x1="0" y1="0" x2="24" y2="0" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#d946ef" />
-          <stop offset="50%" stopColor="#8b5cf6" />
-          <stop offset="100%" stopColor="#06b6d4" />
-        </linearGradient>
-      </defs>
-      {/* Loader2-like arc */}
-      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-    </svg>
+      style={style ? { ...GRADIENT_STYLE, ...style } : GRADIENT_STYLE}
+    />
   )
 }

@@ -4,7 +4,7 @@
 import * as React from "react"
 import { useRouter } from "next/navigation"
 import { Bot, History, Pencil, Plus, Save, Trash2Icon } from "lucide-react"
-import type { UIMessage } from "ai"
+import { type UIMessage, isToolUIPart, getToolName } from "ai"
 
 import { useI18n } from "@/components/i18n-provider"
 import { Spinner } from "@/components/ui/spinner"
@@ -33,6 +33,7 @@ import { MessageActions } from "@/components/workflows/agent/message-actions"
 import { ImagePreviewDialog, type ImagePreviewItem } from "@/components/workflows/agent/image-preview-dialog"
 import { UserMessage } from "@/components/workflows/agent/user-message"
 import { AVAILABLE_MODELS, groupModelsByProvider } from "@/lib/shared/models"
+import type { AgentMode } from "@/lib/shared/agent/modes"
 import { useQueryClient } from "@tanstack/react-query"
 import { useListQuery } from "@/hooks/list-query/use-list-query"
 import { apiFetchJson } from "@/lib/shared/http/api"
@@ -46,7 +47,13 @@ import { AgentMissingApiKeyAlert } from "@/components/agent/agent-missing-api-ke
 
 type FileUIPart = Extract<UIMessage["parts"][number], { type: "file" }>
 type UploadedChatImage = { url: string; mediaType: string; filename?: string }
-type GraphStep = { stepKey: string; name: string; deps: string[] }
+type GraphStep = {
+  stepKey: string
+  name: string
+  deps: string[]
+  planState?: "plan" | "draft" | "complete"
+  isDraftLoading?: boolean
+}
 type OrchestratorProgress = {
   plan?: { title?: string | null; steps?: Array<{ name: string; description: string }> } | null
   draftStepsCount: number
@@ -139,11 +146,24 @@ const ChatMessageRow = React.memo(function ChatMessageRow(props: {
   ) => Promise<boolean>
   onPickImagesForEdit: (files: File[]) => Promise<FileUIPart[]>
   onToolApprovalResponse: (input: { id: string; approved: boolean; reason?: string }) => void
+  onModeSwitch?: (mode: import("@/lib/shared/agent/modes").AgentMode) => void
+  onPlanBuild?: (plan: { title: string; summary: string; steps: string[]; highlights: string[] }) => void
+  agentMode?: import("@/lib/shared/agent/modes").AgentMode
+  onAgentModeChange?: (mode: import("@/lib/shared/agent/modes").AgentMode) => void
+  planBuildActive?: boolean
 }) {
   const { message, t } = props
   const isUser = message.role === "user"
 
   if (!isUser) {
+    // When planBuildActive, pass orchestratorProgress to ALL assistant messages
+    // so the plan_ready card can use it for live tracking.
+    // The live message's create_plan rendering is suppressed via planBuildActive.
+    const progress = props.planBuildActive
+      ? props.orchestratorProgress
+      : props.isLive
+        ? props.orchestratorProgress
+        : null
     return (
       <div>
         <MessageParts
@@ -152,9 +172,16 @@ const ChatMessageRow = React.memo(function ChatMessageRow(props: {
           isLast={Boolean(props.isLive)}
           t={t}
           onToolApprovalResponse={props.onToolApprovalResponse}
-          orchestratorProgress={props.isLive ? props.orchestratorProgress : null}
+          onModeSwitch={props.onModeSwitch}
+          onPlanBuild={props.onPlanBuild}
+          orchestratorProgress={progress}
+          planBuildActive={props.planBuildActive}
         />
-        {!props.isStreaming && <MessageActions message={message} t={t} />}
+        {!props.isStreaming &&
+          message.parts.some(
+            (p) =>
+              (p.type === "text" && p.text.trim()) || isToolUIPart(p) || p.type === "reasoning" || p.type === "file",
+          ) && <MessageActions message={message} t={t} />}
       </div>
     )
   }
@@ -170,6 +197,8 @@ const ChatMessageRow = React.memo(function ChatMessageRow(props: {
       onOpenImagePreview={props.onOpenImagePreview}
       onEditMessage={props.onEditUserMessage}
       onPickImages={props.onPickImagesForEdit}
+      agentMode={props.agentMode}
+      onAgentModeChange={props.onAgentModeChange}
     />
   )
 })
@@ -182,10 +211,12 @@ export default function WorkflowAgentClient(props: {
   chatId?: string | null
   workflowId?: string
   initialModel?: string
+  initialMode?: AgentMode
   initialMessages?: UIMessage[]
   initialPrompt?: string
   initialApiKeyConfigured?: boolean
   initialChatTitle?: string
+  initialChatDescription?: string
 }) {
   const { t, locale } = useI18n()
   const router = useRouter()
@@ -202,7 +233,9 @@ export default function WorkflowAgentClient(props: {
     initialPrompt: apiKeyConfigured ? props.initialPrompt : undefined,
     initialMessages: props.initialMessages,
     initialModel: props.initialModel,
+    initialMode: props.initialMode,
     initialChatTitle: props.initialChatTitle,
+    initialChatDescription: props.initialChatDescription,
   })
   const selectedStep = session.selectedStep
   const stepKeyInputId = React.useId()
@@ -217,11 +250,46 @@ export default function WorkflowAgentClient(props: {
   const queryClient = useQueryClient()
   const [mobileTab, setMobileTab] = React.useState<"chat" | "canvas">("chat")
   const [composerValue, setComposerValue] = React.useState("")
-  const [modelsLoading, setModelsLoading] = React.useState(() => !String(props.initialModel ?? "").trim())
+  const [settingsLoading, setModelsLoading] = React.useState(() => !String(props.initialModel ?? "").trim())
 
   const composerTextareaRef = React.useRef<HTMLTextAreaElement | null>(null)
 
   const groupedModels = React.useMemo(() => groupModelsByProvider(AVAILABLE_MODELS, session.model), [session.model])
+
+  const setMode = React.useCallback(
+    (next: AgentMode) => {
+      session.setMode(next)
+      apiFetchJson("/api/settings/agent", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: next }),
+      }).catch(() => {})
+    },
+    [session.setMode],
+  )
+
+  // Track whether a plan_ready Build was triggered.
+  // Persisted across re-renders by deriving from message history + current mode.
+  const [planBuildActive, setPlanBuildActive] = React.useState<boolean>(() => {
+    if (session.mode !== "agent") return false
+    const msgs = session.messages
+    for (const msg of msgs) {
+      for (const part of msg.parts) {
+        if (isToolUIPart(part) && getToolName(part) === "plan_ready") return true
+      }
+    }
+    return false
+  })
+
+  const onPlanBuild = React.useCallback(
+    (plan: { title: string; summary: string; steps: string[]; highlights: string[] }) => {
+      setPlanBuildActive(true)
+      setMode("agent")
+      const prompt = t("agent.mode.planReady.autoPrompt", { title: plan.title })
+      session.send(prompt)
+    },
+    [setMode, session.send, t],
+  )
 
   React.useEffect(() => {
     let cancelled = false
@@ -349,7 +417,14 @@ export default function WorkflowAgentClient(props: {
   }, [session.pending, session.saving, session.isDirty, startNewChat])
 
   type ChatHistoryResponse = {
-    items?: Array<{ id?: string; publicId?: string; title?: string; createdAt?: string; updatedAt?: string }>
+    items?: Array<{
+      id?: string
+      publicId?: string
+      title?: string
+      agentMode?: string | null
+      createdAt?: string
+      updatedAt?: string
+    }>
     totalCount?: number
     nextOffset?: number
     hasMore?: boolean
@@ -377,6 +452,7 @@ export default function WorkflowAgentClient(props: {
           id: String(it?.id ?? ""),
           publicId: String(it?.publicId ?? ""),
           title: String(it?.title ?? ""),
+          agentMode: typeof it?.agentMode === "string" ? it.agentMode : null,
           createdAt: String(it?.createdAt ?? ""),
           updatedAt: String(it?.updatedAt ?? ""),
         }))
@@ -429,6 +505,7 @@ export default function WorkflowAgentClient(props: {
           id: String(it?.id ?? ""),
           publicId: String(it?.publicId ?? ""),
           title: String(it?.title ?? ""),
+          agentMode: typeof it?.agentMode === "string" ? it.agentMode : null,
           createdAt: String(it?.createdAt ?? ""),
           updatedAt: String(it?.updatedAt ?? ""),
         }))
@@ -622,12 +699,22 @@ export default function WorkflowAgentClient(props: {
 
   const stepSheetContentRef = React.useRef<HTMLDivElement | null>(null)
   const title = session.chatTitle || t("agent.chat.newChat")
-  const subtitle = workflowId ? t("workflows.orchestrator.subtitleEdit") : t("workflows.orchestrator.subtitleNew")
+  const defaultSubtitle = workflowId
+    ? t("workflows.orchestrator.subtitleEdit")
+    : t("workflows.orchestrator.subtitleNew")
+  const subtitle = session.chatDescription || defaultSubtitle
   const chatSpan = "row-span-5 lg:row-span-8"
   const composerSpan = "row-span-2"
   const graphSteps = React.useMemo(
-    () => session.stepsForGraph.map((s) => ({ stepKey: s.stepKey, name: s.name, deps: s.deps })),
-    [session.stepsForGraph],
+    () =>
+      session.stepsForGraph.map((s) => ({
+        stepKey: s.stepKey,
+        name: s.name,
+        deps: s.deps,
+        planState: session.planStateByKey[s.stepKey],
+        isDraftLoading: session.isDraftLoadingByKey[s.stepKey],
+      })),
+    [session.stepsForGraph, session.planStateByKey, session.isDraftLoadingByKey],
   )
   const onEditGraphStep = React.useCallback(
     (stepKey: string) => {
@@ -717,6 +804,11 @@ export default function WorkflowAgentClient(props: {
                   onEditUserMessage={onEditUserMessage}
                   onPickImagesForEdit={uploadPickedImagesForEdit}
                   onToolApprovalResponse={session.addToolApprovalResponse}
+                  onModeSwitch={setMode}
+                  onPlanBuild={onPlanBuild}
+                  agentMode={session.mode}
+                  onAgentModeChange={setMode}
+                  planBuildActive={planBuildActive}
                 />
               )
 
@@ -783,6 +875,8 @@ export default function WorkflowAgentClient(props: {
                             onOpenImagePreview={openPreviewSingle}
                             onEditMessage={onEditUserMessage}
                             onPickImages={uploadPickedImagesForEdit}
+                            agentMode={session.mode}
+                            onAgentModeChange={setMode}
                           />
                         </div>
                         {rest.map((item) => renderMessage(item))}
@@ -820,7 +914,9 @@ export default function WorkflowAgentClient(props: {
         model={session.model}
         onModelChange={session.setModel}
         groupedModels={groupedModels}
-        modelsLoading={modelsLoading}
+        settingsLoading={settingsLoading}
+        agentMode={session.mode}
+        onAgentModeChange={setMode}
         attachments={composerAttachments}
         onPickImages={uploadPickedImages}
         onRemoveAttachment={removeAttachment}

@@ -171,6 +171,8 @@
       "apiKeyPlaceholder": "OpenRouter API Key",
       "model": "模型",
       "modelPlaceholder": "选择模型",
+      "defaultMode": "默认模式",
+      "defaultModePlaceholder": "选择默认模式",
       "showAction": "显示",
       "hideAction": "隐藏",
       "saveFailed": "保存失败"
@@ -418,6 +420,32 @@
   },
   "agent": {
     "apiKey": "智能体 API Key",
+    "mode": {
+      "label": "模式",
+      "agent": "Agent",
+      "agentDescription": "自主构建工作流",
+      "chat": "Chat",
+      "chatDescription": "查询与管理平台",
+      "plan": "Plan",
+      "planDescription": "讨论与规划工作流方案",
+      "switchSuggestion": "建议切换到 {mode} 模式",
+      "switchAction": "切换到 {mode}",
+      "stayAction": "留在当前模式",
+      "switched": "已切换",
+      "stayed": "已忽略",
+      "planReady": {
+        "buildPlan": "构建计划",
+        "build": "开始构建",
+        "continuePlanning": "继续讨论",
+        "started": "已开始构建",
+        "autoPrompt": "请按照上面的计划开始构建工作流 \"{title}\""
+      }
+    },
+    "node": {
+      "plan": "构想",
+      "draft": "草稿",
+      "generating": "生成中..."
+    },
     "chat": {
       "missingApiKeyAlertTitle": "未配置智能体 API Key",
       "missingApiKeyAlertDescription": "请先到 偏好 → 智能体 配置 API Key，未配置前将无法发送消息。",
@@ -1139,6 +1167,9 @@
         "titleDone": "思考了 {seconds}s"
       },
       "composerPlaceholder": "描述你的需求，让智能体帮你操作…",
+      "composerPlaceholderAgent": "描述你的需求，让智能体帮你操作…",
+      "composerPlaceholderChat": "查询、管理你的工作流和任务…",
+      "composerPlaceholderPlan": "描述你的需求，让我们一起规划方案…",
       "sendAction": "发送",
       "applyCreateAction": "保存为新工作流",
       "createWorkflowQueued": "智能体：开始生成工作流",
@@ -1617,32 +1648,39 @@
     },
     "showDetails": "查看详情",
     "hideDetails": "收起详情",
-    "set_plan": {
+    "approval": {
+      "title": "此操作需要您的确认",
+      "approveAction": "批准",
+      "denyAction": "拒绝",
+      "approved": "已批准",
+      "denied": "已拒绝"
+    },
+    "create_plan": {
       "label": "制定计划",
       "running": "正在制定计划…",
       "done": "计划已生成",
       "doneWithCount": "计划已生成 · {count} 个步骤"
     },
-    "draft_step": {
+    "define_step": {
       "label": "生成步骤",
       "running": "正在生成步骤…",
       "runningWithName": "正在生成：{name}…",
       "done": "步骤已生成",
       "doneWithName": "已生成步骤：{name}"
     },
-    "finalize_draft": {
+    "validate_draft": {
       "label": "验证工作流",
       "running": "正在验证工作流…",
       "done": "工作流验证通过",
       "failed": "验证失败"
     },
-    "create_workflow_draft": {
+    "create_workflow": {
       "label": "创建工作流",
       "running": "正在创建工作流…",
       "done": "工作流已创建",
       "failed": "创建失败"
     },
-    "update_workflow_draft": {
+    "update_workflow": {
       "label": "更新工作流",
       "running": "正在更新工作流…",
       "done": "工作流已更新",
@@ -1660,10 +1698,15 @@
       "done": "输出规范已生成",
       "failed": "输出规范生成失败"
     },
-    "get_workflow": {
+    "load_workflow": {
       "label": "加载工作流",
       "running": "正在加载工作流…",
       "done": "工作流已加载"
+    },
+    "preview_steps": {
+      "label": "预览步骤",
+      "running": "正在更新预览…",
+      "done": "预览已更新"
     },
     "workflow": {
       "list": { "label": "查询工作流", "running": "正在查询工作流…", "done": "已查询工作流" },

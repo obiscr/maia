@@ -26,17 +26,29 @@ import { tApiError } from "@/lib/shared/i18n/error"
 import { toast } from "@/lib/client/toast"
 import { SettingsFormSkeleton } from "@/components/settings/settings-skeletons"
 import { AVAILABLE_MODELS, groupModelsByProvider } from "@/lib/shared/models"
+import {
+  type AgentMode,
+  AGENT_MODES,
+  AGENT_MODE_I18N_KEYS,
+  DEFAULT_AGENT_MODE,
+  isAgentMode,
+} from "@/lib/shared/agent/modes"
 
 type AgentSettingsStatus = {
   apiKeyConfigured: boolean
   model: string
+  mode: AgentMode
 }
 
 type AgentSettingsResponse = {
   settings: AgentSettingsStatus
 }
 
-const DEFAULTS: AgentSettingsStatus = { apiKeyConfigured: false, model: "anthropic/claude-opus-4.6" }
+const DEFAULTS: AgentSettingsStatus = {
+  apiKeyConfigured: false,
+  model: "anthropic/claude-opus-4.6",
+  mode: DEFAULT_AGENT_MODE,
+}
 
 export default function AgentSettingsPage() {
   const { t } = useI18n()
@@ -47,6 +59,7 @@ export default function AgentSettingsPage() {
   const [lastSavedApiKeyDraft, setLastSavedApiKeyDraft] = useState("")
   const [apiKeyClearRequested, setApiKeyClearRequested] = useState(false)
   const [model, setModel] = useState(DEFAULTS.model)
+  const [mode, setMode] = useState<AgentMode>(DEFAULTS.mode)
   const [showKey, setShowKey] = useState(false)
 
   useEffect(() => {
@@ -57,9 +70,11 @@ export default function AgentSettingsPage() {
         const json = await apiFetchJson<AgentSettingsResponse>("/api/settings/agent", {
           method: "GET",
         })
+        const rawMode = json.settings?.mode
         const s: AgentSettingsStatus = {
           apiKeyConfigured: Boolean(json.settings?.apiKeyConfigured),
           model: String(json.settings?.model ?? DEFAULTS.model),
+          mode: isAgentMode(rawMode) ? rawMode : DEFAULTS.mode,
         }
         if (cancelled) return
         setInitial(s)
@@ -68,6 +83,7 @@ export default function AgentSettingsPage() {
         setLastSavedApiKeyDraft("")
         setApiKeyClearRequested(false)
         setModel(s.model)
+        setMode(s.mode)
       } catch {
         if (!cancelled) toast.error(t("common.loadFailed"))
       } finally {
@@ -80,7 +96,11 @@ export default function AgentSettingsPage() {
     }
   }, [t])
 
-  const dirty = model !== initial.model || apiKeyClearRequested || apiKeyDraft.trim() !== lastSavedApiKeyDraft
+  const dirty =
+    model !== initial.model ||
+    mode !== initial.mode ||
+    apiKeyClearRequested ||
+    apiKeyDraft.trim() !== lastSavedApiKeyDraft
 
   const groupedModels = useMemo(() => groupModelsByProvider(AVAILABLE_MODELS, model), [model])
 
@@ -88,7 +108,7 @@ export default function AgentSettingsPage() {
     if (saving) return
     setSaving(true)
     try {
-      const body: Record<string, unknown> = { model }
+      const body: Record<string, unknown> = { model, mode }
       const nextApiKeyDraft = apiKeyDraft.trim()
       if (nextApiKeyDraft) {
         body.apiKey = nextApiKeyDraft
@@ -102,9 +122,11 @@ export default function AgentSettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       })
+      const savedMode = (json.settings as Record<string, unknown>)?.mode
       const s: AgentSettingsStatus = {
         apiKeyConfigured: Boolean(json.settings?.apiKeyConfigured ?? initial.apiKeyConfigured),
         model: String(json.settings?.model ?? model),
+        mode: isAgentMode(savedMode) ? savedMode : mode,
       }
       setInitial(s)
       // Never keep secrets in UI state after save.
@@ -112,6 +134,7 @@ export default function AgentSettingsPage() {
       setLastSavedApiKeyDraft("")
       setApiKeyClearRequested(false)
       setModel(s.model)
+      setMode(s.mode)
       toast.success(t("common.saved"))
     } catch (e) {
       toast.error(tApiError({ t, err: e, fallbackKey: "settings.agent.saveFailed" }))
@@ -125,6 +148,7 @@ export default function AgentSettingsPage() {
     setLastSavedApiKeyDraft("")
     setApiKeyClearRequested(false)
     setModel(initial.model)
+    setMode(initial.mode)
   }
 
   return (
@@ -132,7 +156,7 @@ export default function AgentSettingsPage() {
       <SettingsSectionHeader title={t("settings.agent.title")} description={t("settings.agent.description")} />
       <SettingsSectionContent>
         {loading ? (
-          <SettingsFormSkeleton rows={2} />
+          <SettingsFormSkeleton rows={3} />
         ) : (
           <form
             onSubmit={(e) => {
@@ -209,6 +233,31 @@ export default function AgentSettingsPage() {
                           {idx < groupedModels.length - 1 ? <SelectSeparator /> : null}
                         </SelectGroup>
                       ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                <Field data-disabled={loading || saving}>
+                  <FieldLabel htmlFor="agent-mode">{t("settings.agent.defaultMode")}</FieldLabel>
+                  <Select
+                    value={mode}
+                    onValueChange={(v) => {
+                      if (isAgentMode(v)) setMode(v)
+                    }}
+                    disabled={loading || saving}
+                  >
+                    <SelectTrigger id="agent-mode">
+                      <SelectValue placeholder={t("settings.agent.defaultModePlaceholder")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AGENT_MODES.map((m) => {
+                        const modeLabelKey = AGENT_MODE_I18N_KEYS[m]
+                        return (
+                          <SelectItem key={m} value={m}>
+                            {t(modeLabelKey)}
+                          </SelectItem>
+                        )
+                      })}
                     </SelectContent>
                   </Select>
                 </Field>

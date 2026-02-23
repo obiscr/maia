@@ -31,6 +31,12 @@ export type ProposalState = { ok?: boolean; draft?: unknown; warnings?: string[]
 export type OrchestratorPlanStep = { name: string; description: string }
 export type OrchestratorPlan = { title: string | null; steps: OrchestratorPlanStep[] }
 
+export type PlanPreviewStep = {
+  stepKey: string
+  name: string
+  deps: string[]
+}
+
 // ---------------------------------------------------------------------------
 // Extractors — derive orchestrator state from AI SDK message parts
 // ---------------------------------------------------------------------------
@@ -47,7 +53,7 @@ function readOrchestratorPlanInput(input: unknown): OrchestratorPlan | null {
     const step = isRecord(s) ? (s as Record<string, unknown>) : null
     const name = typeof step?.name === "string" ? step.name.trim() : ""
     const description = typeof step?.description === "string" ? step.description.trim() : ""
-    if (!name || !description) return null
+    if (!name) return null
     steps.push({ name, description })
   }
 
@@ -58,12 +64,13 @@ function readOrchestratorPlanInput(input: unknown): OrchestratorPlan | null {
 }
 
 export function extractPlanFromMessages(messages: UIMessage[]): OrchestratorPlan | null {
+  // First, look for create_plan (Agent direct mode).
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i]!
     for (const part of msg.parts) {
       if (
         isToolUIPart(part) &&
-        getToolName(part) === "set_plan" &&
+        getToolName(part) === "create_plan" &&
         (part.state === "output-available" || part.state === "input-available")
       ) {
         const plan = readOrchestratorPlanInput(part.input)
@@ -71,6 +78,87 @@ export function extractPlanFromMessages(messages: UIMessage[]): OrchestratorPlan
       }
     }
   }
+
+  // Fallback: look for plan_ready (Plan → Agent handoff mode).
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i]!
+    for (const part of msg.parts) {
+      if (
+        isToolUIPart(part) &&
+        getToolName(part) === "plan_ready" &&
+        (part.state === "output-available" || part.state === "input-available")
+      ) {
+        const input = isRecord(part.input) ? (part.input as Record<string, unknown>) : null
+        if (!input) continue
+        const rawSteps = Array.isArray(input.steps) ? input.steps : []
+        if (rawSteps.length === 0) continue
+        const steps: OrchestratorPlanStep[] = rawSteps.map((s: unknown) => {
+          if (typeof s === "string") return { name: s, description: "" }
+          if (isRecord(s)) {
+            const st = s as Record<string, unknown>
+            const name = typeof st.name === "string" ? st.name : typeof st.stepKey === "string" ? st.stepKey : String(s)
+            return { name, description: "" }
+          }
+          return { name: String(s), description: "" }
+        })
+        return { title: typeof input.title === "string" ? input.title : null, steps }
+      }
+    }
+  }
+
+  return null
+}
+
+// ---------------------------------------------------------------------------
+// Plan preview steps — for canvas rendering during Plan/Agent modes
+// ---------------------------------------------------------------------------
+
+function readStructuredSteps(rawSteps: unknown[]): PlanPreviewStep[] | null {
+  const result: PlanPreviewStep[] = []
+  for (const s of rawSteps) {
+    if (!isRecord(s)) return null
+    const st = s as Record<string, unknown>
+    const stepKey = typeof st.stepKey === "string" ? st.stepKey.trim() : ""
+    const name = typeof st.name === "string" ? st.name.trim() : ""
+    if (!stepKey || !name) return null
+    const deps = Array.isArray(st.deps) ? st.deps.map(String) : []
+    result.push({ stepKey, name, deps })
+  }
+  return result.length > 0 ? result : null
+}
+
+export function extractPlanPreviewSteps(messages: UIMessage[]): PlanPreviewStep[] | null {
+  // Single reverse scan: the most recent message wins.
+  // Within the same message, priority is: plan_ready > preview_steps > create_plan.
+  const TOOL_NAMES = ["plan_ready", "preview_steps", "create_plan"] as const
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i]!
+
+    let bestInMsg: PlanPreviewStep[] | null = null
+    let bestPriority: number = TOOL_NAMES.length
+
+    for (const part of msg.parts) {
+      if (!isToolUIPart(part) || (part.state !== "output-available" && part.state !== "input-available")) continue
+
+      const toolName = getToolName(part)
+      const priority = TOOL_NAMES.indexOf(toolName as (typeof TOOL_NAMES)[number])
+      if (priority === -1 || priority >= bestPriority) continue
+
+      const input = isRecord(part.input) ? (part.input as Record<string, unknown>) : null
+      if (!input) continue
+      const rawSteps = Array.isArray(input.steps) ? input.steps : []
+      const structured = readStructuredSteps(rawSteps)
+      if (!structured) continue
+
+      bestInMsg = structured
+      bestPriority = priority
+      if (priority === 0) break
+    }
+
+    if (bestInMsg) return bestInMsg
+  }
+
   return null
 }
 
@@ -81,7 +169,7 @@ export function extractDraftStepsFromMessages(messages: UIMessage[]): WorkflowSt
     for (const part of msg.parts) {
       if (
         isToolUIPart(part) &&
-        getToolName(part) === "draft_step" &&
+        getToolName(part) === "define_step" &&
         (part.state === "output-available" || part.state === "input-available")
       ) {
         const inp = isRecord(part.input) ? part.input : null
@@ -119,7 +207,7 @@ export function extractProposalFromMessages(messages: UIMessage[]): ProposalStat
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i]!
     for (const part of msg.parts) {
-      if (isToolUIPart(part) && getToolName(part) === "finalize_draft" && part.state === "output-available") {
+      if (isToolUIPart(part) && getToolName(part) === "validate_draft" && part.state === "output-available") {
         const r = part.output
         if (isRecord(r) && r.ok === true && isRecord(r.draft)) {
           baseDraft = r.draft as Record<string, unknown>
@@ -167,7 +255,7 @@ export function extractSavedWorkflowIdFromMessages(messages: UIMessage[]): strin
     for (const part of msg.parts) {
       if (!isToolUIPart(part) || part.state !== "output-available") continue
       const toolName = getToolName(part)
-      if (toolName !== "create_workflow_draft" && toolName !== "update_workflow_draft") continue
+      if (toolName !== "create_workflow" && toolName !== "update_workflow") continue
       const out = part.output
       if (!isRecord(out) || out.ok !== true) continue
       const wid = out.workflowId
@@ -194,30 +282,31 @@ export type StageStatusMap = {
 export function deriveStageStatus(messages: UIMessage[], chatPending: boolean): StageStatusMap {
   const allParts = messages.flatMap((m) => m.parts)
 
-  const hasPlanOutput = !!findToolPartByName(allParts, "set_plan", "output-available")
-  const hasPlanStreaming = !!findToolPartByName(allParts, "set_plan", "input-streaming", "input-available")
+  const hasPlanOutput = !!findToolPartByName(allParts, "create_plan", "output-available")
+  const hasPlanStreaming = !!findToolPartByName(allParts, "create_plan", "input-streaming", "input-available")
 
-  const hasDraftOutput = !!findToolPartByName(allParts, "draft_step", "output-available")
-  const hasDraftStreaming = !!findToolPartByName(allParts, "draft_step", "input-streaming", "input-available")
+  // plan_ready from Plan mode also counts as a completed plan.
+  const hasPlanReadyOutput = !!findToolPartByName(allParts, "plan_ready", "output-available")
+
+  const hasDraftOutput = !!findToolPartByName(allParts, "define_step", "output-available")
+  const hasDraftStreaming = !!findToolPartByName(allParts, "define_step", "input-streaming", "input-available")
 
   const hasValidateOk = allParts.some((p) => {
-    if (!isToolUIPart(p) || getToolName(p) !== "finalize_draft" || p.state !== "output-available") return false
+    if (!isToolUIPart(p)) return false
+    if (getToolName(p) !== "validate_draft" || p.state !== "output-available") return false
     const out = isRecord(p.output) ? (p.output as Record<string, unknown>) : null
     return out?.ok === true
   })
-  const hasValidateOutput = !!findToolPartByName(allParts, "finalize_draft", "output-available")
-  const hasValidateStreaming = !!findToolPartByName(allParts, "finalize_draft", "input-streaming", "input-available")
+  const hasValidateOutput = !!findToolPartByName(allParts, "validate_draft", "output-available")
+  const hasValidateStreaming = !!findToolPartByName(allParts, "validate_draft", "input-streaming", "input-available")
+
+  const hasPlanDone = hasPlanOutput || hasPlanReadyOutput
 
   const hasAnyOrchestratorTool =
-    hasPlanOutput ||
-    hasPlanStreaming ||
-    hasDraftOutput ||
-    hasDraftStreaming ||
-    hasValidateOutput ||
-    hasValidateStreaming
+    hasPlanDone || hasPlanStreaming || hasDraftOutput || hasDraftStreaming || hasValidateOutput || hasValidateStreaming
 
   type S = "todo" | "in_progress" | "done"
-  const planStatus: S = hasPlanOutput
+  const planStatus: S = hasPlanDone
     ? "done"
     : hasPlanStreaming
       ? "in_progress"
@@ -231,7 +320,7 @@ export function deriveStageStatus(messages: UIMessage[], chatPending: boolean): 
         ? hasDraftStreaming || chatPending
           ? "in_progress"
           : "done"
-        : hasPlanOutput && (hasDraftStreaming || chatPending)
+        : hasPlanDone && (hasDraftStreaming || chatPending)
           ? "in_progress"
           : "todo"
   const validateStatus: S = hasValidateOk

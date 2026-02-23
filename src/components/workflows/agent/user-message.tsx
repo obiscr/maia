@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { ArrowUp, FileText, X } from "lucide-react"
+import { ArrowUp, FileText } from "lucide-react"
 import type { UIMessage } from "ai"
 
 import { AttachmentThumbImage, PromptComposer, type PromptComposerAttachment } from "@/components/agent/prompt-composer"
@@ -10,6 +10,7 @@ import type { ImagePreviewItem } from "@/components/workflows/agent/image-previe
 import { Spinner } from "@/components/ui/spinner"
 import type { PromptComposerModelGroup } from "@/components/agent/prompt-composer"
 import { cn } from "@/lib/utils"
+import type { AgentMode } from "@/lib/shared/agent/modes"
 
 type UserMessageProps = {
   message: UIMessage
@@ -26,6 +27,8 @@ type UserMessageProps = {
     removedFiles: Array<Extract<UIMessage["parts"][number], { type: "file" }>>,
   ) => Promise<boolean>
   onPickImages?: (files: File[]) => Promise<Array<Extract<UIMessage["parts"][number], { type: "file" }>>>
+  agentMode?: AgentMode
+  onAgentModeChange?: (mode: AgentMode) => void
 }
 
 type FileUIPart = Extract<UIMessage["parts"][number], { type: "file" }>
@@ -242,6 +245,7 @@ export function UserMessage(props: UserMessageProps) {
     [draftFiles],
   )
   const dirty = draft !== text || originalSignature !== draftSignature
+  const hasContent = draft.trim().length > 0 || draftFiles.length > 0
 
   const openAttachment = React.useCallback(
     (url: string, filename: string, mediaType: string) => {
@@ -326,7 +330,7 @@ export function UserMessage(props: UserMessageProps) {
   }, [focused, onCancel])
 
   const onSave = React.useCallback(async () => {
-    if (!dirty) return
+    if (!hasContent) return
     if (saving) return
     if (uploading) return
     setSaving(true)
@@ -356,7 +360,7 @@ export function UserMessage(props: UserMessageProps) {
     } finally {
       setSaving(false)
     }
-  }, [dirty, saving, uploading, props, draft, draftFiles, files])
+  }, [hasContent, saving, uploading, props, draft, draftFiles, files])
 
   const onPickImages = React.useCallback(
     async (picked: File[]) => {
@@ -403,6 +407,8 @@ export function UserMessage(props: UserMessageProps) {
           attachments={attachments}
           onPickImages={onPickImages}
           onAttachmentClick={(a) => openAttachment(a.previewUrl, a.filename, a.mediaType)}
+          agentMode={props.agentMode}
+          onAgentModeChange={props.onAgentModeChange}
           variant="chat"
           chrome="message-edit"
           textareaMaxHeight="20vh"
@@ -410,30 +416,17 @@ export function UserMessage(props: UserMessageProps) {
           inputGroupClassName="rounded-md"
           messageEditShowLeftControls={true}
           messageEditActions={
-            <>
-              <Button
-                type="button"
-                size="icon"
-                variant="outline"
-                className="size-7 rounded-full p-0"
-                onClick={onCancel}
-                disabled={saving}
-                aria-label={props.t("common.cancelAction")}
-              >
-                <X className="size-5" />
-              </Button>
-              <Button
-                type="button"
-                size="icon"
-                variant="default"
-                className="size-7 rounded-full"
-                onClick={() => void onSave()}
-                disabled={!dirty || saving || uploading || props.pending}
-                aria-label={props.t("workflows.orchestrator.sendAction")}
-              >
-                {saving ? <Spinner className="size-5" /> : <ArrowUp className="size-5" />}
-              </Button>
-            </>
+            <Button
+              type="button"
+              size="icon"
+              variant="default"
+              className="size-7 rounded-full"
+              onClick={() => void onSave()}
+              disabled={!hasContent || saving || uploading || props.pending}
+              aria-label={props.t("workflows.orchestrator.sendAction")}
+            >
+              {saving ? <Spinner className="size-5" /> : <ArrowUp className="size-5" />}
+            </Button>
           }
           attachmentRemovable={true}
           onRemoveAttachment={(id) => {
@@ -441,7 +434,7 @@ export function UserMessage(props: UserMessageProps) {
           }}
           mode="send-only"
           onSubmit={() => void onSave()}
-          disableSubmitWhenIdle={!dirty}
+          disableSubmitWhenIdle={!hasContent}
         />
       ) : (
         <ReadonlyUserMessage

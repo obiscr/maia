@@ -20,7 +20,9 @@ import {
   type WorkflowStep,
   type WorkflowForPanel,
   type ProposalState,
+  type PlanPreviewStep,
   extractPlanFromMessages,
+  extractPlanPreviewSteps,
   extractDraftStepsFromMessages,
   extractProposalFromMessages,
   extractSavedWorkflowIdFromMessages,
@@ -29,14 +31,17 @@ import {
   readDraftObject,
 } from "./orchestrator-state"
 
+import { isRecord } from "@/lib/shared/lang/is-record"
+
 export type { WorkflowStep, WorkflowForPanel, ProposalState } from "./orchestrator-state"
-export type { OrchestratorPlanStep, OrchestratorPlan } from "./orchestrator-state"
+export type { OrchestratorPlanStep, OrchestratorPlan, PlanPreviewStep } from "./orchestrator-state"
 
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
 
 import { DEFAULT_CHAT_MODEL } from "@/lib/shared/models"
+import { type AgentMode, DEFAULT_AGENT_MODE } from "@/lib/shared/agent/modes"
 
 export function useWorkflowAgentSession(params: {
   chatId?: string | null
@@ -46,7 +51,9 @@ export function useWorkflowAgentSession(params: {
   initialPrompt?: string | null
   initialMessages?: UIMessage[]
   initialModel?: string
+  initialMode?: AgentMode
   initialChatTitle?: string
+  initialChatDescription?: string
 }) {
   const { chatId: chatIdProp, workflowId: workflowIdProp, locale, t, initialPrompt, initialMessages } = params
 
@@ -67,10 +74,13 @@ export function useWorkflowAgentSession(params: {
   React.useEffect(() => setEffectiveWorkflowId(workflowIdProp), [workflowIdProp])
 
   const [chatTitle, setChatTitle] = React.useState(() => String(params.initialChatTitle ?? "").trim())
+  const [chatDescription, setChatDescription] = React.useState(() => String(params.initialChatDescription ?? "").trim())
 
   const [model, setModelState] = React.useState<string>(
     () => String(params.initialModel ?? "").trim() || DEFAULT_CHAT_MODEL,
   )
+
+  const [mode, setModeState] = React.useState<AgentMode>(() => params.initialMode ?? DEFAULT_AGENT_MODE)
 
   const shouldAutoContinueToolChain = React.useCallback(({ messages }: { messages: UIMessage[] }): boolean => {
     if (lastAssistantMessageIsCompleteWithApprovalResponses({ messages })) return true
@@ -83,7 +93,7 @@ export function useWorkflowAgentSession(params: {
     // Do NOT continue after the workflow has been persisted successfully.
     const hasSavedWorkflow = toolParts.some((p) => {
       const n = getToolName(p)
-      if (n !== "create_workflow_draft" && n !== "update_workflow_draft") return false
+      if (n !== "create_workflow" && n !== "update_workflow") return false
       if (p.state !== "output-available") return false
       const out = p.output
       return out && typeof out === "object" && (out as Record<string, unknown>).ok === true
@@ -95,12 +105,12 @@ export function useWorkflowAgentSession(params: {
     // (stopWhen + prepareStep) handles tool execution completely
     // within a single HTTP request — no client-side kick is needed.
     const ORCHESTRATOR_TOOLS = new Set([
-      "set_plan",
-      "draft_step",
-      "finalize_draft",
+      "create_plan",
+      "define_step",
+      "validate_draft",
       "generate_input_spec",
       "generate_output_spec",
-      "get_workflow",
+      "load_workflow",
     ])
     const hasCompletedOrchestratorTool = toolParts.some(
       (p) => (p.state === "output-available" || p.state === "output-error") && ORCHESTRATOR_TOOLS.has(getToolName(p)),
@@ -124,10 +134,27 @@ export function useWorkflowAgentSession(params: {
     [chatIdProp, stableChatId, t],
   )
 
-  const bodyRef = React.useRef({ chatId: stableChatId, workflowId: effectiveWorkflowId, locale, model })
+  const setMode = React.useCallback(
+    (next: AgentMode) => {
+      setModeState(next)
+      bodyRef.current = { ...bodyRef.current, mode: next }
+      if (!chatIdProp) return
+      apiFetchJson(`/api/chats/${encodeURIComponent(stableChatId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentMode: next }),
+      }).catch((e) => {
+        if (e instanceof ApiError && e.code === "NOT_FOUND") return
+        toast.error(t("common.error"))
+      })
+    },
+    [chatIdProp, stableChatId, t],
+  )
+
+  const bodyRef = React.useRef({ chatId: stableChatId, workflowId: effectiveWorkflowId, locale, model, mode })
   React.useEffect(() => {
-    bodyRef.current = { chatId: stableChatId, workflowId: effectiveWorkflowId, locale, model }
-  }, [stableChatId, effectiveWorkflowId, locale, model])
+    bodyRef.current = { chatId: stableChatId, workflowId: effectiveWorkflowId, locale, model, mode }
+  }, [stableChatId, effectiveWorkflowId, locale, model, mode])
 
   const transport = React.useMemo(
     () =>
@@ -155,6 +182,9 @@ export function useWorkflowAgentSession(params: {
       if (part.type === "data-chat-title" && typeof part.data === "string") {
         setChatTitle(part.data.trim())
       }
+      if (part.type === "data-chat-description" && typeof part.data === "string") {
+        setChatDescription(part.data.trim())
+      }
     },
     onFinish: () => {
       if (chatIdProp) return
@@ -170,12 +200,51 @@ export function useWorkflowAgentSession(params: {
 
   // Derive orchestrator state from AI SDK message parts
   const plan = React.useMemo(() => extractPlanFromMessages(chat.messages), [chat.messages])
+  const planPreviewSteps = React.useMemo(() => extractPlanPreviewSteps(chat.messages), [chat.messages])
   const draftStepsFromStream = React.useMemo(() => extractDraftStepsFromMessages(chat.messages), [chat.messages])
   const proposal = React.useMemo(() => extractProposalFromMessages(chat.messages), [chat.messages])
 
   const chatPending = chat.status === "submitted" || chat.status === "streaming"
 
   const stageStatus = React.useMemo(() => deriveStageStatus(chat.messages, chatPending), [chat.messages, chatPending])
+
+  // Detect define_step streaming activity.
+  // `streamingStepKey`: the stepKey being generated (null when partial JSON hasn't reached it yet).
+  // `isDefineStepActive`: true as soon as AI SDK sees the tool call header, BEFORE stepKey is parseable.
+  const { streamingStepKey: streamingDefineStepKey, isActive: isDefineStepActive } = React.useMemo(() => {
+    if (!chatPending) return { streamingStepKey: null, isActive: false }
+    const lastMsg = chat.messages[chat.messages.length - 1]
+    if (!lastMsg || lastMsg.role !== "assistant") return { streamingStepKey: null, isActive: false }
+    for (let i = lastMsg.parts.length - 1; i >= 0; i--) {
+      const part = lastMsg.parts[i]!
+      if (!isToolUIPart(part)) continue
+      if (getToolName(part) !== "define_step") continue
+      if (part.state === "input-streaming" || part.state === "input-available") {
+        const inp = isRecord(part.input) ? (part.input as Record<string, unknown>) : null
+        const step = isRecord(inp?.step) ? (inp.step as Record<string, unknown>) : null
+        const key = step && typeof step.stepKey === "string" ? step.stepKey : null
+        return { streamingStepKey: key, isActive: true }
+      }
+    }
+    return { streamingStepKey: null, isActive: false }
+  }, [chat.messages, chatPending])
+
+  // Track which steps have fully completed (output-available) vs merely drafted (input-available).
+  // extractDraftStepsFromMessages includes input-available for graph data, but planState should
+  // only transition to "complete" at output-available.
+  const completedDefineStepKeys = React.useMemo((): Set<string> => {
+    const keys = new Set<string>()
+    for (const msg of chat.messages) {
+      for (const part of msg.parts) {
+        if (isToolUIPart(part) && getToolName(part) === "define_step" && part.state === "output-available") {
+          const inp = isRecord(part.input) ? (part.input as Record<string, unknown>) : null
+          const step = isRecord(inp?.step) ? (inp.step as Record<string, unknown>) : null
+          if (step && typeof step.stepKey === "string") keys.add(step.stepKey)
+        }
+      }
+    }
+    return keys
+  }, [chat.messages])
 
   // Workflow panel state
   const [workflow, setWorkflow] = React.useState<WorkflowForPanel | null>(null)
@@ -190,45 +259,75 @@ export function useWorkflowAgentSession(params: {
   const listRef = React.useRef<HTMLDivElement | null>(null)
   const inputRef = React.useRef<HTMLTextAreaElement | null>(null)
 
-  // Sticky auto-scroll: only scroll when the user is already at the bottom
+  // Sticky auto-scroll – Vercel AI SDK chatbot pattern.
+  // Uses MutationObserver + ResizeObserver to react to actual DOM/size
+  // changes, and tracks user-initiated scrolling so that content-height
+  // fluctuations during streaming never falsely disengage auto-follow.
   const isAtBottomRef = React.useRef(true)
+  const isUserScrollingRef = React.useRef(false)
   const scrollCleanupRef = React.useRef<(() => void) | null>(null)
-  const scrollRafRef = React.useRef<number | null>(null)
-  const lastAutoScrollAtRef = React.useRef(0)
-  const pendingRef = React.useRef(false)
   const scrollContainerRef = React.useCallback((node: HTMLDivElement | null) => {
     scrollCleanupRef.current?.()
     scrollCleanupRef.current = null
     if (!node) return
     const viewport = node.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')
     if (!viewport) return
-    const THRESHOLD = 80
-    const onScroll = () => {
-      isAtBottomRef.current = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < THRESHOLD
-    }
-    viewport.addEventListener("scroll", onScroll, { passive: true })
-    onScroll()
-    scrollCleanupRef.current = () => viewport.removeEventListener("scroll", onScroll)
-  }, [])
-  React.useEffect(() => {
-    pendingRef.current = chatPending
-  }, [chatPending])
 
-  const scheduleAutoScroll = React.useCallback(() => {
-    if (!isAtBottomRef.current) return
-    if (scrollRafRef.current != null) return
-    scrollRafRef.current = window.requestAnimationFrame(() => {
-      scrollRafRef.current = null
-      if (!isAtBottomRef.current) return
-      const now = performance.now()
-      // Keep streaming scroll updates at ~20fps to avoid layout thrash.
-      if (pendingRef.current && now - lastAutoScrollAtRef.current < 50) return
-      lastAutoScrollAtRef.current = now
-      listRef.current?.scrollIntoView({
-        behavior: pendingRef.current ? "auto" : "smooth",
-        block: "end",
-      })
+    const THRESHOLD = 100
+
+    const checkIfAtBottom = () => {
+      const { scrollTop, scrollHeight, clientHeight } = viewport
+      return scrollTop + clientHeight >= scrollHeight - THRESHOLD
+    }
+
+    let isProgrammaticScroll = false
+    const scrollToBottom = () => {
+      isProgrammaticScroll = true
+      viewport.scrollTo({ top: viewport.scrollHeight, behavior: "instant" as ScrollBehavior })
+      isProgrammaticScroll = false
+      isAtBottomRef.current = true
+    }
+
+    let scrollTimeout: ReturnType<typeof setTimeout>
+    const handleScroll = () => {
+      if (isProgrammaticScroll) return
+      isUserScrollingRef.current = true
+      clearTimeout(scrollTimeout)
+      isAtBottomRef.current = checkIfAtBottom()
+      scrollTimeout = setTimeout(() => {
+        isUserScrollingRef.current = false
+      }, 150)
+    }
+
+    viewport.addEventListener("scroll", handleScroll, { passive: true })
+
+    const scrollIfNeeded = () => {
+      if (isAtBottomRef.current && !isUserScrollingRef.current) {
+        requestAnimationFrame(scrollToBottom)
+      }
+    }
+
+    const mutationObserver = new MutationObserver(scrollIfNeeded)
+    mutationObserver.observe(viewport, {
+      childList: true,
+      subtree: true,
+      characterData: true,
     })
+
+    const resizeObserver = new ResizeObserver(scrollIfNeeded)
+    resizeObserver.observe(viewport)
+    for (const child of viewport.children) {
+      resizeObserver.observe(child)
+    }
+
+    isAtBottomRef.current = checkIfAtBottom()
+
+    scrollCleanupRef.current = () => {
+      viewport.removeEventListener("scroll", handleScroll)
+      clearTimeout(scrollTimeout)
+      mutationObserver.disconnect()
+      resizeObserver.disconnect()
+    }
   }, [])
 
   type FileUIPart = Extract<UIMessage["parts"][number], { type: "file" }>
@@ -267,16 +366,6 @@ export function useWorkflowAgentSession(params: {
     }
   }, [effectiveWorkflowId])
 
-  React.useEffect(() => {
-    scheduleAutoScroll()
-    return () => {
-      if (scrollRafRef.current != null) {
-        window.cancelAnimationFrame(scrollRafRef.current)
-        scrollRafRef.current = null
-      }
-    }
-  }, [chat.messages, scheduleAutoScroll])
-
   // Pre-compute steps from initialMessages as a stable fallback
   if (initialStepsRef.current === null && initialMessages?.length) {
     const initProposal = extractProposalFromMessages(initialMessages)
@@ -289,15 +378,111 @@ export function useWorkflowAgentSession(params: {
     }
   }
 
-  // Steps for graph: local overrides > proposal draft > stream draft > initial fallback > workflow
+  // Steps for graph: local overrides > proposal draft > stream draft > plan preview > initial fallback > workflow
   const stepsForGraph = React.useMemo((): WorkflowStep[] => {
     if (localStepOverrides) return localStepOverrides
     const proposalSteps = readDraftSteps(proposal)
     if (proposalSteps?.length) return proposalSteps
-    if (draftStepsFromStream.length) return draftStepsFromStream
+    if (draftStepsFromStream.length) {
+      if (planPreviewSteps) {
+        const planDepsByKey = new Map(planPreviewSteps.map((p) => [p.stepKey, p.deps]))
+        const draftedKeys = new Set(draftStepsFromStream.map((s) => s.stepKey))
+
+        // Models often omit deps in define_step even though create_plan had them.
+        // Inherit plan preview deps for any drafted step that has empty deps.
+        const mergedDraftSteps = draftStepsFromStream.map((s) => {
+          if (s.deps.length === 0) {
+            const planDeps = planDepsByKey.get(s.stepKey)
+            if (planDeps && planDeps.length > 0) {
+              return { ...s, deps: planDeps }
+            }
+          }
+          return s
+        })
+
+        const remaining = planPreviewSteps
+          .filter((p) => !draftedKeys.has(p.stepKey))
+          .map(
+            (p): WorkflowStep => ({
+              stepKey: p.stepKey,
+              name: p.name,
+              scriptEsm: "",
+              deps: p.deps,
+            }),
+          )
+        // When the AI has built at least as many steps as planned, any unmatched
+        // plan preview keys are stale renames (AI changed stepKey between plan and
+        // build). Drop them to avoid phantom draft nodes on the canvas.
+        if (remaining.length > 0 && mergedDraftSteps.length >= planPreviewSteps.length) {
+          return mergedDraftSteps
+        }
+        return [...mergedDraftSteps, ...remaining]
+      }
+      return draftStepsFromStream
+    }
+    if (planPreviewSteps) {
+      return planPreviewSteps.map(
+        (p): WorkflowStep => ({
+          stepKey: p.stepKey,
+          name: p.name,
+          scriptEsm: "",
+          deps: p.deps,
+        }),
+      )
+    }
     if (initialStepsRef.current?.length) return initialStepsRef.current
     return workflow?.steps ?? []
-  }, [localStepOverrides, proposal, draftStepsFromStream, workflow])
+  }, [localStepOverrides, proposal, draftStepsFromStream, planPreviewSteps, workflow])
+
+  // Compute planState for each step node on the canvas.
+  // A step is "complete" only after its define_step reaches output-available (server confirmed).
+  // Steps at input-available are still "draft" with a spinner.
+  // `isDefineStepActive` covers the first-step edge case where the tool call header is seen
+  // but stepKey hasn't been parsed from the partial JSON yet.
+  const planStateByKey = React.useMemo((): Record<string, "plan" | "draft" | "complete"> => {
+    if (!planPreviewSteps) return {}
+    const previewKeys = new Set(planPreviewSteps.map((s) => s.stepKey))
+    const hasDraftActivity = draftStepsFromStream.length > 0 || isDefineStepActive
+    const hasProposal = Boolean(readDraftSteps(proposal)?.length)
+    if (hasProposal) return {}
+
+    const result: Record<string, "plan" | "draft" | "complete"> = {}
+    for (const step of stepsForGraph) {
+      if (completedDefineStepKeys.has(step.stepKey)) {
+        result[step.stepKey] = "complete"
+      } else if (previewKeys.has(step.stepKey)) {
+        result[step.stepKey] = hasDraftActivity ? "draft" : "plan"
+      }
+    }
+    return result
+  }, [planPreviewSteps, completedDefineStepKeys, draftStepsFromStream, isDefineStepActive, proposal, stepsForGraph])
+
+  const isDraftLoadingByKey = React.useMemo((): Record<string, boolean> => {
+    // Primary: we know the exact stepKey being streamed
+    if (streamingDefineStepKey) {
+      return { [streamingDefineStepKey]: true }
+    }
+    // Fallback: define_step is active (tool call header seen) but stepKey not yet
+    // parseable from partial JSON, OR we're between auto-continue streams.
+    // Show spinner on the first uncompleted plan step by order.
+    if (!chatPending) return {}
+    if (!planPreviewSteps || planPreviewSteps.length === 0) return {}
+    const hasAnyDefineStep = completedDefineStepKeys.size > 0 || draftStepsFromStream.length > 0 || isDefineStepActive
+    if (!hasAnyDefineStep) return {}
+    for (const step of planPreviewSteps) {
+      if (!completedDefineStepKeys.has(step.stepKey)) {
+        return { [step.stepKey]: true }
+      }
+    }
+    return {}
+  }, [
+    streamingDefineStepKey,
+    chatPending,
+    planPreviewSteps,
+    completedDefineStepKeys,
+    draftStepsFromStream,
+    isDefineStepActive,
+  ])
 
   // Set dirty when draft steps stream in
   React.useEffect(() => {
@@ -356,6 +541,7 @@ export function useWorkflowAgentSession(params: {
       if (pending) return
       if (!text && fs.length === 0) return
       isAtBottomRef.current = true
+      isUserScrollingRef.current = false
       if (text) {
         chat.sendMessage({ text, files: fs.length ? fs : undefined })
         return
@@ -367,7 +553,7 @@ export function useWorkflowAgentSession(params: {
 
   const editUserMessage = React.useCallback(
     async (messageId: string, nextText: string, nextFiles?: FileUIPart[]) => {
-      if (pendingRef.current) return false
+      if (chatPending) return false
       const trimmedId = String(messageId || "").trim()
       if (!trimmedId) return false
 
@@ -401,6 +587,7 @@ export function useWorkflowAgentSession(params: {
       }
 
       isAtBottomRef.current = true
+      isUserScrollingRef.current = false
       chat.setMessages([...current.slice(0, targetIdx), rewritten])
       try {
         await Promise.resolve(chat.regenerate())
@@ -409,7 +596,7 @@ export function useWorkflowAgentSession(params: {
       }
       return true
     },
-    [chat],
+    [chat, chatPending],
   )
 
   // Optional: auto-send a server-provided initialPrompt (used by workflow edit entry points)
@@ -607,12 +794,15 @@ export function useWorkflowAgentSession(params: {
   return {
     chatId: stableChatId,
     chatTitle,
+    chatDescription,
     listRef,
     scrollContainerRef,
     inputRef,
     monacoTheme,
     model,
     setModel,
+    mode,
+    setMode,
 
     // AI SDK chat state (standard)
     messages: chat.messages,
@@ -625,6 +815,8 @@ export function useWorkflowAgentSession(params: {
     workflowLoading,
     stepsForGraph,
     draftStepsFromStream,
+    planStateByKey,
+    isDraftLoadingByKey,
     isDirty: dirty,
     selectedStepKey,
     setSelectedStepKey,

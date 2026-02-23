@@ -40,7 +40,7 @@ function Row(props: {
   )
 }
 
-export function WorkflowAgentProgressCompact(props: {
+export function PlanStepsProgress(props: {
   title: string
   generatingPlanText: string
   generatingStepText?: string
@@ -51,12 +51,13 @@ export function WorkflowAgentProgressCompact(props: {
   draftStepsCount?: number
   done?: boolean
   mode?: WorkflowAgentProgressMode
+  idle?: boolean
   className?: string
 }) {
   const planSteps = Array.isArray(props.plan?.steps)
     ? (props.plan?.steps as Array<{ name: string; description: string }>)
     : []
-  const hasExpandable = planSteps.length > 0
+  const hasExpandable = planSteps.some((s) => String(s?.name ?? "").trim().length > 0)
   const [open, setOpen] = React.useState<boolean>(() => hasExpandable)
   const hasUserToggledRef = React.useRef(false)
 
@@ -71,10 +72,10 @@ export function WorkflowAgentProgressCompact(props: {
   const isDoneLike = isDone || computedAllDone
   // Correct semantics:
   // - While executing, the ACTIVE row is the NEXT step being generated (spinner).
-  // - A step becomes DONE once its draft node has been emitted (draft_step arrived).
+  // - A step becomes DONE once its draft node has been emitted (define_step arrived).
   // So: doneCount = draftCount, activeIdx = draftCount (clamped), and when all steps are emitted, no active spinner.
   const doneCount = isDone ? planSteps.length : Math.min(draftCount, planSteps.length)
-  const activeIdx = isDoneLike ? null : draftCount < planSteps.length ? draftCount : null
+  const activeIdx = props.idle || isDoneLike ? null : draftCount < planSteps.length ? draftCount : null
 
   const formatTemplate = React.useCallback((tpl: string | undefined, vars: Record<string, string | number>) => {
     if (!tpl) return ""

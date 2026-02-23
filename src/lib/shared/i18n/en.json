@@ -171,6 +171,8 @@
       "apiKeyPlaceholder": "OpenRouter API key",
       "model": "Model",
       "modelPlaceholder": "Select a model",
+      "defaultMode": "Default mode",
+      "defaultModePlaceholder": "Select default mode",
       "showAction": "Show",
       "hideAction": "Hide",
       "saveFailed": "Save failed"
@@ -418,6 +420,32 @@
   },
   "agent": {
     "apiKey": "Agent API key",
+    "mode": {
+      "label": "Mode",
+      "agent": "Agent",
+      "agentDescription": "Build workflows autonomously",
+      "chat": "Chat",
+      "chatDescription": "Query & manage platform",
+      "plan": "Plan",
+      "planDescription": "Discuss & design workflow plans",
+      "switchSuggestion": "Suggest switching to {mode} mode",
+      "switchAction": "Switch to {mode}",
+      "stayAction": "Stay in current mode",
+      "switched": "Switched",
+      "stayed": "Stayed in current mode",
+      "planReady": {
+        "buildPlan": "Build plan",
+        "build": "Start building",
+        "continuePlanning": "Continue planning",
+        "started": "Building started",
+        "autoPrompt": "Start building the workflow \"{title}\" based on the plan above."
+      }
+    },
+    "node": {
+      "plan": "Plan",
+      "draft": "Draft",
+      "generating": "Generating..."
+    },
     "chat": {
       "missingApiKeyAlertTitle": "Agent API key is missing",
       "missingApiKeyAlertDescription": "Please configure an API key in Preferences → Agent. You won’t be able to send messages until it’s set.",
@@ -1139,6 +1167,9 @@
         "titleDone": "Thought for {seconds}s"
       },
       "composerPlaceholder": "Describe what you need — let the agent help you…",
+      "composerPlaceholderAgent": "Describe what you need — let the agent help you…",
+      "composerPlaceholderChat": "Query, manage your workflows and tasks…",
+      "composerPlaceholderPlan": "Describe what you need — let's plan together…",
       "sendAction": "Send",
       "applyCreateAction": "Save as new workflow",
       "createWorkflowQueued": "Agent workflow generation started",
@@ -1617,32 +1648,39 @@
     },
     "showDetails": "Show details",
     "hideDetails": "Hide details",
-    "set_plan": {
+    "approval": {
+      "title": "This action requires your approval",
+      "approveAction": "Approve",
+      "denyAction": "Deny",
+      "approved": "Approved",
+      "denied": "Denied"
+    },
+    "create_plan": {
       "label": "Create plan",
       "running": "Creating plan…",
       "done": "Plan created",
       "doneWithCount": "Plan created · {count} steps"
     },
-    "draft_step": {
-      "label": "Draft step",
-      "running": "Drafting step…",
+    "define_step": {
+      "label": "Generate step",
+      "running": "Generating step…",
       "runningWithName": "Generating: {name}…",
-      "done": "Step drafted",
-      "doneWithName": "Step drafted: {name}"
+      "done": "Step generated",
+      "doneWithName": "Step generated: {name}"
     },
-    "finalize_draft": {
+    "validate_draft": {
       "label": "Validate workflow",
       "running": "Validating workflow…",
       "done": "Workflow validated",
       "failed": "Validation failed"
     },
-    "create_workflow_draft": {
+    "create_workflow": {
       "label": "Create workflow",
       "running": "Creating workflow…",
       "done": "Workflow created",
       "failed": "Create failed"
     },
-    "update_workflow_draft": {
+    "update_workflow": {
       "label": "Update workflow",
       "running": "Updating workflow…",
       "done": "Workflow updated",
@@ -1660,10 +1698,15 @@
       "done": "Output spec generated",
       "failed": "Output spec generation failed"
     },
-    "get_workflow": {
+    "load_workflow": {
       "label": "Load workflow",
       "running": "Loading workflow…",
       "done": "Workflow loaded"
+    },
+    "preview_steps": {
+      "label": "Preview steps",
+      "running": "Updating preview…",
+      "done": "Preview updated"
     },
     "workflow": {
       "list": { "label": "List workflows", "running": "Listing workflows…", "done": "Listed workflows" },

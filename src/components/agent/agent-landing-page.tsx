@@ -10,9 +10,10 @@ import { apiFetchJson } from "@/lib/shared/http/api"
 import { toast } from "@/lib/client/toast"
 import { AVAILABLE_MODELS, DEFAULT_CHAT_MODEL, groupModelsByProvider } from "@/lib/shared/models"
 import { useWorkflowAgentSession } from "@/components/workflows/agent/use-workflow-agent-session"
+import { type AgentMode, isAgentMode } from "@/lib/shared/agent/modes"
 
 type AgentSettingsResponse = {
-  settings: { apiKeyConfigured: boolean; model: string }
+  settings: { apiKeyConfigured: boolean; model: string; mode?: string }
 }
 
 export function AgentLandingPage(props: { initialApiKeyConfigured?: boolean }) {
@@ -25,7 +26,7 @@ export function AgentLandingPage(props: { initialApiKeyConfigured?: boolean }) {
   const didAutoRunRef = React.useRef(false)
   const startingRef = React.useRef(false)
   const [starting, setStarting] = React.useState(false)
-  const [modelsLoading, setModelsLoading] = React.useState(true)
+  const [settingsLoading, setModelsLoading] = React.useState(true)
   const [apiKeyConfigured, setApiKeyConfigured] = React.useState<boolean | null>(() =>
     typeof props.initialApiKeyConfigured === "boolean" ? props.initialApiKeyConfigured : null,
   )
@@ -39,6 +40,7 @@ export function AgentLandingPage(props: { initialApiKeyConfigured?: boolean }) {
   const pending = session.pending
   const model = session.model
   const setSessionModel = session.setModel
+  const setSessionMode = session.setMode
 
   React.useEffect(() => {
     let cancelled = false
@@ -49,6 +51,8 @@ export function AgentLandingPage(props: { initialApiKeyConfigured?: boolean }) {
         setApiKeyConfigured(Boolean(json?.settings?.apiKeyConfigured))
         const m = String(json?.settings?.model ?? "").trim()
         if (m) setSessionModel(m)
+        const rawMode = json?.settings?.mode
+        if (typeof rawMode === "string" && isAgentMode(rawMode)) setSessionMode(rawMode)
       } catch {
         // ignore – default model is already set
       } finally {
@@ -59,7 +63,7 @@ export function AgentLandingPage(props: { initialApiKeyConfigured?: boolean }) {
     return () => {
       cancelled = true
     }
-  }, [setSessionModel])
+  }, [setSessionModel, setSessionMode])
 
   const setModel = React.useCallback(
     (next: string) => {
@@ -71,6 +75,18 @@ export function AgentLandingPage(props: { initialApiKeyConfigured?: boolean }) {
       }).catch(() => {})
     },
     [setSessionModel],
+  )
+
+  const setMode = React.useCallback(
+    (next: AgentMode) => {
+      setSessionMode(next)
+      apiFetchJson("/api/settings/agent", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: next }),
+      }).catch(() => {})
+    },
+    [setSessionMode],
   )
 
   const groupedModels = React.useMemo(() => groupModelsByProvider(AVAILABLE_MODELS, model), [model])
@@ -219,7 +235,7 @@ export function AgentLandingPage(props: { initialApiKeyConfigured?: boolean }) {
         const res = await apiFetchJson<{ id?: string; publicId?: string }>("/api/chats", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chatId, model }),
+          body: JSON.stringify({ chatId, model, agentMode: session.mode }),
         })
         const publicId = typeof res?.publicId === "string" ? res.publicId : ""
         if (!publicId) return
@@ -237,7 +253,7 @@ export function AgentLandingPage(props: { initialApiKeyConfigured?: boolean }) {
         setStarting(false)
       }
     },
-    [pending, chatId, model, router],
+    [pending, chatId, model, session.mode, router],
   )
 
   const onSubmit = React.useCallback(async () => {
@@ -306,11 +322,13 @@ export function AgentLandingPage(props: { initialApiKeyConfigured?: boolean }) {
       model={model}
       setModel={setModel}
       groupedModels={groupedModels}
-      modelsLoading={modelsLoading}
+      settingsLoading={settingsLoading}
       attachments={attachments}
       removeAttachment={removeAttachment}
       uploadPickedImages={uploadPickedImages}
       anyUploading={anyUploading}
+      agentMode={session.mode}
+      onAgentModeChange={setMode}
     />
   )
 }
