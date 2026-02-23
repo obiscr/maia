@@ -25,6 +25,7 @@ import { apiFetchJson } from "@/lib/shared/http/api"
 import { tApiError } from "@/lib/shared/i18n/error"
 import { toast } from "@/lib/client/toast"
 import { SettingsFormSkeleton } from "@/components/settings/settings-skeletons"
+import { ModelSelectItem } from "@/components/agent/model-badges"
 import { AVAILABLE_MODELS, groupModelsByProvider } from "@/lib/shared/models"
 import {
   type AgentMode,
@@ -226,9 +227,7 @@ export default function AgentSettingsPage() {
                         <SelectGroup key={g.provider}>
                           <SelectLabel>{g.provider}</SelectLabel>
                           {g.models.map((m) => (
-                            <SelectItem key={m.id} value={m.id}>
-                              {m.name}
-                            </SelectItem>
+                            <ModelSelectItem key={m.id} value={m.id} name={m.name} badges={m.badges} />
                           ))}
                           {idx < groupedModels.length - 1 ? <SelectSeparator /> : null}
                         </SelectGroup>

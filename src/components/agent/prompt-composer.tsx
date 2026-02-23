@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { ModelSelectItem } from "@/components/agent/model-badges"
 import { type AgentMode, AGENT_MODES, AGENT_MODE_I18N_KEYS } from "@/lib/shared/agent/modes"
 
 const COMPOSER_PLACEHOLDER_KEYS: Record<AgentMode, string> = {
@@ -45,7 +46,7 @@ export type PromptComposerAttachment = {
 
 export type PromptComposerModelGroup = {
   provider: string
-  models: Array<{ id: string; name: string; provider: string }>
+  models: Array<{ id: string; name: string; provider: string; badges?: string[] }>
 }
 
 export function AttachmentThumbImage(props: { src: string; alt: string; uploading?: boolean; dimmed?: boolean }) {
@@ -644,9 +645,7 @@ export function PromptComposer(props: {
                               <SelectGroup key={g.provider}>
                                 <SelectLabel>{g.provider}</SelectLabel>
                                 {g.models.map((m) => (
-                                  <SelectItem key={m.id} value={m.id}>
-                                    {m.name}
-                                  </SelectItem>
+                                  <ModelSelectItem key={m.id} value={m.id} name={m.name} badges={m.badges} />
                                 ))}
                                 {idx < groupedModels.length - 1 ? <SelectSeparator /> : null}
                               </SelectGroup>
