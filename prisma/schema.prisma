@@ -1231,13 +1231,16 @@ model Chat {
   workflow     Workflow?  @relation(fields: [workflowId], references: [publicId], onDelete: SetNull)
 
   title        String    @default("")
+  description  String    @default("")
 
   /// AI model used for this chat, e.g. "anthropic/claude-opus-4.6".
   model        String?
 
-  /// Resolved agent profile for this chat (cached after first classification).
-  /// e.g. "workflow.orchestrator" | "general.tools"
+  /// @deprecated Legacy agent-mode field. Use `agent` instead.
   profileId    String?
+
+  /// Agent mode for this chat: "agent" | "chat" | "plan".
+  agentMode    String?
 
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
