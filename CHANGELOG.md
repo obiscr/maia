@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
+## v0.3.1
+
+### Added
+  - **Agent modes**: Agent / Chat / Plan three conversation modes with mode selector and per-user default setting.
+  - **Plan mode**: read-only planning with canvas preview; confirmed plans hand off to Agent mode via one-click Build.
+  - **Chat description**: auto-generated subtitle for each conversation.
+
+### Changed
+  - Renamed orchestrator tools for clarity (`create_plan`, `define_step`, `validate_draft`, `create_workflow`, `update_workflow`, `load_workflow`).
+  - `validate_draft` now enforces graph validation and inputSpec completeness.
+  - Removed deprecated models (xAI Grok 4.1, Qwen 3.5 Plus, DeepSeek R1).
+
+### Migration
+  - Run `prisma migrate deploy`; adds `agentMode` and `description` columns to `Chat` and migrates legacy tool names in message data.
+
 ## v0.3.0
 
 ### Breaking
