@@ -47,7 +47,7 @@ export function PlanStepsProgress(props: {
   completedCountText?: string
   stepsCountText?: string
   completedStepsCountText?: string
-  plan?: { title?: string | null; steps?: Array<{ name: string; description: string }> } | null
+  plan?: { title?: string | null; steps?: Array<{ stepKey?: string; name: string; description: string }> } | null
   draftStepsCount?: number
   done?: boolean
   mode?: WorkflowAgentProgressMode

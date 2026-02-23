@@ -433,6 +433,8 @@
       "stayAction": "留在当前模式",
       "switched": "已切换",
       "stayed": "已忽略",
+      "switchAutoPrompt": "我已切换到 {mode} 模式，请在此模式下继续当前任务。",
+      "stayAutoPrompt": "我想留在当前模式，请继续在这里处理当前任务。",
       "planReady": {
         "buildPlan": "构建计划",
         "build": "开始构建",
@@ -444,6 +446,7 @@
     "node": {
       "plan": "构想",
       "draft": "草稿",
+      "error": "失败",
       "generating": "生成中..."
     },
     "chat": {
@@ -1664,7 +1667,7 @@
     "define_step": {
       "label": "生成步骤",
       "running": "正在生成步骤…",
-      "runningWithName": "正在生成：{name}…",
+      "runningWithName": "正在生成步骤：{name}",
       "done": "步骤已生成",
       "doneWithName": "已生成步骤：{name}"
     },

@@ -433,6 +433,8 @@
       "stayAction": "Stay in current mode",
       "switched": "Switched",
       "stayed": "Stayed in current mode",
+      "switchAutoPrompt": "I switched to {mode} mode. Please continue with the task in this mode.",
+      "stayAutoPrompt": "I want to stay in the current mode. Please continue here.",
       "planReady": {
         "buildPlan": "Build plan",
         "build": "Start building",
@@ -444,6 +446,7 @@
     "node": {
       "plan": "Plan",
       "draft": "Draft",
+      "error": "Failed",
       "generating": "Generating..."
     },
     "chat": {
@@ -1664,7 +1667,7 @@
     "define_step": {
       "label": "Generate step",
       "running": "Generating step…",
-      "runningWithName": "Generating: {name}…",
+      "runningWithName": "Generating step: {name}",
       "done": "Step generated",
       "doneWithName": "Step generated: {name}"
     },

@@ -11,7 +11,7 @@ import {
   type SourceDocumentUIPart,
 } from "ai"
 
-import { Bot, Lightbulb, ListTodo, MessageCircleDashed } from "lucide-react"
+import { Bot, CheckCircle2, CirclePause, Lightbulb, ListTodo, MessageCircleDashed } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { ChatMarkdown } from "@/components/common/markdown/chat-markdown"
@@ -32,10 +32,18 @@ type MessagePartsProps = {
   isLast: boolean
   t: (k: string) => string
   onToolApprovalResponse?: (input: { id: string; approved: boolean; reason?: string }) => void
+  onToolOutput?: (input: { tool: string; toolCallId: string; output: unknown }) => void
   onModeSwitch?: (mode: AgentMode) => void
-  onPlanBuild?: (plan: { title: string; summary: string; steps: string[]; highlights: string[] }) => void
+  onModeStay?: () => void
+  onPlanBuild?: (plan: {
+    title: string
+    summary: string
+    steps: string[]
+    highlights: string[]
+    toolCallId: string
+  }) => void
   orchestratorProgress?: {
-    plan?: { title?: string | null; steps?: Array<{ name: string; description: string }> } | null
+    plan?: { title?: string | null; steps?: Array<{ stepKey?: string; name: string; description: string }> } | null
     draftStepsCount: number
     done: boolean
   } | null
@@ -44,11 +52,20 @@ type MessagePartsProps = {
 }
 
 function MessagePartsImpl(props: MessagePartsProps) {
-  const { message, isStreaming, isLast, t, onToolApprovalResponse, onModeSwitch, onPlanBuild } = props
+  const {
+    message,
+    isStreaming,
+    isLast,
+    t,
+    onToolApprovalResponse,
+    onToolOutput,
+    onModeSwitch,
+    onModeStay,
+    onPlanBuild,
+  } = props
   const elements: React.ReactNode[] = []
   const orchestratorProgress = props.orchestratorProgress
   let insertedOrchestratorProgress = false
-  let draftStepIdx = 0
   const planSteps = orchestratorProgress?.plan?.steps
 
   const normalizeReasoningText = React.useCallback((raw: string) => {
@@ -175,12 +192,27 @@ function MessagePartsImpl(props: MessagePartsProps) {
 
       if (toolName === "suggest_mode_switch") {
         const input = part.input as Record<string, unknown> | undefined
+        const toolCallId = typeof part.toolCallId === "string" ? part.toolCallId : ""
         const targetMode =
           typeof input?.target_mode === "string" && isAgentMode(input.target_mode) ? input.target_mode : null
         const reason = typeof input?.reason === "string" ? input.reason : ""
-        if (targetMode) {
+        const output = part.output as Record<string, unknown> | undefined
+        const accepted =
+          part.state === "output-available" && output && typeof output.accepted === "boolean" ? output.accepted : null
+        const initialChoice = accepted === true ? "switched" : accepted === false ? "stayed" : "pending"
+        if (targetMode && toolCallId) {
           elements.push(
-            <ModeSwitchCard key={key} targetMode={targetMode} reason={reason} t={t} onSwitch={onModeSwitch} />,
+            <ModeSwitchCard
+              key={key}
+              targetMode={targetMode}
+              reason={reason}
+              toolCallId={toolCallId}
+              initialChoice={initialChoice}
+              t={t}
+              onSwitch={onModeSwitch}
+              onStay={onModeStay}
+              onToolOutput={onToolOutput}
+            />,
           )
         }
         continue
@@ -192,6 +224,7 @@ function MessagePartsImpl(props: MessagePartsProps) {
         const title = typeof input?.title === "string" ? input.title : ""
         const summary = typeof input?.summary === "string" ? input.summary : ""
         const rawSteps = Array.isArray(input?.steps) ? input.steps : []
+        const toolCallId = typeof part.toolCallId === "string" ? part.toolCallId : ""
         const steps: string[] = rawSteps.map((s: unknown) => {
           if (typeof s === "string") return s
           if (s && typeof s === "object") {
@@ -211,7 +244,18 @@ function MessagePartsImpl(props: MessagePartsProps) {
               highlights={highlights}
               t={t}
               streaming={isPartial || (isStreaming && isLast)}
-              onBuild={() => onPlanBuild?.({ title, summary, steps, highlights })}
+              onBuild={() => {
+                if (!toolCallId) return
+                onPlanBuild?.({ title, summary, steps, highlights, toolCallId })
+              }}
+              onContinuePlanning={() => {
+                if (!toolCallId) return
+                onToolOutput?.({
+                  tool: "plan_ready",
+                  toolCallId,
+                  output: { accepted: false },
+                })
+              }}
               onModeSwitch={onModeSwitch}
               planBuildActive={props.planBuildActive}
               orchestratorProgress={props.planBuildActive ? orchestratorProgress : null}
@@ -223,8 +267,12 @@ function MessagePartsImpl(props: MessagePartsProps) {
 
       let plannedName: string | undefined
       if (toolName === "define_step" && planSteps) {
-        plannedName = planSteps[draftStepIdx]?.name
-        draftStepIdx++
+        const inp = part.input as Record<string, unknown> | undefined
+        const step = inp?.step as Record<string, unknown> | undefined
+        const stepKey = typeof step?.stepKey === "string" ? step.stepKey : null
+        if (stepKey) {
+          plannedName = planSteps.find((s) => s.stepKey === stepKey)?.name
+        }
       }
       elements.push(
         <WorkflowAgentInlineToolCall
@@ -286,18 +334,32 @@ const MODE_SWITCH_ICONS: Record<AgentMode, React.ElementType> = {
   plan: ListTodo,
 }
 
+const MODE_SWITCH_RESULT_ICONS: Record<"switched" | "stayed", React.ElementType> = {
+  switched: CheckCircle2,
+  stayed: CirclePause,
+}
+
 function ModeSwitchCard(props: {
   targetMode: AgentMode
   reason: string
+  toolCallId: string
+  initialChoice?: "pending" | "switched" | "stayed"
   t: (k: string) => string
   onSwitch?: (mode: AgentMode) => void
+  onStay?: () => void
+  onToolOutput?: (input: { tool: string; toolCallId: string; output: unknown }) => void
 }) {
-  const { targetMode, reason, t, onSwitch } = props
-  const [choice, setChoice] = React.useState<"pending" | "switched" | "stayed">("pending")
+  const { targetMode, reason, toolCallId, initialChoice = "pending", t, onSwitch, onStay, onToolOutput } = props
+  const [choice, setChoice] = React.useState<"pending" | "switched" | "stayed">(initialChoice)
+
+  React.useEffect(() => {
+    setChoice(initialChoice)
+  }, [initialChoice])
 
   const modeLabelKey = AGENT_MODE_I18N_KEYS[targetMode]
   const modeLabel = t(modeLabelKey)
   const ModeIcon = MODE_SWITCH_ICONS[targetMode]
+  const ResultIcon = choice !== "pending" ? MODE_SWITCH_RESULT_ICONS[choice] : null
 
   return (
     <div className="my-2 rounded-lg border bg-muted/40 p-3">
@@ -307,7 +369,8 @@ function ModeSwitchCard(props: {
           <p className="text-sm font-medium">{t("agent.mode.switchSuggestion").replace("{mode}", modeLabel)}</p>
           {reason ? <p className="text-xs text-muted-foreground">{reason}</p> : null}
           {choice !== "pending" ? (
-            <p className="text-xs text-muted-foreground">
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              {ResultIcon ? <ResultIcon className="h-3.5 w-3.5 shrink-0" /> : null}
               {t(choice === "switched" ? "agent.mode.switched" : "agent.mode.stayed")}
             </p>
           ) : (
@@ -318,13 +381,31 @@ function ModeSwitchCard(props: {
                 className="h-7 gap-1.5 text-xs"
                 onClick={() => {
                   setChoice("switched")
+                  onToolOutput?.({
+                    tool: "suggest_mode_switch",
+                    toolCallId,
+                    output: { accepted: true, target_mode: targetMode },
+                  })
                   onSwitch?.(targetMode)
                 }}
               >
                 <ModeIcon className="h-3 w-3" />
                 {t("agent.mode.switchAction").replace("{mode}", modeLabel)}
               </Button>
-              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setChoice("stayed")}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => {
+                  setChoice("stayed")
+                  onToolOutput?.({
+                    tool: "suggest_mode_switch",
+                    toolCallId,
+                    output: { accepted: false },
+                  })
+                  onStay?.()
+                }}
+              >
                 {t("agent.mode.stayAction")}
               </Button>
             </div>
@@ -342,7 +423,9 @@ export const MessageParts = React.memo(
     prev.isStreaming === next.isStreaming &&
     prev.isLast === next.isLast &&
     prev.t === next.t &&
+    prev.onToolOutput === next.onToolOutput &&
     prev.onModeSwitch === next.onModeSwitch &&
+    prev.onModeStay === next.onModeStay &&
     prev.onPlanBuild === next.onPlanBuild &&
     prev.orchestratorProgress === next.orchestratorProgress &&
     prev.planBuildActive === next.planBuildActive,

@@ -3,6 +3,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
+import dynamic from "next/dynamic"
 import { Bot, History, Pencil, Plus, Save, Trash2Icon } from "lucide-react"
 import { type UIMessage, isToolUIPart, getToolName } from "ai"
 
@@ -17,12 +18,9 @@ import { cn } from "@/lib/utils"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Card } from "@/components/ui/card"
 import { SectionCard } from "@/components/common/section-card"
-import { WorkflowGraphCanvasWrapper } from "@/components/graph/workflow-graph-canvas-wrapper"
 import { useWorkflowAgentSession } from "@/components/workflows/agent/use-workflow-agent-session"
-import { setupMaiaMonaco, maiaMonacoOptions } from "@/lib/client/monaco"
 import { StandardActionDialog } from "@/components/common/standard-action-dialog"
 import { WorkflowQuickExamples } from "@/components/workflows/common/workflow-quick-examples"
-import { MaiaMonacoEditor } from "@/components/common/maia-monaco-editor"
 import { StandardPageHeader } from "@/components/common/standard-page-header"
 import { DetailPageLayout } from "@/components/common/detail-page-layout"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -33,13 +31,37 @@ import { MessageActions } from "@/components/workflows/agent/message-actions"
 import { ImagePreviewDialog, type ImagePreviewItem } from "@/components/workflows/agent/image-preview-dialog"
 import { UserMessage } from "@/components/workflows/agent/user-message"
 import { AVAILABLE_MODELS, groupModelsByProvider } from "@/lib/shared/models"
-import type { AgentMode } from "@/lib/shared/agent/modes"
+import { AGENT_MODE_I18N_KEYS, type AgentMode } from "@/lib/shared/agent/modes"
 import { useQueryClient } from "@tanstack/react-query"
 import { useListQuery } from "@/hooks/list-query/use-list-query"
 import { apiFetchJson } from "@/lib/shared/http/api"
 import { tApiError } from "@/lib/shared/i18n/error"
 import { ChatHistorySheet, type ChatHistoryItem } from "@/components/workflows/agent/chat-history-sheet"
 import { AgentMissingApiKeyAlert } from "@/components/agent/agent-missing-api-key-alert"
+
+const StepMonacoEditor = dynamic(() => import("@/components/workflows/agent/step-monaco-editor"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full w-full items-center justify-center gap-2 text-muted-foreground">
+      <Spinner className="size-5" />
+    </div>
+  ),
+})
+
+const WorkflowGraphCanvasWrapper = dynamic(
+  () =>
+    import("@/components/graph/workflow-graph-canvas-wrapper").then((m) => ({
+      default: m.WorkflowGraphCanvasWrapper,
+    })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full w-full items-center justify-center gap-2 text-muted-foreground">
+        <Spinner className="size-5" />
+      </div>
+    ),
+  },
+)
 
 // ---------------------------------------------------------------------------
 // Message rendering
@@ -51,11 +73,11 @@ type GraphStep = {
   stepKey: string
   name: string
   deps: string[]
-  planState?: "plan" | "draft" | "complete"
+  planState?: "plan" | "draft" | "complete" | "error"
   isDraftLoading?: boolean
 }
 type OrchestratorProgress = {
-  plan?: { title?: string | null; steps?: Array<{ name: string; description: string }> } | null
+  plan?: { title?: string | null; steps?: Array<{ stepKey?: string; name: string; description: string }> } | null
   draftStepsCount: number
   done: boolean
 } | null
@@ -134,7 +156,10 @@ const ChatMessageRow = React.memo(function ChatMessageRow(props: {
   isLive?: boolean
   t: (k: string) => string
   model: string
-  groupedModels: Array<{ provider: string; models: Array<{ id: string; name: string; provider: string }> }>
+  groupedModels: Array<{
+    provider: string
+    models: Array<{ id: string; name: string; provider: string; badges?: string[] }>
+  }>
   onModelChange: (model: string) => void
   onOpenImagePreview: (item: ImagePreviewItem) => void
   orchestratorProgress: OrchestratorProgress
@@ -146,8 +171,16 @@ const ChatMessageRow = React.memo(function ChatMessageRow(props: {
   ) => Promise<boolean>
   onPickImagesForEdit: (files: File[]) => Promise<FileUIPart[]>
   onToolApprovalResponse: (input: { id: string; approved: boolean; reason?: string }) => void
+  onToolOutput: (input: { tool: string; toolCallId: string; output: unknown }) => void
   onModeSwitch?: (mode: import("@/lib/shared/agent/modes").AgentMode) => void
-  onPlanBuild?: (plan: { title: string; summary: string; steps: string[]; highlights: string[] }) => void
+  onModeStay?: () => void
+  onPlanBuild?: (plan: {
+    title: string
+    summary: string
+    steps: string[]
+    highlights: string[]
+    toolCallId: string
+  }) => void
   agentMode?: import("@/lib/shared/agent/modes").AgentMode
   onAgentModeChange?: (mode: import("@/lib/shared/agent/modes").AgentMode) => void
   planBuildActive?: boolean
@@ -172,7 +205,9 @@ const ChatMessageRow = React.memo(function ChatMessageRow(props: {
           isLast={Boolean(props.isLive)}
           t={t}
           onToolApprovalResponse={props.onToolApprovalResponse}
+          onToolOutput={props.onToolOutput}
           onModeSwitch={props.onModeSwitch}
+          onModeStay={props.onModeStay}
           onPlanBuild={props.onPlanBuild}
           orchestratorProgress={progress}
           planBuildActive={props.planBuildActive}
@@ -268,6 +303,17 @@ export default function WorkflowAgentClient(props: {
     [session.setMode],
   )
 
+  const onModeSwitch = React.useCallback(
+    (next: AgentMode) => {
+      setMode(next)
+    },
+    [setMode],
+  )
+
+  const onModeStay = React.useCallback(() => {
+    // No-op: sendAutomaticallyWhen handles auto-continue after addToolOutput.
+  }, [])
+
   // Track whether a plan_ready Build was triggered.
   // Persisted across re-renders by deriving from message history + current mode.
   const [planBuildActive, setPlanBuildActive] = React.useState<boolean>(() => {
@@ -282,13 +328,20 @@ export default function WorkflowAgentClient(props: {
   })
 
   const onPlanBuild = React.useCallback(
-    (plan: { title: string; summary: string; steps: string[]; highlights: string[] }) => {
+    (plan: { title: string; summary: string; steps: string[]; highlights: string[]; toolCallId: string }) => {
       setPlanBuildActive(true)
       setMode("agent")
-      const prompt = t("agent.mode.planReady.autoPrompt", { title: plan.title })
-      session.send(prompt)
+      session.addToolOutput({
+        tool: "plan_ready",
+        toolCallId: plan.toolCallId,
+        output: {
+          accepted: true,
+          title: plan.title,
+          steps: plan.steps,
+        },
+      })
     },
-    [setMode, session.send, t],
+    [setMode, session.addToolOutput],
   )
 
   React.useEffect(() => {
@@ -804,7 +857,9 @@ export default function WorkflowAgentClient(props: {
                   onEditUserMessage={onEditUserMessage}
                   onPickImagesForEdit={uploadPickedImagesForEdit}
                   onToolApprovalResponse={session.addToolApprovalResponse}
-                  onModeSwitch={setMode}
+                  onToolOutput={session.addToolOutput}
+                  onModeSwitch={onModeSwitch}
+                  onModeStay={onModeStay}
                   onPlanBuild={onPlanBuild}
                   agentMode={session.mode}
                   onAgentModeChange={setMode}
@@ -1055,14 +1110,10 @@ export default function WorkflowAgentClient(props: {
                         {t("workflows.scriptEsm")}
                       </div>
                       <div className="min-h-0 flex-1">
-                        <MaiaMonacoEditor
-                          height="100%"
-                          defaultLanguage="javascript"
+                        <StepMonacoEditor
                           theme={session.monacoTheme}
                           value={selectedStep.scriptEsm}
                           onChange={(v) => session.updateDraftStep(selectedStep.stepKey, { scriptEsm: v ?? "" })}
-                          beforeMount={setupMaiaMonaco}
-                          options={maiaMonacoOptions}
                         />
                       </div>
                       <div className="border-t bg-muted/10 px-3 py-2 text-xs text-muted-foreground">

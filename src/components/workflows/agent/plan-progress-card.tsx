@@ -10,7 +10,7 @@ import { PlanStepsProgress } from "@/components/workflows/agent/plan-steps-progr
 import type { AgentMode } from "@/lib/shared/agent/modes"
 
 type OrchestratorProgress = {
-  plan?: { title?: string | null; steps?: Array<{ name: string; description: string }> } | null
+  plan?: { title?: string | null; steps?: Array<{ stepKey?: string; name: string; description: string }> } | null
   draftStepsCount: number
   done: boolean
 } | null
@@ -32,6 +32,7 @@ export type PlanProgressCardProps = {
    * Omit for agent mode — the card will only show header + progress.
    */
   onBuild?: () => void
+  onContinuePlanning?: () => void
   onModeSwitch?: (mode: AgentMode) => void
   planBuildActive?: boolean
   orchestratorProgress?: OrchestratorProgress
@@ -46,6 +47,7 @@ export function PlanProgressCard(props: PlanProgressCardProps) {
     t,
     streaming,
     onBuild,
+    onContinuePlanning,
     planBuildActive,
     orchestratorProgress,
   } = props
@@ -110,7 +112,7 @@ export function PlanProgressCard(props: PlanProgressCardProps) {
           draftStepsCount={displayDraftStepsCount}
           done={displayDone}
           mode="list"
-          idle={hasActions && state === "pending"}
+          idle={hasActions && (state === "pending" || state === "dismissed")}
           className="rounded-none border-0 my-0"
         />
       </div>
@@ -126,7 +128,15 @@ export function PlanProgressCard(props: PlanProgressCardProps) {
       {/* Actions (plan mode only) */}
       {hasActions && !streaming && state === "pending" ? (
         <div className="flex items-center justify-end gap-2 px-3 py-2">
-          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setLocalState("dismissed")}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => {
+              setLocalState("dismissed")
+              onContinuePlanning?.()
+            }}
+          >
             {t("agent.mode.planReady.continuePlanning")}
           </Button>
           <Button
@@ -146,7 +156,7 @@ export function PlanProgressCard(props: PlanProgressCardProps) {
       ) : hasActions && !streaming && state === "building" ? (
         <div className="flex items-center justify-end gap-2 px-3 py-2">
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            {displayDone ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
+            <CheckCircle2 className="h-3.5 w-3.5" />
             {t("agent.mode.planReady.started")}
           </p>
         </div>

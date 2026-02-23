@@ -10,6 +10,7 @@ import { getToolName } from "ai"
 import { sdkToCanonicalToolName, type ToolPart } from "@/lib/shared/agent/tool-parts"
 import { JsonViewer } from "@/components/common/json-viewer"
 import { GradientCircleArrowRightIcon } from "@/components/icons/GradientCircleArrowRightIcon"
+import { ChatMarkdown } from "@/components/common/markdown/chat-markdown"
 
 function rawToI18nKey(raw: string): string {
   return sdkToCanonicalToolName(raw)
@@ -228,6 +229,27 @@ function StepCard({ part }: { part: ToolPart }) {
   )
 }
 
+function StepEditDiffCard({ part }: { part: ToolPart }) {
+  if (part.state !== "output-available") return null
+  if (!part.output || typeof part.output !== "object") return null
+  const out = part.output as Record<string, unknown>
+  const raw = out.editDiff
+  if (!raw || typeof raw !== "object") return null
+  const diff = raw as Record<string, unknown>
+  const summary = typeof diff.summary === "string" ? diff.summary : ""
+  const kind = typeof diff.kind === "string" ? diff.kind : ""
+  const codeBlock = typeof diff.codeBlock === "string" ? diff.codeBlock : ""
+
+  if (!summary && !codeBlock) return null
+
+  return (
+    <div className="px-3 py-2">
+      {summary ? <div className="mb-1 text-[11px] text-muted-foreground">{summary}</div> : null}
+      {kind === "modified" && codeBlock ? <ChatMarkdown markdown={codeBlock} className="maia-mdx" /> : null}
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Status icon — memoized to avoid animation glitches during parent re-renders.
 // ---------------------------------------------------------------------------
@@ -392,14 +414,15 @@ export function WorkflowAgentInlineToolCall(props: { part: ToolPart; plannedName
       </button>
 
       {open && hasExpandable ? (
-        <div className="border-t space-y-2 bg-background">
+        <div className="border-t divide-y bg-background">
           {category === "orchestrator_plan" ? <PlanCard part={part} /> : null}
           {category === "orchestrator_step" ? <StepCard part={part} /> : null}
+          {category === "orchestrator_step" ? <StepEditDiffCard part={part} /> : null}
 
           {hasJsonToShow ? (
             <div className="w-0 min-w-full">
               {detailPayload != null ? (
-                <JsonViewer value={detailPayload} className="max-h-64" preClassName="p-2" />
+                <JsonViewer value={detailPayload} className="max-h-64" defaultWrap={false} preClassName="p-2" />
               ) : null}
             </div>
           ) : null}
