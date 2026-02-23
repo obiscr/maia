@@ -78,9 +78,7 @@ const ZH_WORKFLOW_TEMPLATES: Record<WorkflowTemplateId, string> = {
 
 抓网页的时候别太脆：遇到跳转、超时、乱码、HTML 不规范都要尽量处理；失败的话也要把错误原因写进 errors 数组里（不要直接崩）。
 
-另外请在工作流 draft 里把 inputSpec 也一起写好（required 尽量少，至少给 2 个 examples）。步骤脚本用系统要求的 export default async main(...) 结构。
-
-最后：先给一个清晰 plan，再逐步 draft_step，最后 finalize_draft。`,
+另外请在工作流里把 inputSpec 也一起写好（required 尽量少，至少给 2 个 examples）。`,
 
   csv_stats: `我有一个 CSV 文件，想让你帮我创建一个"自动统计小助手"的工作流：读入 CSV → 识别每列是什么类型 → 统计一下（数值列算均值/最大最小/中位数等，文本列看 Top 值）→ 顺便做点数据质量提示（缺失、空值、异常）。
 
@@ -89,16 +87,12 @@ const ZH_WORKFLOW_TEMPLATES: Record<WorkflowTemplateId, string> = {
 
 大文件别一次性全读爆内存：你可以采样/分块，但要在输出里说明清楚你怎么做的；失败也要写 errors，并给降级方案。
 
-把 inputSpec 写好（required 少一点，给 2 个 examples）。
-
-最后：先 plan，再逐步 draft_step，最后 finalize_draft。`,
+把 inputSpec 写好（required 少一点，给 2 个 examples）。`,
 
   json_validate: `我这边会传一段 JSON（params.payload），但数据可能不太干净。你帮我创建一个工作流：先检查一下格式/字段对不对 → 再把字段规范化（比如补默认值、改字段名、类型转换）→ 最后输出一个"干净版"的 JSON（outputs.result），最好还带点校验信息。
 
 如果校验失败，不要只给一句话：请输出结构化 errors（字段路径、原因、怎么修）。
-inputSpec 也一起生成，required 尽量少，给 examples。
-
-最后：先 plan → draft_step → finalize_draft。`,
+inputSpec 也一起生成，required 尽量少，给 examples。`,
 
   rss_digest: `给你一个 RSS/Atom 链接（params.feedUrl），帮我创建一个工作流：抓取 feed → 把条目整理干净（标题、链接、时间、来源）→ 去重一下 → 输出一个 items 列表（默认拿一小部分就行，maxItems 作为可选参数）。
 
@@ -166,9 +160,7 @@ inputSpec required 少一点，最后一步输出。`,
 - inputSpec（含 examples）要给出来；
 - 允许并行处理，但最后一定要汇聚；
 - 分块 ID 可复现，抓取/解析失败要有重试与降级，并在 diagnostics 里能看出来；
-- step 脚本结构与 ctx 读取规则严格遵守系统提示。
-
-最后：先给 plan，再逐步 draft_step，最后 finalize_draft。`,
+- step 脚本结构与 ctx 读取规则严格遵守系统提示。`,
 
   etl_pipeline: `我要你为 Maia 设计一个"端到端 ETL：原始数据 → 清洗归一 → 质量闸门 → 隔离错误 → 产出 curated dataset → 报告"的复杂工作流，并输出可执行 workflow draft。
 
@@ -229,9 +221,7 @@ inputSpec required 少一点，最后一步输出。`,
 5) 依赖包尽量少：HTML 可用 cheerio；RSS 如需可用 rss-parser；其余尽量用 Node 内置。
 6) 抓取类 step 必须考虑失败与重试：输出 errors 数组 + 降级策略（跳过/重试次数记录）。
 7) stepKey 命名 snake_case，不要引用不存在的 deps。
-8) 输出步骤 name/description 语言跟随 lang（zh/en）。
-
-最后：请先给清晰 plan，再按计划逐步 draft_step（每步一次 tool call），最后 finalize_draft 输出完整 draft。`,
+8) 输出步骤 name/description 语言跟随 lang（zh/en）。`,
 }
 
 const EN_WORKFLOW_TEMPLATES: Record<WorkflowTemplateId, string> = {
@@ -242,9 +232,7 @@ Output should look like: { url, title, metaDescription, summary, fetchedAt }.
 
 Please make it resilient: redirects, timeouts, weird encodings, broken HTML — don't crash. If something fails, record it in an errors[] list and still produce the best possible output.
 
-Also generate inputSpec (keep required fields minimal, include at least 2 examples). Each step script must follow the system's export default async main(...) format.
-
-Finally: give a clear plan first, then draft_step step-by-step, then finalize_draft with the full draft.`,
+Also generate inputSpec (keep required fields minimal, include at least 2 examples).`,
 
   csv_stats: `I have a CSV and I want a "quick stats + quality" workflow: read the CSV, guess column types, compute basic stats for numeric columns, show top values for categorical columns, and output a report JSON.
 
@@ -374,9 +362,7 @@ Hard constraints:
 5) Keep deps minimal (cheerio OK; rss-parser OK; otherwise Node built-ins).
 6) Fetch steps must include retries/errors[] and degradation policy.
 7) snake_case stepKey, no invalid deps.
-8) Step name/description should follow lang (zh/en).
-
-Finally: provide a clear plan first, then draft_step step-by-step, then finalize_draft with the full draft.`,
+8) Step name/description should follow lang (zh/en).`,
 }
 
 export function getWorkflowTemplatePrompt(locale: string | undefined | null, id: WorkflowTemplateId): string {

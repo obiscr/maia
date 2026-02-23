@@ -14,16 +14,10 @@ export const AVAILABLE_MODELS: ModelInfo[] = [
   // Google
   { id: "google/gemini-3.1-pro-preview", name: "Gemini 3.1 Pro", provider: "Google" },
   { id: "google/gemini-3-flash-preview", name: "Gemini 3 Flash", provider: "Google" },
-  // xAI
-  { id: "x-ai/grok-4.1-fast", name: "Grok 4.1 Fast", provider: "xAI" },
   // MiniMax
   { id: "minimax/minimax-m2.5", name: "MiniMax M2.5", provider: "MiniMax" },
   // Moonshot
   { id: "moonshotai/kimi-k2.5", name: "Kimi K2.5", provider: "Moonshot" },
-  // Qwen
-  { id: "qwen/qwen3.5-plus-02-15", name: "Qwen3.5 Plus", provider: "Qwen" },
-  // DeepSeek
-  { id: "deepseek/deepseek-r1-0528", name: "DeepSeek R1 0528", provider: "DeepSeek" },
 ]
 
 export const DEFAULT_CHAT_MODEL = "anthropic/claude-opus-4.6"
