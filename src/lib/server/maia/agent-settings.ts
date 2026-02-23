@@ -17,11 +17,14 @@ import { pathExists, readJsonFile } from "@/lib/server/maia/fs"
 import { maiaDataDir } from "@/lib/server/maia/paths"
 import { DEFAULT_OPENROUTER_MODEL, resolveAiModelAlias } from "@/lib/server/agent/models"
 
+import { type AgentMode, DEFAULT_AGENT_MODE, isAgentMode } from "@/lib/shared/agent/modes"
+
 const agentModelSchema = z.string().trim().min(1).default(DEFAULT_OPENROUTER_MODEL)
 
 export const agentSettingsSchema = z.object({
   apiKey: z.string().default(""),
   model: agentModelSchema,
+  mode: z.string().default(DEFAULT_AGENT_MODE),
 })
 
 export type AgentSettings = z.infer<typeof agentSettingsSchema>
@@ -83,6 +86,18 @@ async function maybeImportLegacySettingsToUser(userId: string): Promise<void> {
   void fs.unlink(aiPath).catch(() => {})
 }
 
+async function readUserAgentMode(userId: string): Promise<AgentMode> {
+  const raw = await getUserSettingJson({ userId, key: USER_SETTING_KEYS.agentMode })
+  if (!raw) return DEFAULT_AGENT_MODE
+  try {
+    const parsed = JSON.parse(raw)
+    const v = typeof parsed === "string" ? parsed : String(parsed ?? "")
+    return isAgentMode(v) ? v : DEFAULT_AGENT_MODE
+  } catch {
+    return DEFAULT_AGENT_MODE
+  }
+}
+
 async function readUserAgentModel(userId: string): Promise<string> {
   const raw = await getUserSettingJson({ userId, key: USER_SETTING_KEYS.agentModel })
   if (!raw) return DEFAULT_OPENROUTER_MODEL
@@ -103,29 +118,32 @@ export async function getAgentSettingsForUser(
   opts?: { touchApiKeyLastUsed?: boolean },
 ): Promise<AgentSettings> {
   await maybeImportLegacySettingsToUser(userId).catch(() => {})
-  const [model, apiKey] = await Promise.all([
+  const [model, apiKey, mode] = await Promise.all([
     readUserAgentModel(userId),
     getUserSecretPlaintext({ userId, key: USER_SECRET_KEYS.agentApiKey, touchLastUsed: opts?.touchApiKeyLastUsed }),
+    readUserAgentMode(userId),
   ])
-  return agentSettingsSchema.parse({ apiKey: apiKey ?? "", model })
+  return agentSettingsSchema.parse({ apiKey: apiKey ?? "", model, mode })
 }
 
 export async function getAgentSettingsStatusForUser(
   userId: string,
-): Promise<{ apiKeyConfigured: boolean; model: string }> {
+): Promise<{ apiKeyConfigured: boolean; model: string; mode: string }> {
   await maybeImportLegacySettingsToUser(userId).catch(() => {})
-  const [model, hasKey] = await Promise.all([
+  const [model, hasKey, mode] = await Promise.all([
     readUserAgentModel(userId),
     hasUserSecret({ userId, key: USER_SECRET_KEYS.agentApiKey }),
+    readUserAgentMode(userId),
   ])
-  return { apiKeyConfigured: hasKey, model }
+  return { apiKeyConfigured: hasKey, model, mode }
 }
 
 export async function saveAgentSettingsForUser(params: {
   userId: string
   apiKey?: string | null
   model?: string | null
-}): Promise<{ apiKeyConfigured: boolean; model: string }> {
+  mode?: string | null
+}): Promise<{ apiKeyConfigured: boolean; model: string; mode: string }> {
   await maybeImportLegacySettingsToUser(params.userId).catch(() => {})
 
   if (typeof params.model === "string") {
@@ -134,6 +152,15 @@ export async function saveAgentSettingsForUser(params: {
       userId: params.userId,
       key: USER_SETTING_KEYS.agentModel,
       valueJson: JSON.stringify(safeModel),
+      version: 1,
+    })
+  }
+
+  if (typeof params.mode === "string" && isAgentMode(params.mode)) {
+    await setUserSettingJson({
+      userId: params.userId,
+      key: USER_SETTING_KEYS.agentMode,
+      valueJson: JSON.stringify(params.mode),
       version: 1,
     })
   }

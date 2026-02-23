@@ -14,6 +14,7 @@ const bodySchema = z.object({
   workflowId: z.string().trim().min(1).optional(),
   chatId: z.string().trim().min(1).optional(),
   model: z.string().trim().min(1).optional(),
+  agentMode: z.string().trim().min(1).optional(),
 })
 const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -38,13 +39,14 @@ export const POST = withApiObservability(async (req: Request) => {
   if (body.chatId) {
     const existing = await prisma.chat.findUnique({
       where: { id: body.chatId },
-      select: { id: true, publicId: true, userId: true, workflowId: true, model: true },
+      select: { id: true, publicId: true, userId: true, workflowId: true, model: true, agentMode: true },
     })
     if (existing) {
       if (existing.userId !== auth.userId) return fail({ status: 403, code: "FORBIDDEN" })
-      const updateData: { workflowId?: string | null; model?: string | null } = {}
+      const updateData: { workflowId?: string | null; model?: string | null; agentMode?: string | null } = {}
       if (!existing.workflowId && body.workflowId) updateData.workflowId = body.workflowId
       if (!existing.model && body.model) updateData.model = body.model
+      if (!existing.agentMode && body.agentMode) updateData.agentMode = body.agentMode
       if (Object.keys(updateData).length > 0) {
         await prisma.chat.update({
           where: { id: body.chatId },
@@ -64,6 +66,7 @@ export const POST = withApiObservability(async (req: Request) => {
           userId: auth.userId,
           workflowId: body.workflowId ?? null,
           model: body.model ?? null,
+          agentMode: body.agentMode ?? null,
           title: "",
         },
         select: { id: true, publicId: true },
@@ -90,6 +93,7 @@ export const POST = withApiObservability(async (req: Request) => {
       userId: auth.userId,
       workflowId: body.workflowId ?? null,
       model: body.model ?? null,
+      agentMode: body.agentMode ?? null,
       title: "",
     },
     select: { id: true, publicId: true },
@@ -132,6 +136,8 @@ export const GET = withApiObservability(async (req: Request) => {
         id: true,
         publicId: true,
         title: true,
+        description: true,
+        agentMode: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -144,6 +150,8 @@ export const GET = withApiObservability(async (req: Request) => {
       id: row.id,
       publicId: row.publicId,
       title: row.title ?? "",
+      description: row.description ?? "",
+      agentMode: row.agentMode ?? null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     })),

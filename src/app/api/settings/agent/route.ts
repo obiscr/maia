@@ -12,6 +12,7 @@ const updateSchema = z.object({
   // null => clear; string => set/update; undefined => unchanged
   apiKey: z.union([z.string(), z.null()]).optional(),
   model: z.string().optional(),
+  mode: z.string().optional(),
 })
 
 export const GET = withApiObservability(async (req: Request) => {
@@ -41,6 +42,7 @@ export const PUT = withApiObservability(async (req: Request) => {
     // Keep `null` to explicitly clear the secret; only `undefined` means unchanged.
     apiKey: body.apiKey,
     model: body.model ?? undefined,
+    mode: body.mode ?? undefined,
   })
   mark("write")
   return ok({ settings })

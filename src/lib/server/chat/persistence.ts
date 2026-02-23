@@ -29,7 +29,7 @@ function prunePartsForStorage(parts: UIMessage["parts"]): UIMessage["parts"] {
     const toolName = getToolName(part)
     const p = part as unknown as ToolPart & Record<string, unknown>
 
-    if (toolName === "draft_step" && isRecord(p.input)) {
+    if (toolName === "define_step" && isRecord(p.input)) {
       const inp = p.input as Record<string, unknown>
       const step = isRecord(inp.step) ? (inp.step as Record<string, unknown>) : null
       if (step && typeof step.scriptEsm === "string" && step.scriptEsm.length > 200) {
@@ -43,7 +43,7 @@ function prunePartsForStorage(parts: UIMessage["parts"]): UIMessage["parts"] {
       }
     }
 
-    if (toolName === "finalize_draft") {
+    if (toolName === "validate_draft") {
       if (isRecord(p.input)) {
         const inp = p.input as Record<string, unknown>
         if (isRecord(inp.draft)) {
@@ -140,6 +140,7 @@ export async function ensureChat(params: {
   userId: string
   workflowId?: string | null
   model?: string | null
+  mode?: string | null
 }): Promise<{ publicId: string }> {
   const existing = await prisma.chat.findUnique({
     where: { id: params.chatId },
@@ -149,9 +150,10 @@ export async function ensureChat(params: {
     if (existing.userId !== params.userId) {
       throw new Error("CHAT_ACCESS_DENIED")
     }
-    const updateData: { workflowId?: string | null; model?: string | null } = {}
+    const updateData: { workflowId?: string | null; model?: string | null; agentMode?: string } = {}
     if (!existing.workflowId && params.workflowId) updateData.workflowId = params.workflowId
     if (!existing.model && params.model) updateData.model = params.model
+    if (params.mode) updateData.agentMode = params.mode
     if (Object.keys(updateData).length > 0) {
       await prisma.chat.update({
         where: { id: params.chatId },
@@ -170,6 +172,7 @@ export async function ensureChat(params: {
       userId: params.userId,
       workflowId: params.workflowId ?? null,
       model: params.model ?? null,
+      agentMode: params.mode ?? null,
       title: "",
     },
   })
@@ -264,10 +267,7 @@ const TITLE_SYSTEM_PROMPT = [
   "- Do NOT wrap in quotes or add punctuation at the end.",
 ].join("\n")
 
-export async function generateChatTitle(params: {
-  firstUserText: string
-  apiKey: string
-}): Promise<string> {
+export async function generateChatTitle(params: { firstUserText: string; apiKey: string }): Promise<string> {
   const model = createOpenRouterModel({ apiKey: params.apiKey, model: CHAT_TITLE_GENERATION_MODEL })
   const { text } = await generateText({
     model,
@@ -285,4 +285,37 @@ export async function generateChatTitle(params: {
 
 export async function updateChatTitle(chatId: string, title: string) {
   await prisma.chat.update({ where: { id: chatId }, data: { title } })
+}
+
+// ---------------------------------------------------------------------------
+// AI description generation
+// ---------------------------------------------------------------------------
+
+const DESCRIPTION_SYSTEM_PROMPT = [
+  "Generate a brief description (1-2 sentences, max 120 chars) summarizing a chat conversation based on the user's first message.",
+  "Rules:",
+  "- Reply with ONLY the description text, nothing else.",
+  "- Match the language of the user's message.",
+  "- Capture the main intent or topic of the conversation.",
+  "- Do NOT wrap in quotes or add punctuation at the end.",
+].join("\n")
+
+export async function generateChatDescription(params: { firstUserText: string; apiKey: string }): Promise<string> {
+  const model = createOpenRouterModel({ apiKey: params.apiKey, model: CHAT_TITLE_GENERATION_MODEL })
+  const { text } = await generateText({
+    model,
+    system: DESCRIPTION_SYSTEM_PROMPT,
+    prompt: params.firstUserText.slice(0, 2000),
+    maxOutputTokens: 150,
+    temperature: 0.3,
+  })
+  return text
+    .replace(/^[#*"'\s]+/, "")
+    .replace(/["']+$/, "")
+    .trim()
+    .slice(0, 200)
+}
+
+export async function updateChatDescription(chatId: string, description: string) {
+  await prisma.chat.update({ where: { id: chatId }, data: { description } })
 }

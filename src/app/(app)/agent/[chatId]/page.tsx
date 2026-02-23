@@ -6,6 +6,7 @@ import { getT } from "@/lib/server/i18n/server"
 import { requireAuthedUser } from "@/lib/server/auth/require"
 import { loadChat } from "@/lib/server/chat/persistence"
 import { getAgentSettingsStatusForUser } from "@/lib/server/maia/agent-settings"
+import { toAgentMode } from "@/lib/shared/agent/modes"
 
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getT()
@@ -34,10 +35,12 @@ export default async function ChatPage(props: {
       chatId={chat.id}
       workflowId={chat.workflowId ?? undefined}
       initialModel={chat.model ?? undefined}
+      initialMode={toAgentMode(chat.agentMode)}
       initialMessages={chat.messages}
       initialPrompt={prompt}
       initialApiKeyConfigured={settings.apiKeyConfigured}
       initialChatTitle={chat.title ?? undefined}
+      initialChatDescription={chat.description ?? undefined}
     />
   )
 }

@@ -8,6 +8,7 @@ export type UserSettingKey = string
 
 export const USER_SETTING_KEYS = {
   agentModel: "agent.model",
+  agentMode: "agent.mode",
   uiTimezone: "ui.timezone",
   /**
    * Outbound language for emails/notifications.

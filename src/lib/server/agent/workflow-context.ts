@@ -67,7 +67,7 @@ export function buildWorkflowContextPrompt(params: {
   lines.push(
     includeScripts
       ? "steps:"
-      : "steps: (scripts omitted to save context; call get_workflow if you need the full scriptEsm for a step)",
+      : "steps: (scripts omitted to save context; call load_workflow if you need the full scriptEsm for a step)",
   )
 
   let out = lines.join("\n")

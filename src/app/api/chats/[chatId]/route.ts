@@ -18,17 +18,24 @@ export const GET = withApiObservability(async (_req: Request, { params }: { para
 
   const chat = await prisma.chat.findUnique({
     where: { id: chatId },
-    select: { id: true, publicId: true, title: true, model: true, userId: true },
+    select: { id: true, publicId: true, title: true, description: true, model: true, userId: true },
   })
   if (!chat) return fail({ status: 404, code: "NOT_FOUND" })
   if (chat.userId !== auth.userId) return fail({ status: 403, code: "FORBIDDEN" })
 
-  return ok({ id: chat.id, publicId: chat.publicId, title: chat.title ?? "", model: chat.model ?? "" })
+  return ok({
+    id: chat.id,
+    publicId: chat.publicId,
+    title: chat.title ?? "",
+    description: chat.description ?? "",
+    model: chat.model ?? "",
+  })
 })
 
 const patchSchema = z.object({
   model: z.string().trim().min(1).optional(),
   title: z.string().max(120).optional(),
+  agentMode: z.string().trim().min(1).optional(),
 })
 
 /**
@@ -56,6 +63,7 @@ export const PATCH = withApiObservability(async (req: Request, { params }: { par
   const data: Record<string, unknown> = {}
   if (body.model !== undefined) data.model = body.model
   if (body.title !== undefined) data.title = body.title.trim()
+  if (body.agentMode !== undefined) data.agentMode = body.agentMode
 
   if (Object.keys(data).length > 0) {
     await prisma.chat.update({ where: { id: chatId }, data })

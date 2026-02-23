@@ -16,15 +16,30 @@ import { createOpenRouterModel } from "@/lib/server/agent/openrouter"
 import { getModelMaxOutputTokens, resolveAiModelAlias } from "@/lib/server/agent/models"
 import { getAgentSettingsForUser } from "@/lib/server/maia/agent-settings"
 import { requireRequestAuth } from "@/lib/server/authz"
-import { ensureChat, saveChat, generateChatTitle, updateChatTitle } from "@/lib/server/chat/persistence"
+import {
+  ensureChat,
+  saveChat,
+  generateChatTitle,
+  updateChatTitle,
+  generateChatDescription,
+  updateChatDescription,
+} from "@/lib/server/chat/persistence"
 import { listRegisteredTools } from "@/lib/server/tools/registry"
+import { executeRegisteredToolWithOperation } from "@/lib/server/tools/executor"
 import { isToolUIPart, getToolName } from "ai"
 import { canonicalToSdkToolName, type ToolPart } from "@/lib/shared/agent/tool-parts"
 import type { ToolExecutionContext } from "@/lib/server/tools/types"
 import { toViewerAuthContext } from "@/lib/server/scopes/viewer-scope"
 import { prisma } from "@/lib/server/db"
-import { buildUnifiedSystemPrompt } from "@/lib/server/chat/prompts"
-import { buildOrchestratorTools, type OrchestratorSharedState } from "@/lib/server/chat/tools"
+import { buildAgentSystemPrompt, buildChatSystemPrompt, buildPlanSystemPrompt } from "@/lib/server/chat/prompts"
+import {
+  buildOrchestratorTools,
+  buildRegistryTools,
+  buildSuggestModeSwitchTool,
+  buildPlanReadyTool,
+  buildPreviewStepsTool,
+  type OrchestratorSharedState,
+} from "@/lib/server/chat/tools"
 import { isRecord } from "@/lib/shared/lang/is-record"
 import { withApiObservability } from "@/lib/server/observability"
 import { OrchestratorPhaseTracker } from "@/lib/server/chat/orchestrator-phase"
@@ -66,7 +81,7 @@ function prunePayloadsForModel(messages: UIMessage[]): UIMessage[] {
       const toolName = getToolName(part)
       const p = part as unknown as ToolPart & Record<string, unknown>
 
-      if (toolName === "get_workflow" && isRecord(p.output)) {
+      if (toolName === "load_workflow" && isRecord(p.output)) {
         const out = p.output as Record<string, unknown>
         const data = isRecord(out.data) ? (out.data as Record<string, unknown>) : null
         const steps = data && Array.isArray(data.steps) ? data.steps : null
@@ -81,7 +96,7 @@ function prunePayloadsForModel(messages: UIMessage[]): UIMessage[] {
         }
       }
 
-      if (toolName === "draft_step" && isRecord(p.input)) {
+      if (toolName === "define_step" && isRecord(p.input)) {
         const inp = p.input as Record<string, unknown>
         const step = isRecord(inp.step) ? (inp.step as Record<string, unknown>) : null
         if (step && typeof step.scriptEsm === "string" && step.scriptEsm) {
@@ -92,7 +107,7 @@ function prunePayloadsForModel(messages: UIMessage[]): UIMessage[] {
         }
       }
 
-      if (toolName === "finalize_draft") {
+      if (toolName === "validate_draft") {
         const pruneDraft = (draft: Record<string, unknown>) => {
           const steps = Array.isArray(draft.steps) ? draft.steps : []
           const prunedSteps = steps.map((s) => {
@@ -124,7 +139,7 @@ function prunePayloadsForModel(messages: UIMessage[]): UIMessage[] {
 }
 
 // ---------------------------------------------------------------------------
-// Orchestrator state snapshot — injected into system prompt
+// Orchestrator state snapshot — injected into system prompt (agent mode only)
 // ---------------------------------------------------------------------------
 
 function buildOrchestratorStateSnapshot(messages: UIMessage[]): string {
@@ -145,11 +160,32 @@ function buildOrchestratorStateSnapshot(messages: UIMessage[]): string {
       const toolName = getToolName(part)
       const p = part as unknown as ToolPart & Record<string, unknown>
 
-      if (toolName === "set_plan" && isRecord(p.input)) {
+      if (toolName === "create_plan" && isRecord(p.input)) {
         lastPlan = p.input as Plan
       }
 
-      if (toolName === "draft_step" && isRecord(p.input)) {
+      if (toolName === "plan_ready" && !lastPlan && isRecord(p.input)) {
+        const inp = p.input as Record<string, unknown>
+        const rawSteps = Array.isArray(inp.steps) ? inp.steps : []
+        if (rawSteps.length > 0) {
+          lastPlan = {
+            title: typeof inp.title === "string" ? inp.title : null,
+            steps: rawSteps.map((s: unknown) => {
+              if (typeof s === "string") return { name: s, description: "" }
+              if (isRecord(s)) {
+                const st = s as Record<string, unknown>
+                return {
+                  name: typeof st.name === "string" ? st.name : typeof st.stepKey === "string" ? st.stepKey : String(s),
+                  description: typeof st.description === "string" ? st.description : "",
+                }
+              }
+              return { name: String(s), description: "" }
+            }),
+          }
+        }
+      }
+
+      if (toolName === "define_step" && isRecord(p.input)) {
         const inp = p.input as Record<string, unknown>
         const step = isRecord(inp.step) ? (inp.step as Record<string, unknown>) : null
         const key = step && typeof step.stepKey === "string" ? String(step.stepKey).trim() : ""
@@ -167,11 +203,11 @@ function buildOrchestratorStateSnapshot(messages: UIMessage[]): string {
         const out = p.output as Record<string, unknown>
         outputsSpecOk = out.ok === true
       }
-      if (toolName === "finalize_draft" && isRecord(p.output)) {
+      if (toolName === "validate_draft" && isRecord(p.output)) {
         const out = p.output as Record<string, unknown>
         finalizeOk = out.ok === true
       }
-      if ((toolName === "create_workflow_draft" || toolName === "update_workflow_draft") && isRecord(p.output)) {
+      if ((toolName === "create_workflow" || toolName === "update_workflow") && isRecord(p.output)) {
         const out = p.output as Record<string, unknown>
         if (out.ok === true && typeof out.workflowId === "string") savedWorkflowId = out.workflowId
       }
@@ -217,6 +253,72 @@ function estimateTokenCount(data: unknown): number {
 }
 
 // ---------------------------------------------------------------------------
+// Read-only tool filter for Plan mode
+// ---------------------------------------------------------------------------
+
+const PLAN_MODE_WRITE_SUFFIXES = [
+  ".create",
+  ".update",
+  ".delete",
+  ".cancel",
+  ".patch",
+  ".pause",
+  ".resume",
+  ".force_stop",
+  ".fanout",
+  ".run_now",
+  ".deps.install",
+  ".version.create_snapshot",
+  ".version.restore",
+  ".job.create",
+  ".retry",
+  ".rerun",
+  ".restart",
+]
+
+function isReadOnlyRegistryTool(canonicalName: string): boolean {
+  return !PLAN_MODE_WRITE_SUFFIXES.some((suffix) => canonicalName.endsWith(suffix))
+}
+
+// Agent mode: only read-only registry tools for reference lookups.
+// Write/destructive ops and workflow create/update are handled by orchestrator tools.
+const AGENT_MODE_BLOCKED_TOOLS = new Set([
+  "workflow.create",
+  "workflow.update",
+  "workflow.patch",
+  "workflow.delete",
+  "run.delete",
+  "run.cancel",
+  "run.force_stop",
+  "run.step.retry",
+  "run.step.rerun",
+  "run.step.restart",
+  "job.create",
+  "job.delete",
+  "job.cancel",
+  "job.resume",
+  "schedule.create",
+  "schedule.patch",
+  "schedule.delete",
+  "schedule.run_now",
+  "batch.create",
+  "batch.patch",
+  "batch.delete",
+  "batch.pause",
+  "batch.resume",
+  "batch.cancel",
+  "batch.fanout",
+  "batch.job.create",
+  "workflow.deps.install",
+  "workflow.version.create_snapshot",
+  "workflow.version.restore",
+])
+
+function isAgentModeRegistryTool(canonicalName: string): boolean {
+  return !AGENT_MODE_BLOCKED_TOOLS.has(canonicalName)
+}
+
+// ---------------------------------------------------------------------------
 // Request schema
 // ---------------------------------------------------------------------------
 
@@ -226,6 +328,7 @@ const requestSchema = z.object({
   workflowId: z.string().trim().min(1).optional(),
   locale: z.string().trim().min(2).max(16).default("en"),
   model: z.string().trim().min(1).optional(),
+  mode: z.enum(["agent", "chat", "plan"]).default("agent"),
 })
 
 // ---------------------------------------------------------------------------
@@ -248,10 +351,10 @@ export const POST = withApiObservability(async (req: Request) => {
     return new Response(JSON.stringify({ error: "INVALID_BODY" }), { status: 400 })
   }
 
-  const { chatId, messages: rawMessages, workflowId, locale } = body
+  const { chatId, messages: rawMessages, workflowId, locale, mode } = body
   const originalMessages = absolutizeFileUrls(rawMessages as UIMessage[], req.url)
 
-  const { publicId } = await ensureChat({ chatId, userId: auth.userId, workflowId, model: body.model })
+  const { publicId } = await ensureChat({ chatId, userId: auth.userId, workflowId, model: body.model, mode })
 
   const settings = await getAgentSettingsForUser(auth.userId, { touchApiKeyLastUsed: true })
   if (!settings.apiKey) {
@@ -269,16 +372,20 @@ export const POST = withApiObservability(async (req: Request) => {
     return new Response(JSON.stringify({ error: "USER_NOT_FOUND" }), { status: 401 })
   }
 
-  // Kick off title generation in parallel (fast model, doesn't block the main stream)
   const firstUserMsg = originalMessages.find((m) => m.role === "user")
-  const firstUserText = firstUserMsg?.parts.find((p): p is Extract<typeof p, { type: "text" }> => p.type === "text")?.text
+  const firstUserText = firstUserMsg?.parts.find(
+    (p): p is Extract<typeof p, { type: "text" }> => p.type === "text",
+  )?.text
   const isFirstMessage = originalMessages.filter((m) => m.role === "user").length === 1
   let titlePromise: Promise<string> | null = null
+  let descriptionPromise: Promise<string> | null = null
   if (isFirstMessage && firstUserText?.trim()) {
     titlePromise = generateChatTitle({ firstUserText: firstUserText.trim(), apiKey: settings.apiKey! }).catch(() => "")
+    descriptionPromise = generateChatDescription({
+      firstUserText: firstUserText.trim(),
+      apiKey: settings.apiKey!,
+    }).catch(() => "")
   }
-
-  let trackerRef: OrchestratorPhaseTracker | null = null
 
   const stream = createUIMessageStream({
     originalMessages,
@@ -294,77 +401,134 @@ export const POST = withApiObservability(async (req: Request) => {
       const effectiveModel = resolveAiModelAlias(body.model ?? settings.model)
       const openRouterModel = createOpenRouterModel({ apiKey: settings.apiKey!, model: effectiveModel })
 
-      // Detect initial mode from message history: if the conversation already
-      // contains orchestrator tool calls, lock into orchestrator mode.
-      const ORCHESTRATOR_TOOL_SET = new Set([
-        "set_plan",
-        "draft_step",
-        "finalize_draft",
-        "create_workflow_draft",
-        "update_workflow_draft",
-        "generate_input_spec",
-        "generate_output_spec",
-        "get_workflow",
-      ])
-      const hasOrchestratorHistory = originalMessages.some((msg) =>
-        msg.parts.some((part) => isToolUIPart(part) && ORCHESTRATOR_TOOL_SET.has(getToolName(part))),
-      )
-
       const isEditing = typeof workflowId === "string" && workflowId.trim().length > 0
-      const initialMode: "undecided" | "orchestrator" | "general" =
-        isEditing || hasOrchestratorHistory ? "orchestrator" : "undecided"
 
-      const registryToolNames = listRegisteredTools()
-        .filter((t) => !t.internalOnly)
-        .map((t) => canonicalToSdkToolName(t.name))
+      // ── Build system prompt based on mode ──
+      let systemPrompt: string
+      let tools: ToolSet
+      let tracker: OrchestratorPhaseTracker | null = null
+      let shared: OrchestratorSharedState | null = null
 
-      const tracker = new OrchestratorPhaseTracker({
-        isEditing,
-        initialMode,
-        registryToolNames,
-      })
-      trackerRef = tracker
+      if (mode === "agent") {
+        // Detect plan_ready handoff: scan messages for a completed plan_ready tool call.
+        let planHandoff: { title: string; summary: string; steps: string[]; highlights: string[] } | null = null
+        for (const msg of originalMessages) {
+          for (const part of msg.parts) {
+            if (!isToolUIPart(part)) continue
+            if (getToolName(part) !== "plan_ready") continue
+            if (part.state !== "output-available") continue
+            const input = part.input as Record<string, unknown> | undefined
+            if (!input) continue
+            const title = typeof input.title === "string" ? input.title : ""
+            const summary = typeof input.summary === "string" ? input.summary : ""
+            const rawSteps = Array.isArray(input.steps) ? input.steps : []
+            const steps: string[] = rawSteps.map((s: unknown) => {
+              if (typeof s === "string") return s
+              if (isRecord(s)) {
+                const st = s as Record<string, unknown>
+                const name = typeof st.name === "string" ? st.name : ""
+                const stepKey = typeof st.stepKey === "string" ? st.stepKey : ""
+                return name || stepKey || JSON.stringify(s)
+              }
+              return String(s)
+            })
+            const highlights = Array.isArray(input.highlights) ? (input.highlights as string[]).map(String) : []
+            if (title || steps.length > 0) {
+              planHandoff = { title, summary, steps, highlights }
+            }
+          }
+        }
 
-      const shared: OrchestratorSharedState = {
-        draftSteps: [],
-        generatedInputSpec: null,
-        generatedOutputsSpec: null,
-        finalizedDraft: null,
-      }
-
-      // Unified system prompt covers both capabilities; the model decides
-      // which tools to use based on user intent.
-      let systemPrompt = buildUnifiedSystemPrompt({ locale, workflowId })
-      if (initialMode === "orchestrator") {
+        systemPrompt = buildAgentSystemPrompt({ locale, workflowId, planHandoff })
         const snap = buildOrchestratorStateSnapshot(originalMessages)
         if (snap) systemPrompt += `\n\n[STATE SNAPSHOT]\n${snap}`
+
+        shared = {
+          draftSteps: [],
+          generatedInputSpec: null,
+          generatedOutputsSpec: null,
+          finalizedDraft: null,
+        }
+
+        tracker = new OrchestratorPhaseTracker({ isEditing, skipPlan: !!planHandoff })
+
+        const orchTools = buildOrchestratorTools({
+          toolCtx,
+          model: openRouterModel,
+          locale,
+          shared,
+        })
+
+        if (planHandoff) {
+          delete orchTools.create_plan
+        }
+
+        // Agent mode: orchestrator tools + filtered read-only registry tools for reference
+        const agentRegistered = listRegisteredTools().filter((t) => !t.internalOnly)
+        const agentRegistryTools: ToolSet = {}
+        for (const t of agentRegistered) {
+          if (!isAgentModeRegistryTool(t.name)) continue
+          const aiName = canonicalToSdkToolName(t.name)
+          if (aiName in orchTools) continue
+          agentRegistryTools[aiName] = (await import("ai")).tool({
+            description: t.description,
+            inputSchema: t.inputSchema,
+            execute: async (input: unknown) =>
+              executeRegisteredToolWithOperation({ name: t.name, input, ctx: toolCtx }),
+          })
+        }
+
+        tools = {
+          ...orchTools,
+          ...agentRegistryTools,
+          ...buildSuggestModeSwitchTool(),
+        }
+      } else if (mode === "chat") {
+        systemPrompt = buildChatSystemPrompt({ locale })
+        const chatRegistry = buildRegistryTools(toolCtx)
+        // Chat mode should not have workflow create/update — those must go through Agent orchestrator
+        delete chatRegistry[canonicalToSdkToolName("workflow.create")]
+        delete chatRegistry[canonicalToSdkToolName("workflow.update")]
+        tools = {
+          ...chatRegistry,
+          ...buildSuggestModeSwitchTool(),
+        }
+      } else {
+        // plan mode — read-only registry tools only
+        systemPrompt = buildPlanSystemPrompt({ locale })
+        const allRegistered = listRegisteredTools().filter((t) => !t.internalOnly)
+        const readOnlyTools: ToolSet = {}
+        for (const t of allRegistered) {
+          if (!isReadOnlyRegistryTool(t.name)) continue
+          const { tool: toolFn } = await import("ai")
+          const { executeRegisteredToolWithOperation } = await import("@/lib/server/tools/executor")
+          const aiName = canonicalToSdkToolName(t.name)
+          readOnlyTools[aiName] = toolFn({
+            description: t.description,
+            inputSchema: t.inputSchema,
+            execute: async (input: unknown) =>
+              executeRegisteredToolWithOperation({ name: t.name, input, ctx: toolCtx }),
+          })
+        }
+        tools = {
+          ...readOnlyTools,
+          ...buildSuggestModeSwitchTool(),
+          ...buildPlanReadyTool(),
+          ...buildPreviewStepsTool(),
+        }
       }
 
-      // Register ALL tools (orchestrator + registry); prepareStep controls
-      // which subset is active via activeTools.
-      const tools: ToolSet = buildOrchestratorTools({
-        toolCtx,
-        model: openRouterModel,
-        locale,
-        shared,
-        onPlanUpdate: (_title, stepsLen) => tracker.onPlanSet(stepsLen),
-        onDraftStep: () => tracker.onStepDrafted(),
-      })
-
-      // Layer 1: Strip large payloads (scriptEsm → placeholder) at UIMessage level
+      // ── Prune messages ──
       const prunedUI = prunePayloadsForModel(originalMessages)
       const rawModelMessages = await convertToModelMessages(prunedUI)
 
-      // Layer 2: AI SDK standard tool-call pruning
-      // When in orchestrator mode (or continuing an orchestrator chat), apply
-      // aggressive pruning for large tool payloads; otherwise use lighter pruning.
       const prunedModel =
-        initialMode === "orchestrator"
+        mode === "agent"
           ? pruneMessages({
               messages: rawModelMessages,
               toolCalls: [
-                { type: "before-last-message", tools: ["draft_step", "finalize_draft"] },
-                { type: "before-last-2-messages", tools: ["get_workflow"] },
+                { type: "before-last-message", tools: ["define_step", "validate_draft"] },
+                { type: "before-last-2-messages", tools: ["load_workflow"] },
               ],
               emptyMessages: "remove",
             })
@@ -374,7 +538,6 @@ export const POST = withApiObservability(async (req: Request) => {
               emptyMessages: "remove",
             })
 
-      // Layer 3: Token-budget guard — drop oldest messages if still over context budget
       let modelMessages = prunedModel
       while (modelMessages.length > 2 && estimateTokenCount(modelMessages) > MODEL_CONTEXT_BUDGET_TOKENS) {
         modelMessages = modelMessages.slice(1)
@@ -386,7 +549,7 @@ export const POST = withApiObservability(async (req: Request) => {
       const onRequestAbort = () => abort.abort()
       req.signal.addEventListener("abort", onRequestAbort, { once: true })
 
-      const result = streamText({
+      const streamOpts: Parameters<typeof streamText>[0] = {
         model: openRouterModel,
         system: systemPrompt,
         messages: modelMessages,
@@ -400,9 +563,6 @@ export const POST = withApiObservability(async (req: Request) => {
               .update(`user:${auth.userId}|sha:${String(sha256 || "").toLowerCase()}`, "utf8")
               .digest("base64url")
 
-          // Our chat attachments are stored in the local blob store and referenced via:
-          //   /api/chats/<chatPublicId>/attachments/<sha256>?mime=<...>
-          // We resolve these URLs to bytes without doing an HTTP fetch.
           const out: Array<{ data: Uint8Array; mediaType: string | undefined } | null> = []
           for (const d of downloads) {
             const u = d.url
@@ -421,7 +581,6 @@ export const POST = withApiObservability(async (req: Request) => {
             try {
               buf = await readBlobToBuffer(sha256)
             } catch {
-              // If the blob is missing, pass through; provider may still handle or fail gracefully.
               out.push(null)
               continue
             }
@@ -431,17 +590,25 @@ export const POST = withApiObservability(async (req: Request) => {
           return out
         },
         abortSignal: abort.signal,
-        stopWhen: [stepCountIs(64), () => tracker.terminal],
-        prepareStep: async () => {
-          const at = tracker.activeTools()
-          return at ? { activeTools: at } : {}
-        },
-        onStepFinish: ({ toolResults }) => tracker.processToolResults(toolResults),
         onFinish: () => {
           clearTimeout(timeout)
           req.signal.removeEventListener("abort", onRequestAbort)
         },
-      })
+      }
+
+      // Agent mode: use tracker for step gating and terminal detection
+      if (mode === "agent" && tracker) {
+        streamOpts.stopWhen = [stepCountIs(64), () => tracker!.terminal]
+        streamOpts.prepareStep = async () => {
+          const at = tracker!.activeTools()
+          return { activeTools: at }
+        }
+        streamOpts.onStepFinish = ({ toolResults }) => tracker!.processToolResults(toolResults)
+      } else {
+        streamOpts.stopWhen = stepCountIs(64)
+      }
+
+      const result = streamText(streamOpts)
 
       writer.merge(result.toUIMessageStream())
 
@@ -450,6 +617,14 @@ export const POST = withApiObservability(async (req: Request) => {
         if (title) {
           writer.write({ type: "data-chat-title" as never, data: title } as never)
           void updateChatTitle(chatId, title).catch(() => {})
+        }
+      }
+
+      if (descriptionPromise) {
+        const description = await descriptionPromise
+        if (description) {
+          writer.write({ type: "data-chat-description" as never, data: description } as never)
+          void updateChatDescription(chatId, description).catch(() => {})
         }
       }
     },
@@ -461,10 +636,7 @@ export const POST = withApiObservability(async (req: Request) => {
         workflowId,
         model: body.model,
       })
-      const detectedProfile = trackerRef?.detectedProfileId
-      if (detectedProfile) {
-        await prisma.chat.updateMany({ where: { id: chatId }, data: { profileId: detectedProfile } }).catch(() => {})
-      }
+      await prisma.chat.updateMany({ where: { id: chatId }, data: { agentMode: mode } }).catch(() => {})
     },
   })
 

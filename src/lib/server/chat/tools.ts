@@ -17,6 +17,7 @@ import { validateCronExpression } from "@/lib/server/maia/scheduler"
 import { isPlainObject } from "@/lib/shared/lang/is-plain-object"
 import type { ToolExecutionContext } from "@/lib/server/tools/types"
 import { canonicalToSdkToolName } from "@/lib/shared/agent/tool-parts"
+import { validateWorkflowGraph } from "@/lib/shared/maia/workflow-graph-validation"
 
 const CTX_PARAMS_KEYS_CACHE = new LRUCache<string, string[]>({ max: 500 })
 
@@ -324,74 +325,82 @@ export async function generateInputSpec(params: {
   locale: string
   model: ReturnType<typeof createOpenRouterModel>
 }): Promise<string | null> {
-  try {
-    const template = JSON.stringify(defaultWorkflowInputSpec(), null, 2)
-    const systemPrompt = [
-      "You are WorkflowInputSpecProfile for Maia.",
-      "Task: generate WorkflowInputSpec (v2) for the given workflow.",
-      "- You MUST call validate_input_schema with the final inputSpec JSON to finish.",
-      `- Use the user's locale (${params.locale}) for human-facing strings.`,
-      "- paramsSchema must be a JSON Schema for a TOP-LEVEL object.",
-      "- Provide 1-3 examples.",
-      `Valid template: ${template}`,
-    ].join("\n")
+  const MAX_ATTEMPTS = 2
 
-    const steps = Array.isArray((params.draft as Record<string, unknown>)?.steps)
-      ? (((params.draft as Record<string, unknown>).steps ?? []) as unknown[])
-      : []
-    const slimDraft = {
-      steps: steps.map((s) => {
-        if (!isPlainObject(s)) return s
-        const st = s as Record<string, unknown>
-        const script = typeof st.scriptEsm === "string" ? st.scriptEsm : ""
-        return {
-          stepKey: st.stepKey,
-          name: st.name,
-          description: st.description,
-          deps: st.deps,
-          timeoutMs: st.timeoutMs,
-          paramsKeys: extractCtxParamsKeys(script),
-        }
-      }),
-    }
-    const draftContext = JSON.stringify(slimDraft, null, 2).slice(0, 6000)
-    const result = await generateText({
-      model: params.model,
-      system: systemPrompt,
-      messages: [{ role: "user" as const, content: `Generate inputSpec for this workflow draft:\n${draftContext}` }],
-      tools: {
-        validate_input_schema: tool({
-          description: "Validate and normalize the final inputSpec.",
-          inputSchema: z.object({ inputSpec: z.record(z.string(), z.unknown()) }),
-          execute: async ({ inputSpec }: { inputSpec: Record<string, unknown> }) => {
-            const json = JSON.stringify(inputSpec, null, 2)
-            const parsed = parseWorkflowInputSpec(json)
-            if (!parsed.spec) return { ok: false as const, error: parsed.error }
-            const compiled = compileJsonSchema(parsed.spec.paramsSchema)
-            if (compiled.compileError) return { ok: false as const, error: compiled.compileError }
-            return { ok: true as const, inputSpec: JSON.stringify(parsed.spec, null, 2) }
-          },
-        }),
+  const template = JSON.stringify(defaultWorkflowInputSpec(), null, 2)
+  const systemPrompt = [
+    "You are WorkflowInputSpecProfile for Maia.",
+    "Task: generate WorkflowInputSpec (v2) for the given workflow.",
+    "- You MUST call validate_input_schema with the final inputSpec JSON to finish.",
+    `- Use the user's locale (${params.locale}) for human-facing strings.`,
+    "- paramsSchema must be a JSON Schema for a TOP-LEVEL object.",
+    "- Provide 1-3 examples.",
+    `Valid template: ${template}`,
+  ].join("\n")
+
+  const steps = Array.isArray((params.draft as Record<string, unknown>)?.steps)
+    ? (((params.draft as Record<string, unknown>).steps ?? []) as unknown[])
+    : []
+  const slimDraft = {
+    steps: steps.map((s) => {
+      if (!isPlainObject(s)) return s
+      const st = s as Record<string, unknown>
+      const script = typeof st.scriptEsm === "string" ? st.scriptEsm : ""
+      return {
+        stepKey: st.stepKey,
+        name: st.name,
+        description: st.description,
+        deps: st.deps,
+        timeoutMs: st.timeoutMs,
+        paramsKeys: extractCtxParamsKeys(script),
+      }
+    }),
+  }
+  const draftContext = JSON.stringify(slimDraft, null, 2).slice(0, 6000)
+
+  const inputSpecTools = {
+    validate_input_schema: tool({
+      description: "Validate and normalize the final inputSpec.",
+      inputSchema: z.object({ inputSpec: z.record(z.string(), z.unknown()) }),
+      execute: async ({ inputSpec }: { inputSpec: Record<string, unknown> }) => {
+        const json = JSON.stringify(inputSpec, null, 2)
+        const parsed = parseWorkflowInputSpec(json)
+        if (!parsed.spec) return { ok: false as const, error: parsed.error }
+        const compiled = compileJsonSchema(parsed.spec.paramsSchema)
+        if (compiled.compileError) return { ok: false as const, error: compiled.compileError }
+        return { ok: true as const, inputSpec: JSON.stringify(parsed.spec, null, 2) }
       },
-      stopWhen: stepCountIs(10),
-      temperature: 0.2,
-    })
+    }),
+  }
 
-    for (const step of result.steps) {
-      for (const r of step.toolResults) {
-        if (
-          r.toolName === "validate_input_schema" &&
-          isPlainObject(r.output) &&
-          (r.output as Record<string, unknown>).ok === true
-        ) {
-          return (r.output as Record<string, unknown>).inputSpec as string
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const result = await generateText({
+        model: params.model,
+        system: systemPrompt,
+        messages: [{ role: "user" as const, content: `Generate inputSpec for this workflow draft:\n${draftContext}` }],
+        tools: inputSpecTools,
+        stopWhen: stepCountIs(10),
+        temperature: 0.2,
+      })
+
+      for (const step of result.steps) {
+        for (const r of step.toolResults) {
+          if (
+            r.toolName === "validate_input_schema" &&
+            isPlainObject(r.output) &&
+            (r.output as Record<string, unknown>).ok === true
+          ) {
+            return (r.output as Record<string, unknown>).inputSpec as string
+          }
         }
       }
+    } catch {
+      // fall through to retry
     }
-    return null
-  } catch {
-    return null
   }
+
+  return null
 }
 
 // ---------------------------------------------------------------------------
@@ -623,42 +632,50 @@ export function buildOrchestratorTools(params: {
   model: ReturnType<typeof createOpenRouterModel>
   locale: string
   shared: OrchestratorSharedState
-  onPlanUpdate: (title: string | null, stepsLen: number) => void
-  onDraftStep: () => void
 }): ToolSet {
-  const { toolCtx, onPlanUpdate, onDraftStep } = params
+  const { toolCtx } = params
   const DEFAULT_STEP_TIMEOUT_MS = 10 * 60 * 1000
 
   return {
-    get_workflow: tool({
+    load_workflow: tool({
       description: "Load an existing workflow by ID (name/description/dependencies/inputSpec/steps with deps).",
       inputSchema: z.object({ workflowId: z.string() }),
       execute: async ({ workflowId }: { workflowId: string }) =>
         executeRegisteredToolWithOperation({ name: "workflow.get", input: { id: workflowId }, ctx: toolCtx }),
     }),
 
-    set_plan: tool({
+    create_plan: tool({
       description: "Set the current workflow plan. Replaces any previous plan.",
       inputSchema: z.object({
-        title: z.string().optional(),
+        title: z.string().describe("Short workflow name"),
+        summary: z.string().describe("One-sentence description of what the workflow does"),
         steps: z.array(
           z.object({
+            stepKey: z.string().describe("Unique step identifier (e.g. 'fetch_data', 'parse_html')"),
             name: z.string().describe("Short step name (will appear as the step title)"),
             description: z.string().describe("Brief description of what this step does"),
+            deps: z.array(z.string()).default([]).describe("Array of stepKey values this step depends on"),
           }),
         ),
       }),
-      execute: async ({ title, steps }: { title?: string; steps: { name: string; description: string }[] }) => {
+      execute: async ({
+        title,
+        summary,
+        steps,
+      }: {
+        title: string
+        summary: string
+        steps: { stepKey: string; name: string; description: string; deps: string[] }[]
+      }) => {
         params.shared.draftSteps = []
         params.shared.generatedInputSpec = null
         params.shared.generatedOutputsSpec = null
         params.shared.finalizedDraft = null
-        onPlanUpdate(title ?? null, steps.length)
         return { ok: true }
       },
     }),
 
-    draft_step: tool({
+    define_step: tool({
       description:
         "Draft a single workflow step. " + "Re-drafting an existing stepKey replaces the previous version (upsert).",
       inputSchema: z.object({ step: stepSchema }),
@@ -670,26 +687,37 @@ export function buildOrchestratorTools(params: {
           params.shared.finalizedDraft = null
         } else {
           params.shared.draftSteps.push(step as unknown as Record<string, unknown>)
-          onDraftStep()
         }
         return { ok: true }
       },
     }),
 
     generate_input_spec: tool({
-      description: "Generate inputSpec for the workflow draft. Called automatically after all steps are drafted.",
+      description:
+        "Generate inputSpec for the workflow draft. " +
+        "REQUIRED when any step reads ctx.params. Called after all steps are drafted. " +
+        "Automatically retries once on failure.",
       inputSchema: z.object({}),
       execute: async () => {
         const draft = { steps: params.shared.draftSteps } as Record<string, unknown>
         const inputSpec = await generateInputSpec({ draft, locale: params.locale, model: params.model })
-        if (!inputSpec) return { ok: false, error: "InputSpec generation failed." }
+        if (!inputSpec) {
+          return {
+            ok: false,
+            error:
+              "InputSpec generation failed after retry. " +
+              "If steps use ctx.params, validate_draft will reject the draft without a valid inputSpec.",
+          }
+        }
         params.shared.generatedInputSpec = inputSpec
         return { ok: true, inputSpec }
       },
     }),
 
     generate_output_spec: tool({
-      description: "Generate outputsSpec for the workflow draft. Called automatically after all steps are drafted.",
+      description:
+        "Generate outputsSpec for the workflow draft. " +
+        "Optional — only affects structured output display after runs, not execution.",
       inputSchema: z.object({}),
       execute: async () => {
         const draft = { steps: params.shared.draftSteps } as Record<string, unknown>
@@ -700,7 +728,7 @@ export function buildOrchestratorTools(params: {
       },
     }),
 
-    finalize_draft: tool({
+    validate_draft: tool({
       description: "Validate the full workflow draft and finalize. Generated specs are merged automatically.",
       inputSchema: z.object({
         draft: z.object({
@@ -728,7 +756,7 @@ export function buildOrchestratorTools(params: {
       execute: async ({ draft }: { draft: Record<string, unknown> }) => {
         const draftCandidate = { ...draft } as Record<string, unknown>
 
-        // Steps are drafted via `draft_step` (upserted into shared state). Treat shared state
+        // Steps are drafted via `define_step` (upserted into shared state). Treat shared state
         // as authoritative to avoid placeholder scripts (e.g. "[omitted from model context]").
         if (params.shared.draftSteps.length > 0) {
           draftCandidate.steps = params.shared.draftSteps
@@ -798,6 +826,21 @@ export function buildOrchestratorTools(params: {
           }
         }
 
+        const graphResult = validateWorkflowGraph(normalizedSteps)
+        if (!graphResult.ok) {
+          const e = graphResult.error
+          const sk = e.code !== "CYCLE" ? e.stepKey : ""
+          const message =
+            e.code === "CYCLE"
+              ? `Circular dependency detected: ${e.cycle.join(" → ")}`
+              : e.code === "SELF_DEP"
+                ? `Step "${sk}" depends on itself`
+                : e.code === "DUP_STEP_KEY"
+                  ? `Duplicate stepKey "${sk}"`
+                  : `Step "${sk}" has unknown dep "${(e as { dep: string }).dep}"`
+          return { ok: false, error: "Workflow graph validation failed", issues: [{ path: ["steps"], message }] }
+        }
+
         const warnings: string[] = []
         if (!normalizedSteps.length) warnings.push("No steps in draft.")
         if (!String(normalized.name ?? "").trim()) warnings.push("Missing workflow name.")
@@ -828,13 +871,35 @@ export function buildOrchestratorTools(params: {
               : null
 
           if (!props) {
-            warnings.push(
-              `Steps reference ctx.params keys (${[...referencedByKey.keys()].join(", ")}), but inputSpec.paramsSchema.properties is empty/missing.`,
-            )
+            const keys = [...referencedByKey.keys()].join(", ")
+            return {
+              ok: false,
+              error: "inputSpec is required because steps reference ctx.params",
+              issues: [
+                {
+                  path: ["inputSpec"],
+                  message: `Steps reference ctx.params keys (${keys}), but inputSpec is missing or has no paramsSchema.properties. Call generate_input_spec first, then retry validate_draft.`,
+                },
+              ],
+            }
           } else {
+            const missingKeys: string[] = []
             for (const [k, stepsSet] of referencedByKey.entries()) {
               if (!(k in props)) {
+                missingKeys.push(k)
                 warnings.push(`inputSpec missing params key "${k}" referenced by steps: ${[...stepsSet].join(", ")}`)
+              }
+            }
+            if (missingKeys.length) {
+              return {
+                ok: false,
+                error: "inputSpec paramsSchema is incomplete",
+                issues: [
+                  {
+                    path: ["inputSpec", "paramsSchema"],
+                    message: `inputSpec.paramsSchema.properties is missing keys: ${missingKeys.join(", ")}. Regenerate inputSpec with generate_input_spec, then retry validate_draft.`,
+                  },
+                ],
               }
             }
           }
@@ -853,15 +918,15 @@ export function buildOrchestratorTools(params: {
       },
     }),
 
-    create_workflow_draft: tool({
+    create_workflow: tool({
       description:
         "Persist the finalized draft as a new workflow. " +
-        "The server uses the draft stored by finalize_draft; no arguments required.",
+        "The server uses the draft stored by validate_draft; no arguments required.",
       inputSchema: z.object({}),
       execute: async () => {
         const draft = params.shared.finalizedDraft
         if (!draft) {
-          return { ok: false, error: "No finalized draft available. Call finalize_draft first." }
+          return { ok: false, error: "No finalized draft available. Call validate_draft first." }
         }
 
         const parsed = workflowDraftSchema.safeParse(draft)
@@ -902,17 +967,17 @@ export function buildOrchestratorTools(params: {
       },
     }),
 
-    update_workflow_draft: tool({
+    update_workflow: tool({
       description:
         "Update an existing workflow from the finalized draft. " +
-        "The server uses the draft stored by finalize_draft; only the target workflowId is required.",
+        "The server uses the draft stored by validate_draft; only the target workflowId is required.",
       inputSchema: z.object({
         workflowId: z.string().trim().min(1).describe("Public ID of the workflow, e.g. wf-1"),
       }),
       execute: async ({ workflowId }: { workflowId: string }) => {
         const draft = params.shared.finalizedDraft
         if (!draft) {
-          return { ok: false, error: "No finalized draft available. Call finalize_draft first." }
+          return { ok: false, error: "No finalized draft available. Call validate_draft first." }
         }
 
         const parsed = workflowDraftSchema.safeParse(draft)
@@ -953,7 +1018,64 @@ export function buildOrchestratorTools(params: {
         return { ok: true, workflowId: publicId, workflow }
       },
     }),
+  }
+}
 
-    ...buildRegistryTools(toolCtx),
+export function buildSuggestModeSwitchTool(): ToolSet {
+  return {
+    suggest_mode_switch: tool({
+      description:
+        "Suggest the user switch to a more appropriate conversation mode when their intent clearly does not match the current mode.",
+      inputSchema: z.object({
+        target_mode: z.enum(["agent", "chat", "plan"]),
+        reason: z.string(),
+      }),
+      execute: async () => ({ acknowledged: true }),
+    }),
+  }
+}
+
+export function buildPlanReadyTool(): ToolSet {
+  return {
+    plan_ready: tool({
+      description:
+        "Call when a plan-mode discussion has reached consensus and the workflow design is ready to build. Produces a structured summary the user can confirm before switching to Agent mode.",
+      inputSchema: z.object({
+        title: z.string().describe("Short workflow name"),
+        summary: z.string().describe("One-sentence description of what the workflow does"),
+        steps: z
+          .array(
+            z.object({
+              stepKey: z.string().describe("Unique step identifier (e.g. 'fetch_data', 'parse_html')"),
+              name: z.string().describe("Human-friendly step name in the user's language"),
+              deps: z.array(z.string()).default([]).describe("Array of stepKey values this step depends on"),
+            }),
+          )
+          .describe("Structured workflow steps with dependencies"),
+        highlights: z.array(z.string()).describe("Key decisions made during planning"),
+      }),
+      execute: async () => ({ acknowledged: true }),
+    }),
+  }
+}
+
+export function buildPreviewStepsTool(): ToolSet {
+  return {
+    preview_steps: tool({
+      description:
+        "Render workflow step preview nodes on the canvas. Call this whenever you propose or update the workflow structure during discussion. Each call replaces the previous preview.",
+      inputSchema: z.object({
+        steps: z
+          .array(
+            z.object({
+              stepKey: z.string().describe("Unique step identifier (e.g. 'fetch_data', 'parse_html')"),
+              name: z.string().describe("Human-friendly step name in the user's language"),
+              deps: z.array(z.string()).default([]).describe("Array of stepKey values this step depends on"),
+            }),
+          )
+          .min(1),
+      }),
+      execute: async () => ({ ok: true }),
+    }),
   }
 }

@@ -2,119 +2,57 @@ import "server-only"
 
 import { isPlainObject } from "@/lib/shared/lang/is-plain-object"
 
-const ORCHESTRATOR_TOOL_NAMES = new Set([
-  "get_workflow",
-  "set_plan",
-  "draft_step",
-  "generate_input_spec",
-  "generate_output_spec",
-  "finalize_draft",
-  "create_workflow_draft",
-  "update_workflow_draft",
-])
-
 /**
- * Tracks the agent mode and orchestrator pipeline phase during a single
- * streamText run.
+ * Tracks the orchestrator pipeline phase during a single streamText run.
+ * Only used in Agent mode.
  *
- * Mode flow:  undecided → orchestrator | general
- *   (once locked, mode never changes for the rest of the chat)
- *
- * Phase flow (orchestrator only):
+ * Phase flow:
  *   plan → draft → specs → finalize → save → (text confirmation) → terminal
  *
- * Finalize may fail; when it does the model is allowed to go back to draft_step
- * to repair individual steps, then retry finalize_draft.
+ * Finalize may fail; when it does the model is allowed to go back to define_step
+ * to repair individual steps, then retry validate_draft.
  *
  * Used by the chat route's `prepareStep` to gate tool availability and
  * by `stopWhen` to terminate generation after the workflow is saved.
  */
 export class OrchestratorPhaseTracker {
   private readonly isEditing: boolean
-  private readonly registryToolNames: string[]
-  private mode: "undecided" | "orchestrator" | "general"
-  private phase: "plan" | "draft" = "plan"
-  private planStepsCount = 0
-  private draftedCount = 0
-  private inputSpecDone = false
-  private outputsSpecDone = false
-  private finalizeDone = false
+  private readonly skipPlan: boolean
   private finalizeFailed = false
   private saveDone = false
 
   /** True once the model should stop generating. */
   terminal = false
 
-  constructor(opts?: {
-    isEditing?: boolean
-    initialMode?: "undecided" | "orchestrator" | "general"
-    registryToolNames?: string[]
-  }) {
+  constructor(opts?: { isEditing?: boolean; skipPlan?: boolean }) {
     this.isEditing = Boolean(opts?.isEditing)
-    this.registryToolNames = opts?.registryToolNames ?? []
-    this.mode = opts?.initialMode ?? (this.isEditing ? "orchestrator" : "undecided")
-  }
-
-  get currentMode() {
-    return this.mode
-  }
-
-  get detectedProfileId(): "workflow.orchestrator" | "general.tools" | null {
-    if (this.mode === "orchestrator") return "workflow.orchestrator"
-    if (this.mode === "general") return "general.tools"
-    return null
-  }
-
-  onPlanSet(stepsCount: number) {
-    this.mode = "orchestrator"
-    if (stepsCount !== this.planStepsCount) this.draftedCount = 0
-    this.planStepsCount = stepsCount
-    this.phase = "draft"
-  }
-
-  onStepDrafted() {
-    this.draftedCount++
+    this.skipPlan = Boolean(opts?.skipPlan)
   }
 
   /**
    * Process tool results from `onStepFinish`.
-   * Updates internal mode + phase based on which tools completed.
+   * Updates internal phase based on which tools completed.
    */
   processToolResults(toolResults: ReadonlyArray<{ toolName: string; output: unknown }>) {
     for (const tr of toolResults) {
       const out = isPlainObject(tr.output) ? (tr.output as Record<string, unknown>) : null
 
-      if (this.mode === "undecided") {
-        if (ORCHESTRATOR_TOOL_NAMES.has(tr.toolName)) {
-          this.mode = "orchestrator"
-        } else {
-          this.mode = "general"
-        }
-      }
-
       switch (tr.toolName) {
-        case "generate_input_spec":
-          this.inputSpecDone = true
-          break
-        case "generate_output_spec":
-          this.outputsSpecDone = true
-          break
-        case "finalize_draft":
+        case "validate_draft":
           if (out?.ok === true) {
-            this.finalizeDone = true
             this.finalizeFailed = false
             this.saveDone = false
           } else {
             this.finalizeFailed = true
           }
           break
-        case "draft_step":
+        case "define_step":
           if (this.finalizeFailed) {
             this.finalizeFailed = false
           }
           break
-        case "create_workflow_draft":
-        case "update_workflow_draft":
+        case "create_workflow":
+        case "update_workflow":
           if (out?.ok === true) {
             this.saveDone = true
             this.terminal = true
@@ -123,30 +61,24 @@ export class OrchestratorPhaseTracker {
       }
     }
 
-    // After save, allow one text-only step for the confirmation message, then stop.
     if (!toolResults.length && this.saveDone) {
       this.terminal = true
     }
   }
 
   /**
-   * Returns the tool names available for the current mode/phase, or
-   * `undefined` when all tools should be available (undecided mode).
-   * Called by `prepareStep` to restrict which tools the model can invoke.
+   * Returns the orchestrator tool names available for the current phase.
    */
-  activeTools(): string[] | undefined {
-    if (this.mode === "undecided") return undefined
-
-    if (this.mode === "general") return this.registryToolNames
-
+  activeTools(): string[] {
     return [
-      "get_workflow",
-      "set_plan",
-      "draft_step",
+      "load_workflow",
+      ...(this.skipPlan ? [] : ["create_plan"]),
+      "define_step",
       "generate_input_spec",
       "generate_output_spec",
-      "finalize_draft",
-      this.isEditing ? "update_workflow_draft" : "create_workflow_draft",
+      "validate_draft",
+      this.isEditing ? "update_workflow" : "create_workflow",
+      "suggest_mode_switch",
     ]
   }
 }
