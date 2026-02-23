@@ -2,6 +2,39 @@ import "server-only"
 
 import type { AgentMode } from "@/lib/shared/agent/modes"
 
+export const PLACEHOLDER_SCRIPTS = new Set(["[saved to workflow]", "[omitted from model context]"])
+
+// ---------------------------------------------------------------------------
+// Rendering capabilities — appended to ALL mode prompts
+// ---------------------------------------------------------------------------
+
+function buildRenderingCapabilities(mode: AgentMode): string {
+  const lines = [
+    "",
+    "Response formatting:",
+    "- The UI natively renders: Mermaid diagrams (```mermaid), KaTeX math ($inline$ and $$block$$), and syntax-highlighted code blocks (Expressive Code: line numbers, collapsible sections, diff markers, frame titles).",
+  ]
+
+  if (mode === "agent" || mode === "plan") {
+    lines.push(
+      "- IMPORTANT: Do NOT use Mermaid to visualize the workflow structure — the canvas already renders workflow steps from your tool calls. Mermaid would duplicate it and confuse the user.",
+      "- Mermaid is fine for OTHER visualizations unrelated to the workflow DAG (e.g. an external system's architecture, a protocol sequence, or a decision tree within a step).",
+    )
+  } else {
+    lines.push(
+      "- Use Mermaid when visualizing architectures, data flows, or multi-step processes would aid understanding (e.g. flowchart, sequence diagram, state diagram).",
+    )
+  }
+
+  lines.push(
+    "- Use KaTeX for mathematical formulas or complex expressions when relevant to the discussion.",
+    "- Use code blocks with language tags for scripts, configs, JSON, or CLI commands.",
+    "- Do NOT add diagrams or formulas when plain text is already clear enough. Prefer clarity over decoration.",
+  )
+
+  return lines.join("\n")
+}
+
 // ---------------------------------------------------------------------------
 // Mode switch suggestion — appended to ALL mode prompts
 // ---------------------------------------------------------------------------
@@ -18,7 +51,7 @@ function buildModeSwitchInstructions(currentMode: AgentMode): string {
     "- IMPORTANT: If the user explicitly mentions a mode name (e.g. 'plan', 'chat', 'agent', '计划模式', '聊天模式') and it differs from the current mode, you MUST call suggest_mode_switch.",
     "- If the user's intent clearly does not match the current mode, call suggest_mode_switch to suggest switching.",
     "- Do not suggest switching frequently — only when the mismatch is obvious or the user explicitly references another mode.",
-    "- After suggesting a switch, continue answering the user's question normally without blocking the conversation.",
+    "- For suggest_mode_switch, briefly explain the reason in text first, then call the tool as the final action for that turn so the UI can wait for user choice.",
     "- If the user explicitly declines a mode switch suggestion:",
     "  • Preference case (the task CAN be done in the current mode, just not ideal): respect their decision, do NOT repeat the suggestion, and proceed in the current mode.",
     "  • Capability case (the task CANNOT be done because required tools are unavailable in this mode): politely but clearly explain that the current mode does not have the tools needed for this specific action, and that switching is necessary — not a preference but a technical requirement. You may repeat this explanation if the user insists, but stay helpful and non-confrontational.",
@@ -34,6 +67,7 @@ function buildModeSwitchInstructions(currentMode: AgentMode): string {
     ],
     chat: [
       "- If the user wants to build or design a workflow, suggest switching to agent or plan mode depending on the complexity.",
+      "- If troubleshooting reveals that a workflow's code/definition needs fixing, suggest switching to agent mode (for the fix) or plan mode (to discuss the fix first if the issue is complex).",
     ],
   }
 
@@ -108,7 +142,7 @@ export function buildAgentSystemPrompt(params: {
     "",
     "Drafting rules:",
     "- Once planning is done, submit every step via define_step. Do not describe steps as text.",
-    "- Do NOT output workflow drafts, step scripts, or JSON specs in normal text. Use tool calls only.",
+    "- Do NOT output workflow drafts, step scripts, or JSON specs in normal text. Use tool calls only. (Exception: edit-diff blocks when modifying existing steps — see 'Edit diff display' below.)",
     "- The required orchestrator tools are available; if you think a tool is missing, proceed with the next required tool call anyway.",
     "- Do not generate inputSpec yourself — use generate_input_spec tool instead. Do not include inputSpec in the draft passed to validate_draft.",
     "- Each step SHOULD include timeoutMs (milliseconds) as a positive integer. If you are unsure, omit it and the platform will apply a safe default.",
@@ -116,12 +150,19 @@ export function buildAgentSystemPrompt(params: {
   ]
   const editAdd = params.workflowId
     ? [
-        "Context: the user is editing an existing workflow.",
-        "CRITICAL: Call load_workflow first to load the current workflow before proposing changes or drafting steps.",
+        "",
+        `Context: the user is editing an existing workflow (workflowId: "${params.workflowId}").`,
+        `CRITICAL: Call load_workflow with workflowId "${params.workflowId}" first to load the current workflow before proposing changes or drafting steps.`,
+        "",
+        "Edit visibility:",
+        "- For edit sessions, always use define_step to apply step changes.",
+        "- CRITICAL: When editing an existing step, you MUST preserve its deps unless the user explicitly asks to change dependencies. Always include the original deps array in define_step; never send an empty deps array by omission.",
+        "- The system automatically computes and renders deterministic step diffs from tool output.",
+        "- Do NOT manually output code diffs in normal text. A brief one-sentence change summary is enough when helpful.",
       ]
     : ["Context: the user is creating a new workflow draft."]
 
-  const parts = [...base, ...editAdd, buildModeSwitchInstructions("agent")]
+  const parts = [...base, ...editAdd, buildRenderingCapabilities("agent"), buildModeSwitchInstructions("agent")]
 
   if (ph) {
     parts.push(
@@ -152,7 +193,9 @@ export function buildChatSystemPrompt(params: { locale: string }) {
     "- For factual questions about system state, call tools first and base your answer on tool output.",
     "- For write/destructive actions, only execute when the user asks explicitly.",
     "- You do NOT have workflow building tools (create_plan, define_step, etc.) in this mode. If the user wants to build or design a workflow, you must suggest switching to agent or plan mode.",
+    "- Troubleshooting: When a user asks you to diagnose a failed workflow run, inspect the run/step data and analyze the error. If you determine the failure is caused by a bug in the workflow definition itself (e.g. script logic error, missing dependency, incorrect data flow), suggest switching to agent mode to fix the workflow. For complex fixes, suggest plan mode first to discuss the approach.",
     "- Keep answers concise and actionable.",
+    buildRenderingCapabilities("chat"),
     buildModeSwitchInstructions("chat"),
   ].join("\n")
 }
@@ -184,8 +227,9 @@ export function buildPlanSystemPrompt(params: { locale: string }) {
     "- summary: one sentence describing what the workflow does.",
     "- steps: Structured array of workflow steps. Each step must include stepKey (unique identifier), name (in user's language), and deps (array of stepKey dependencies). List only the core workflow script steps that map to define_step calls. Each step corresponds to one script node in the workflow DAG. Do NOT include meta-actions like 'configure inputs', 'configure outputs', or 'validate and save' — those are handled automatically by the system.",
     "- highlights: 2–4 key decisions reached during the discussion.",
-    "- After calling plan_ready, send a brief message telling the user they can click the build button to start.",
+    "- Call plan_ready as the final action for that turn so the UI can wait for user choice on the card.",
     "- Do NOT call suggest_mode_switch after plan_ready; the plan_ready card already provides the build action.",
+    buildRenderingCapabilities("plan"),
     buildModeSwitchInstructions("plan"),
   ].join("\n")
 }

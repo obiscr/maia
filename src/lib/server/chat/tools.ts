@@ -10,7 +10,11 @@ import { generateText, stepCountIs, tool, type ToolSet } from "ai"
 import { createOpenRouterModel } from "@/lib/server/agent/openrouter"
 import { listRegisteredTools } from "@/lib/server/tools/registry"
 import { executeRegisteredToolWithOperation } from "@/lib/server/tools/executor"
-import { parseWorkflowInputSpec, defaultWorkflowInputSpec } from "@/lib/shared/maia/input-spec"
+import {
+  parseWorkflowInputSpec,
+  defaultWorkflowInputSpec,
+  extractJsonSchemaObjectShape,
+} from "@/lib/shared/maia/input-spec"
 import { parseWorkflowOutputsSpec, defaultWorkflowOutputsSpecV1 } from "@/lib/shared/maia/outputs-spec"
 import { compileJsonSchema } from "@/lib/server/maia/jsonschema"
 import { validateCronExpression } from "@/lib/server/maia/scheduler"
@@ -18,6 +22,7 @@ import { isPlainObject } from "@/lib/shared/lang/is-plain-object"
 import type { ToolExecutionContext } from "@/lib/server/tools/types"
 import { canonicalToSdkToolName } from "@/lib/shared/agent/tool-parts"
 import { validateWorkflowGraph } from "@/lib/shared/maia/workflow-graph-validation"
+import { PLACEHOLDER_SCRIPTS } from "@/lib/server/chat/prompts"
 
 const CTX_PARAMS_KEYS_CACHE = new LRUCache<string, string[]>({ max: 500 })
 
@@ -324,6 +329,7 @@ export async function generateInputSpec(params: {
   draft: Record<string, unknown>
   locale: string
   model: ReturnType<typeof createOpenRouterModel>
+  abortSignal?: AbortSignal
 }): Promise<string | null> {
   const MAX_ATTEMPTS = 2
 
@@ -382,6 +388,7 @@ export async function generateInputSpec(params: {
         tools: inputSpecTools,
         stopWhen: stepCountIs(10),
         temperature: 0.2,
+        abortSignal: params.abortSignal,
       })
 
       for (const step of result.steps) {
@@ -411,6 +418,7 @@ export async function generateOutputsSpec(params: {
   draft: Record<string, unknown>
   locale: string
   model: ReturnType<typeof createOpenRouterModel>
+  abortSignal?: AbortSignal
 }): Promise<string | null> {
   try {
     const template = JSON.stringify(defaultWorkflowOutputsSpecV1(), null, 2)
@@ -460,6 +468,7 @@ export async function generateOutputsSpec(params: {
       },
       stopWhen: stepCountIs(10),
       temperature: 0.2,
+      abortSignal: params.abortSignal,
     })
 
     for (const step of result.steps) {
@@ -491,6 +500,7 @@ export async function generateCronExpression(params: {
   prompt: string
   locale: string
   model: ReturnType<typeof createOpenRouterModel>
+  abortSignal?: AbortSignal
 }): Promise<GenerateCronExpressionResult> {
   try {
     const systemPrompt = [
@@ -561,6 +571,7 @@ export async function generateCronExpression(params: {
       },
       stopWhen: stepCountIs(8),
       temperature: 0.1,
+      abortSignal: params.abortSignal,
     })
 
     for (const step of result.steps) {
@@ -620,11 +631,212 @@ export function buildRegistryTools(ctx: ToolExecutionContext): ToolSet {
   return Object.fromEntries(entries)
 }
 
+export type LoadedWorkflowSnapshot = {
+  name: string
+  description: string
+  dependencies: string
+  envJson: string
+  inputSpec: string | null
+  outputsSpec: string | null
+  steps: Array<Record<string, unknown>>
+}
+
 export type OrchestratorSharedState = {
   draftSteps: Array<Record<string, unknown>>
+  loadedWorkflow: LoadedWorkflowSnapshot | null
   generatedInputSpec: string | null
   generatedOutputsSpec: string | null
   finalizedDraft: Record<string, unknown> | null
+}
+
+type StepEditDiff = {
+  kind: "added" | "modified" | "unchanged"
+  stepKey: string
+  summary: string
+  oldLineCount: number
+  newLineCount: number
+  changedLineCount: number
+  isTrivial: boolean
+  codeBlock?: string
+  markers?: {
+    ins: string
+    del: string
+    collapse: string
+  }
+}
+
+type DiffOp = { type: "context" | "insert" | "delete"; text: string }
+
+function splitScriptLines(script: string): string[] {
+  const normalized = String(script ?? "").replace(/\r\n/g, "\n")
+  if (!normalized) return []
+  return normalized.split("\n")
+}
+
+function buildLcsTable(a: string[], b: string[]): number[][] {
+  const rows = a.length + 1
+  const cols = b.length + 1
+  const dp: number[][] = Array.from({ length: rows }, () => Array(cols).fill(0))
+  for (let i = 1; i < rows; i++) {
+    for (let j = 1; j < cols; j++) {
+      if (a[i - 1] === b[j - 1]) dp[i]![j] = dp[i - 1]![j - 1]! + 1
+      else dp[i]![j] = Math.max(dp[i - 1]![j]!, dp[i]![j - 1]!)
+    }
+  }
+  return dp
+}
+
+function buildDiffOps(oldLines: string[], newLines: string[]): DiffOp[] {
+  const dp = buildLcsTable(oldLines, newLines)
+  const ops: DiffOp[] = []
+  let i = oldLines.length
+  let j = newLines.length
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+      ops.push({ type: "context", text: oldLines[i - 1]! })
+      i--
+      j--
+      continue
+    }
+    if (j > 0 && (i === 0 || dp[i]![j - 1]! >= dp[i - 1]![j]!)) {
+      ops.push({ type: "insert", text: newLines[j - 1]! })
+      j--
+      continue
+    }
+    if (i > 0) {
+      ops.push({ type: "delete", text: oldLines[i - 1]! })
+      i--
+    }
+  }
+  ops.reverse()
+  return ops
+}
+
+function formatLineRanges(lines: number[]): string {
+  if (!lines.length) return ""
+  const out: string[] = []
+  let start = lines[0]!
+  let prev = lines[0]!
+  for (let i = 1; i < lines.length; i++) {
+    const cur = lines[i]!
+    if (cur === prev + 1) {
+      prev = cur
+      continue
+    }
+    out.push(start === prev ? `${start}` : `${start}-${prev}`)
+    start = cur
+    prev = cur
+  }
+  out.push(start === prev ? `${start}` : `${start}-${prev}`)
+  return out.join(", ")
+}
+
+function buildStepEditDiff(stepKey: string, oldScript: string | null, newScript: string): StepEditDiff {
+  const oldText = oldScript == null ? "" : String(oldScript)
+  const newText = String(newScript ?? "")
+  const oldLines = splitScriptLines(oldText)
+  const newLines = splitScriptLines(newText)
+
+  if (oldScript == null) {
+    return {
+      kind: "added",
+      stepKey,
+      summary: `Step "${stepKey}" was added.`,
+      oldLineCount: 0,
+      newLineCount: newLines.length,
+      changedLineCount: newLines.length,
+      isTrivial: newLines.length <= 2,
+    }
+  }
+  if (oldText === newText) {
+    return {
+      kind: "unchanged",
+      stepKey,
+      summary: `Step "${stepKey}" has no code changes.`,
+      oldLineCount: oldLines.length,
+      newLineCount: newLines.length,
+      changedLineCount: 0,
+      isTrivial: true,
+    }
+  }
+
+  // Guardrail: avoid quadratic diff cost for very large scripts.
+  if (oldLines.length * newLines.length > 200_000) {
+    const approxChanged = Math.abs(newLines.length - oldLines.length)
+    return {
+      kind: "modified",
+      stepKey,
+      summary: `Step "${stepKey}" was updated (diff preview omitted for large script).`,
+      oldLineCount: oldLines.length,
+      newLineCount: newLines.length,
+      changedLineCount: approxChanged,
+      isTrivial: false,
+    }
+  }
+
+  const ops = buildDiffOps(oldLines, newLines)
+  const changedOpIdx = ops
+    .map((op, idx) => ({ op, idx }))
+    .filter(({ op }) => op.type !== "context")
+    .map(({ idx }) => idx)
+
+  const changedLineCount = changedOpIdx.length
+  const isTrivial = changedLineCount <= 2
+
+  const contextRadius = isTrivial ? 6 : 2
+  const include = new Set<number>()
+  for (const idx of changedOpIdx) {
+    const start = Math.max(0, idx - contextRadius)
+    const end = Math.min(ops.length - 1, idx + contextRadius)
+    for (let i = start; i <= end; i++) include.add(i)
+  }
+
+  const rendered: string[] = []
+  const insLines: number[] = []
+  const delLines: number[] = []
+  const collapseLines: number[] = []
+  let lineNo = 0
+  let inGap = false
+
+  for (let i = 0; i < ops.length; i++) {
+    const op = ops[i]!
+    if (!include.has(i)) {
+      if (!inGap) {
+        lineNo++
+        rendered.push("// ... unchanged lines omitted ...")
+        collapseLines.push(lineNo)
+        inGap = true
+      }
+      continue
+    }
+    inGap = false
+    lineNo++
+    rendered.push(op.text)
+    if (op.type === "insert") insLines.push(lineNo)
+    if (op.type === "delete") delLines.push(lineNo)
+  }
+
+  const ins = formatLineRanges(insLines)
+  const del = formatLineRanges(delLines)
+  const collapse = formatLineRanges(collapseLines)
+  const headerParts = [`\`\`\`js title="${stepKey}"`]
+  if (ins) headerParts.push(`ins={${ins}}`)
+  if (del) headerParts.push(`del={${del}}`)
+  if (collapse) headerParts.push(`collapse={${collapse}}`)
+  const header = headerParts.join(" ")
+  const codeBlock = `${header}\n${rendered.join("\n")}\n\`\`\``
+
+  return {
+    kind: "modified",
+    stepKey,
+    summary: `Step "${stepKey}" changed ${changedLineCount} line${changedLineCount === 1 ? "" : "s"}.`,
+    oldLineCount: oldLines.length,
+    newLineCount: newLines.length,
+    changedLineCount,
+    isTrivial,
+    codeBlock,
+    markers: { ins, del, collapse },
+  }
 }
 
 export function buildOrchestratorTools(params: {
@@ -632,16 +844,53 @@ export function buildOrchestratorTools(params: {
   model: ReturnType<typeof createOpenRouterModel>
   locale: string
   shared: OrchestratorSharedState
+  workflowId?: string
+  abortSignal?: AbortSignal
 }): ToolSet {
   const { toolCtx } = params
   const DEFAULT_STEP_TIMEOUT_MS = 10 * 60 * 1000
 
+  const toLoadedWorkflowSnapshot = (result: unknown): LoadedWorkflowSnapshot | null => {
+    const wf = isPlainObject(result) ? (result as Record<string, unknown>).workflow : null
+    if (!isPlainObject(wf)) return null
+    const w = wf as Record<string, unknown>
+    return {
+      name: typeof w.name === "string" ? w.name : "",
+      description: typeof w.description === "string" ? w.description : "",
+      dependencies: typeof w.dependencies === "string" ? w.dependencies : "{}",
+      envJson: typeof w.envJson === "string" ? w.envJson : "{}",
+      inputSpec: typeof w.inputSpec === "string" && w.inputSpec.trim() ? w.inputSpec : null,
+      outputsSpec: typeof w.outputsSpec === "string" && w.outputsSpec.trim() ? w.outputsSpec : null,
+      steps: Array.isArray(w.steps)
+        ? ((w.steps as unknown[]).filter(isPlainObject) as Array<Record<string, unknown>>)
+        : [],
+    }
+  }
+
+  const loadWorkflowSnapshot = async (workflowId: string): Promise<LoadedWorkflowSnapshot | null> => {
+    const result = await executeRegisteredToolWithOperation({
+      name: "workflow.get",
+      input: { id: workflowId, includeCode: true },
+      ctx: toolCtx,
+    })
+    return toLoadedWorkflowSnapshot(result)
+  }
+
   return {
     load_workflow: tool({
-      description: "Load an existing workflow by ID (name/description/dependencies/inputSpec/steps with deps).",
+      description:
+        "Load an existing workflow by ID (name/description/dependencies/inputSpec/steps with code and deps).",
       inputSchema: z.object({ workflowId: z.string() }),
-      execute: async ({ workflowId }: { workflowId: string }) =>
-        executeRegisteredToolWithOperation({ name: "workflow.get", input: { id: workflowId }, ctx: toolCtx }),
+      execute: async ({ workflowId }: { workflowId: string }) => {
+        const result = await executeRegisteredToolWithOperation({
+          name: "workflow.get",
+          input: { id: workflowId, includeCode: true },
+          ctx: toolCtx,
+        })
+        const snapshot = toLoadedWorkflowSnapshot(result)
+        if (snapshot) params.shared.loadedWorkflow = snapshot
+        return result
+      },
     }),
 
     create_plan: tool({
@@ -680,15 +929,63 @@ export function buildOrchestratorTools(params: {
         "Draft a single workflow step. " + "Re-drafting an existing stepKey replaces the previous version (upsert).",
       inputSchema: z.object({ step: stepSchema }),
       execute: async ({ step }: { step: z.infer<typeof stepSchema> }) => {
+        const script = (step.scriptEsm ?? "").trim()
+        if (!script) {
+          return {
+            ok: false,
+            error: `step "${step.stepKey}" has an empty scriptEsm. You MUST provide the full script body.`,
+          }
+        }
+        if (!/\bexport\s+default\b/.test(script)) {
+          return {
+            ok: false,
+            error:
+              `step "${step.stepKey}" is missing "export default". ` +
+              `Every step must have exactly one "export default { async main(env, ctx) { … } }".`,
+          }
+        }
+
         const key = String(step.stepKey ?? "").trim()
+        const existingDraft = key
+          ? (params.shared.draftSteps.find((s) => String(s.stepKey ?? "").trim() === key) ?? null)
+          : null
+        const loaded = key
+          ? (params.shared.loadedWorkflow?.steps.find((s) => String(s.stepKey ?? "").trim() === key) ?? null)
+          : null
+        let baseline = existingDraft ?? loaded ?? null
+        if (!baseline && key && !params.shared.loadedWorkflow && params.workflowId) {
+          const snapshot = await loadWorkflowSnapshot(params.workflowId)
+          if (snapshot) {
+            params.shared.loadedWorkflow = snapshot
+            baseline = snapshot.steps.find((s) => String(s.stepKey ?? "").trim() === key) ?? null
+          }
+        }
+        const baselineDeps =
+          baseline && Array.isArray((baseline as { deps?: unknown[] }).deps)
+            ? ((baseline as { deps?: unknown[] }).deps ?? []).map((d) => String(d ?? "").trim()).filter(Boolean)
+            : []
+        const normalizedIncomingDeps = (Array.isArray(step.deps) ? step.deps : [])
+          .map((d) => String(d ?? "").trim())
+          .filter(Boolean)
+        const normalizedStep = {
+          ...step,
+          deps:
+            // Edit-mode guardrail: if model omits or empties deps for an existing step,
+            // preserve the original DAG edges from baseline.
+            params.workflowId && normalizedIncomingDeps.length === 0 && baselineDeps.length > 0
+              ? baselineDeps
+              : normalizedIncomingDeps,
+        }
+        const baselineScript = baseline && typeof baseline.scriptEsm === "string" ? baseline.scriptEsm : null
+        const editDiff = buildStepEditDiff(key || String(step.stepKey ?? ""), baselineScript, script)
         const idx = key ? params.shared.draftSteps.findIndex((s) => String(s.stepKey ?? "").trim() === key) : -1
         if (idx >= 0) {
-          params.shared.draftSteps[idx] = step as unknown as Record<string, unknown>
+          params.shared.draftSteps[idx] = normalizedStep as unknown as Record<string, unknown>
           params.shared.finalizedDraft = null
         } else {
-          params.shared.draftSteps.push(step as unknown as Record<string, unknown>)
+          params.shared.draftSteps.push(normalizedStep as unknown as Record<string, unknown>)
         }
-        return { ok: true }
+        return { ok: true, editDiff }
       },
     }),
 
@@ -700,7 +997,12 @@ export function buildOrchestratorTools(params: {
       inputSchema: z.object({}),
       execute: async () => {
         const draft = { steps: params.shared.draftSteps } as Record<string, unknown>
-        const inputSpec = await generateInputSpec({ draft, locale: params.locale, model: params.model })
+        const inputSpec = await generateInputSpec({
+          draft,
+          locale: params.locale,
+          model: params.model,
+          abortSignal: params.abortSignal,
+        })
         if (!inputSpec) {
           return {
             ok: false,
@@ -721,7 +1023,12 @@ export function buildOrchestratorTools(params: {
       inputSchema: z.object({}),
       execute: async () => {
         const draft = { steps: params.shared.draftSteps } as Record<string, unknown>
-        const outputsSpec = await generateOutputsSpec({ draft, locale: params.locale, model: params.model })
+        const outputsSpec = await generateOutputsSpec({
+          draft,
+          locale: params.locale,
+          model: params.model,
+          abortSignal: params.abortSignal,
+        })
         if (!outputsSpec) return { ok: false, error: "OutputsSpec generation failed." }
         params.shared.generatedOutputsSpec = outputsSpec
         return { ok: true, outputsSpec }
@@ -755,11 +1062,101 @@ export function buildOrchestratorTools(params: {
       }),
       execute: async ({ draft }: { draft: Record<string, unknown> }) => {
         const draftCandidate = { ...draft } as Record<string, unknown>
+        type UsableInputSpec = { json: string; properties: Record<string, unknown> }
+        const toUsableInputSpec = (value: unknown): UsableInputSpec | null => {
+          if (typeof value !== "string" || !value.trim()) return null
+          const parsed = parseWorkflowInputSpec(value)
+          if (!parsed.spec) return null
+          const compiled = compileJsonSchema(parsed.spec.paramsSchema)
+          if (compiled.compileError) return null
+          if (!isPlainObject(parsed.spec.paramsSchema)) return null
+          const shape = extractJsonSchemaObjectShape(parsed.spec.paramsSchema)
+          if (!shape.properties) return null
+          return {
+            json: JSON.stringify(parsed.spec, null, 2),
+            properties: shape.properties,
+          }
+        }
+        const pickUsableInputSpec = (...values: unknown[]): UsableInputSpec | null => {
+          for (const v of values) {
+            const usable = toUsableInputSpec(v)
+            if (usable) return usable
+          }
+          return null
+        }
 
-        // Steps are drafted via `define_step` (upserted into shared state). Treat shared state
-        // as authoritative to avoid placeholder scripts (e.g. "[omitted from model context]").
-        if (params.shared.draftSteps.length > 0) {
-          draftCandidate.steps = params.shared.draftSteps
+        // Edit mode: fill any missing top-level fields from the loaded workflow snapshot
+        // so that the AI only needs to pass the fields it wants to change.
+        const lw = params.shared.loadedWorkflow
+        if (lw) {
+          if (!draftCandidate.name || !String(draftCandidate.name).trim()) draftCandidate.name = lw.name
+          if (!draftCandidate.description) draftCandidate.description = lw.description
+          if (!draftCandidate.dependencies || draftCandidate.dependencies === "{}")
+            draftCandidate.dependencies = lw.dependencies
+          if (!draftCandidate.envJson || draftCandidate.envJson === "{}") draftCandidate.envJson = lw.envJson
+        }
+
+        // Merge steps from three sources (highest priority first):
+        //   1. shared.draftSteps — actively define_step'd in this session (has real scripts)
+        //   2. shared.loadedWorkflow.steps — loaded via load_workflow (original scripts)
+        //   3. input draft steps — may contain placeholder scripts from model-context pruning
+        const loadedSteps = lw?.steps ?? []
+        if (params.shared.draftSteps.length > 0 || loadedSteps.length > 0) {
+          const draftByKey = new Map(params.shared.draftSteps.map((s) => [String(s.stepKey ?? "").trim(), s]))
+          const loadedByKey = new Map(
+            loadedSteps.map((s) => [String((s as Record<string, unknown>).stepKey ?? "").trim(), s]),
+          )
+          const inputSteps = Array.isArray(draftCandidate.steps) ? (draftCandidate.steps as unknown[]) : []
+
+          if (inputSteps.length > 0) {
+            draftCandidate.steps = inputSteps.map((s) => {
+              if (!isPlainObject(s)) return s
+              const key = String((s as Record<string, unknown>).stepKey ?? "").trim()
+              return draftByKey.get(key) ?? loadedByKey.get(key) ?? s
+            })
+          } else if (loadedSteps.length > 0) {
+            // Edit mode: start from loaded workflow steps and upsert draft changes.
+            const merged = loadedSteps.map((s) => {
+              const key = String((s as Record<string, unknown>).stepKey ?? "").trim()
+              return draftByKey.get(key) ?? s
+            })
+            const loadedKeys = new Set(
+              loadedSteps.map((s) => String((s as Record<string, unknown>).stepKey ?? "").trim()),
+            )
+            for (const ds of params.shared.draftSteps) {
+              const key = String(ds.stepKey ?? "").trim()
+              if (key && !loadedKeys.has(key)) merged.push(ds)
+            }
+            draftCandidate.steps = merged
+          } else if (params.shared.draftSteps.length > 0) {
+            draftCandidate.steps = params.shared.draftSteps
+          }
+        }
+
+        // Early detection: reject if any step has a placeholder or empty script.
+        // This catches state-loss issues (e.g. stream interruption + pruned persistence)
+        // BEFORE the full validation, so the model gets immediate actionable feedback.
+        const rawStepsForCheck = Array.isArray(draftCandidate.steps) ? (draftCandidate.steps as unknown[]) : []
+        const stepsWithBadScript: string[] = []
+        for (const s of rawStepsForCheck) {
+          if (!isPlainObject(s)) continue
+          const st = s as Record<string, unknown>
+          const key = typeof st.stepKey === "string" ? st.stepKey : ""
+          const script = typeof st.scriptEsm === "string" ? st.scriptEsm.trim() : ""
+          if (!script || PLACEHOLDER_SCRIPTS.has(script)) {
+            stepsWithBadScript.push(key || "(unknown)")
+          }
+        }
+        if (stepsWithBadScript.length > 0) {
+          return {
+            ok: false,
+            error:
+              "Steps have missing or placeholder scripts — re-define them with define_step before retrying validate_draft.",
+            issues: stepsWithBadScript.map((key) => ({
+              path: ["steps", key, "scriptEsm"],
+              message: `Step "${key}" has no real script. Call define_step for this step first.`,
+            })),
+          }
         }
 
         // Pre-normalize deps: keep ONLY deps that reference other stepKeys.
@@ -782,19 +1179,33 @@ export function buildOrchestratorTools(params: {
           }
         }
 
-        if (params.shared.generatedInputSpec && !draftCandidate.inputSpec) {
-          draftCandidate.inputSpec = params.shared.generatedInputSpec
+        const initialUsableInputSpec = pickUsableInputSpec(
+          draftCandidate.inputSpec,
+          params.shared.generatedInputSpec,
+          lw?.inputSpec,
+        )
+        if (initialUsableInputSpec) {
+          draftCandidate.inputSpec = initialUsableInputSpec.json
         }
-        if (params.shared.generatedOutputsSpec && !draftCandidate.outputsSpec) {
-          draftCandidate.outputsSpec = params.shared.generatedOutputsSpec
+        if (!draftCandidate.outputsSpec) {
+          const fallbackOutputsSpec = params.shared.generatedOutputsSpec ?? lw?.outputsSpec
+          if (fallbackOutputsSpec) draftCandidate.outputsSpec = fallbackOutputsSpec
         }
 
         let parsed = workflowDraftSchema.safeParse(draftCandidate)
         if (!parsed.success) {
           const hasInputSpecIssue = parsed.error.issues.some((i) => i.path.includes("inputSpec"))
           if (hasInputSpecIssue) {
-            draftCandidate.inputSpec = ""
-            parsed = workflowDraftSchema.safeParse(draftCandidate)
+            // Try one deterministic recovery from server-side shared state before dropping inputSpec.
+            const recovered = pickUsableInputSpec(params.shared.generatedInputSpec, lw?.inputSpec)
+            if (recovered) {
+              draftCandidate.inputSpec = recovered.json
+              parsed = workflowDraftSchema.safeParse(draftCandidate)
+            }
+            if (!parsed.success) {
+              draftCandidate.inputSpec = ""
+              parsed = workflowDraftSchema.safeParse(draftCandidate)
+            }
           }
         }
         if (!parsed.success) {
@@ -860,15 +1271,12 @@ export function buildOrchestratorTools(params: {
         }
 
         if (referencedByKey.size) {
-          const inputSpecRaw =
-            typeof normalized.inputSpec === "string" && normalized.inputSpec.trim() ? normalized.inputSpec : null
-          const parsedInputSpec = inputSpecRaw ? parseWorkflowInputSpec(inputSpecRaw) : { spec: null }
-          const props =
-            parsedInputSpec.spec &&
-            isPlainObject(parsedInputSpec.spec.paramsSchema) &&
-            isPlainObject((parsedInputSpec.spec.paramsSchema as Record<string, unknown>).properties)
-              ? ((parsedInputSpec.spec.paramsSchema as Record<string, unknown>).properties as Record<string, unknown>)
-              : null
+          const usableInputSpec = pickUsableInputSpec(
+            normalized.inputSpec,
+            params.shared.generatedInputSpec,
+            lw?.inputSpec,
+          )
+          const props = usableInputSpec ? usableInputSpec.properties : null
 
           if (!props) {
             const keys = [...referencedByKey.keys()].join(", ")
@@ -908,8 +1316,10 @@ export function buildOrchestratorTools(params: {
         const finalDraft = {
           ...normalized,
           steps: normalizedSteps,
-          ...(params.shared.generatedInputSpec ? { inputSpec: params.shared.generatedInputSpec } : {}),
-          ...(params.shared.generatedOutputsSpec ? { outputsSpec: params.shared.generatedOutputsSpec } : {}),
+          ...(!normalized.inputSpec ? { inputSpec: params.shared.generatedInputSpec ?? lw?.inputSpec ?? null } : {}),
+          ...(!normalized.outputsSpec
+            ? { outputsSpec: params.shared.generatedOutputsSpec ?? lw?.outputsSpec ?? null }
+            : {}),
         }
 
         params.shared.finalizedDraft = finalDraft as Record<string, unknown>
@@ -1030,7 +1440,6 @@ export function buildSuggestModeSwitchTool(): ToolSet {
         target_mode: z.enum(["agent", "chat", "plan"]),
         reason: z.string(),
       }),
-      execute: async () => ({ acknowledged: true }),
     }),
   }
 }
@@ -1054,7 +1463,6 @@ export function buildPlanReadyTool(): ToolSet {
           .describe("Structured workflow steps with dependencies"),
         highlights: z.array(z.string()).describe("Key decisions made during planning"),
       }),
-      execute: async () => ({ acknowledged: true }),
     }),
   }
 }

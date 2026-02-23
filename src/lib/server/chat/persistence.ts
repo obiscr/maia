@@ -19,17 +19,36 @@ function ensureMessageIds(messages: UIMessage[]): UIMessage[] {
 // Prune large payloads from tool parts before persisting.
 // The full scriptEsm / draft payloads are saved in the Workflow table;
 // chat history only needs lightweight summaries for replay.
+//
+// Scripts are only pruned when the workflow has been successfully saved
+// (create_workflow / update_workflow returned ok:true). Before that, the
+// scripts must remain in chat history so that continuations can reconstruct
+// the draft state.
 // ---------------------------------------------------------------------------
 
 const PRUNE_SCRIPT_PLACEHOLDER = "[saved to workflow]"
 
-function prunePartsForStorage(parts: UIMessage["parts"]): UIMessage["parts"] {
+function hasSuccessfulWorkflowSave(messages: UIMessage[]): boolean {
+  for (const msg of messages) {
+    for (const part of msg.parts) {
+      if (!isToolUIPart(part)) continue
+      const name = getToolName(part)
+      if ((name === "create_workflow" || name === "update_workflow") && part.state === "output-available") {
+        const out = isRecord(part.output) ? (part.output as Record<string, unknown>) : null
+        if (out?.ok === true) return true
+      }
+    }
+  }
+  return false
+}
+
+function prunePartsForStorage(parts: UIMessage["parts"], workflowSaved: boolean): UIMessage["parts"] {
   return parts.map((part) => {
     if (!isToolUIPart(part)) return part
     const toolName = getToolName(part)
     const p = part as unknown as ToolPart & Record<string, unknown>
 
-    if (toolName === "define_step" && isRecord(p.input)) {
+    if (toolName === "define_step" && workflowSaved && isRecord(p.input)) {
       const inp = p.input as Record<string, unknown>
       const step = isRecord(inp.step) ? (inp.step as Record<string, unknown>) : null
       if (step && typeof step.scriptEsm === "string" && step.scriptEsm.length > 200) {
@@ -43,7 +62,7 @@ function prunePartsForStorage(parts: UIMessage["parts"]): UIMessage["parts"] {
       }
     }
 
-    if (toolName === "validate_draft") {
+    if (toolName === "validate_draft" && workflowSaved) {
       if (isRecord(p.input)) {
         const inp = p.input as Record<string, unknown>
         if (isRecord(inp.draft)) {
@@ -224,8 +243,10 @@ export async function saveChat(params: {
   const toCreate: Array<{ id: string; chatId: string; role: string; parts: string; attachments: string }> = []
   const toUpdate: Array<{ id: string; parts: string }> = []
 
+  const workflowSaved = hasSuccessfulWorkflowSave(withIds)
+
   for (const msg of withIds) {
-    const prunedParts = prunePartsForStorage(msg.parts)
+    const prunedParts = prunePartsForStorage(msg.parts, workflowSaved)
     const partsJson = JSON.stringify(prunedParts)
     const attachmentsJson = JSON.stringify((msg as unknown as Record<string, unknown>).experimental_attachments ?? [])
 

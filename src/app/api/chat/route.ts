@@ -8,6 +8,7 @@ import {
   stepCountIs,
   createUIMessageStream,
   createUIMessageStreamResponse,
+  tool,
   type UIMessage,
   type ToolSet,
 } from "ai"
@@ -31,7 +32,12 @@ import { canonicalToSdkToolName, type ToolPart } from "@/lib/shared/agent/tool-p
 import type { ToolExecutionContext } from "@/lib/server/tools/types"
 import { toViewerAuthContext } from "@/lib/server/scopes/viewer-scope"
 import { prisma } from "@/lib/server/db"
-import { buildAgentSystemPrompt, buildChatSystemPrompt, buildPlanSystemPrompt } from "@/lib/server/chat/prompts"
+import {
+  buildAgentSystemPrompt,
+  buildChatSystemPrompt,
+  buildPlanSystemPrompt,
+  PLACEHOLDER_SCRIPTS,
+} from "@/lib/server/chat/prompts"
 import {
   buildOrchestratorTools,
   buildRegistryTools,
@@ -83,27 +89,46 @@ function prunePayloadsForModel(messages: UIMessage[]): UIMessage[] {
 
       if (toolName === "load_workflow" && isRecord(p.output)) {
         const out = p.output as Record<string, unknown>
-        const data = isRecord(out.data) ? (out.data as Record<string, unknown>) : null
-        const steps = data && Array.isArray(data.steps) ? data.steps : null
-        if (data && steps) {
+        const wf = isRecord(out.workflow) ? (out.workflow as Record<string, unknown>) : null
+        const steps = wf && Array.isArray(wf.steps) ? wf.steps : null
+        if (wf && steps) {
           const prunedSteps = steps.map((s) => {
             if (!isRecord(s)) return s
             const st = s as Record<string, unknown>
             if (typeof st.scriptEsm === "string" && st.scriptEsm) return { ...st, scriptEsm: PRUNE_SCRIPT_PLACEHOLDER }
             return st
           })
-          return { ...p, output: { ...out, data: { ...data, steps: prunedSteps } } } as typeof part
+          return { ...p, output: { ...out, workflow: { ...wf, steps: prunedSteps } } } as typeof part
         }
       }
 
       if (toolName === "define_step" && isRecord(p.input)) {
         const inp = p.input as Record<string, unknown>
         const step = isRecord(inp.step) ? (inp.step as Record<string, unknown>) : null
+        const out = isRecord(p.output) ? (p.output as Record<string, unknown>) : null
+        const outEdit = out && isRecord(out.editDiff) ? (out.editDiff as Record<string, unknown>) : null
+        const prunedOut =
+          out && outEdit
+            ? {
+                ...out,
+                editDiff: {
+                  ...outEdit,
+                  codeBlock:
+                    typeof outEdit.codeBlock === "string" && outEdit.codeBlock
+                      ? "[omitted from model context]"
+                      : outEdit.codeBlock,
+                },
+              }
+            : out
         if (step && typeof step.scriptEsm === "string" && step.scriptEsm) {
           return {
             ...p,
             input: { ...inp, step: { ...step, scriptEsm: PRUNE_SCRIPT_PLACEHOLDER } },
+            ...(prunedOut ? { output: prunedOut } : {}),
           } as typeof part
+        }
+        if (prunedOut) {
+          return { ...p, output: prunedOut } as typeof part
         }
       }
 
@@ -147,6 +172,9 @@ function buildOrchestratorStateSnapshot(messages: UIMessage[]): string {
 
   let lastPlan: Plan | null = null
   const draftStepKeys: string[] = []
+  const stepsWithScript: Set<string> = new Set()
+  const stepsMissingScript: Set<string> = new Set()
+  const incompleteToolCalls: string[] = []
   let inputSpecOk: boolean | null = null
   let outputsSpecOk: boolean | null = null
   let finalizeOk: boolean | null = null
@@ -159,6 +187,11 @@ function buildOrchestratorStateSnapshot(messages: UIMessage[]): string {
       if (!isToolUIPart(part)) continue
       const toolName = getToolName(part)
       const p = part as unknown as ToolPart & Record<string, unknown>
+
+      // Detect incomplete tool calls (stream interrupted before result)
+      if (part.state === "input-available" || part.state === "input-streaming") {
+        incompleteToolCalls.push(toolName)
+      }
 
       if (toolName === "create_plan" && isRecord(p.input)) {
         lastPlan = p.input as Plan
@@ -192,6 +225,16 @@ function buildOrchestratorStateSnapshot(messages: UIMessage[]): string {
         if (key && !seenStep.has(key)) {
           seenStep.add(key)
           draftStepKeys.push(key)
+        }
+        // Track whether each step has a real script or just a placeholder
+        if (key && step && part.state === "output-available") {
+          const script = typeof step.scriptEsm === "string" ? step.scriptEsm.trim() : ""
+          if (script && !PLACEHOLDER_SCRIPTS.has(script)) {
+            stepsWithScript.add(key)
+            stepsMissingScript.delete(key)
+          } else {
+            if (!stepsWithScript.has(key)) stepsMissingScript.add(key)
+          }
         }
       }
 
@@ -232,6 +275,16 @@ function buildOrchestratorStateSnapshot(messages: UIMessage[]): string {
     const omitted = Math.max(0, total - tail.length)
     lines.push(`draft.steps.count: ${total}`)
     lines.push(`draft.steps.tail: ${tail.join(", ")}${omitted ? ` (+${omitted} omitted)` : ""}`)
+  }
+  if (stepsMissingScript.size > 0) {
+    lines.push(
+      `WARNING draft.steps.missingScript: ${[...stepsMissingScript].join(", ")} — these steps must be re-defined with define_step before validate_draft`,
+    )
+  }
+  if (incompleteToolCalls.length > 0) {
+    lines.push(
+      `WARNING incomplete.toolCalls: ${incompleteToolCalls.join(", ")} — previous call(s) did not complete; retry if needed`,
+    )
   }
   if (inputSpecOk != null) lines.push(`inputSpec.ok: ${inputSpecOk ? "true" : "false"}`)
   if (outputsSpecOk != null) lines.push(`outputsSpec.ok: ${outputsSpecOk ? "true" : "false"}`)
@@ -401,6 +454,12 @@ export const POST = withApiObservability(async (req: Request) => {
       const effectiveModel = resolveAiModelAlias(body.model ?? settings.model)
       const openRouterModel = createOpenRouterModel({ apiKey: settings.apiKey!, model: effectiveModel })
 
+      const STREAM_TIMEOUT_MS = Math.max(10_000, Number(process.env.CHAT_STREAM_TIMEOUT_MS) || 290_000)
+      const abort = new AbortController()
+      const timeout = setTimeout(() => abort.abort(), STREAM_TIMEOUT_MS)
+      const onRequestAbort = () => abort.abort()
+      req.signal.addEventListener("abort", onRequestAbort, { once: true })
+
       const isEditing = typeof workflowId === "string" && workflowId.trim().length > 0
 
       // ── Build system prompt based on mode ──
@@ -408,6 +467,7 @@ export const POST = withApiObservability(async (req: Request) => {
       let tools: ToolSet
       let tracker: OrchestratorPhaseTracker | null = null
       let shared: OrchestratorSharedState | null = null
+      let agentRegistryToolNames: string[] = []
 
       if (mode === "agent") {
         // Detect plan_ready handoff: scan messages for a completed plan_ready tool call.
@@ -445,9 +505,51 @@ export const POST = withApiObservability(async (req: Request) => {
 
         shared = {
           draftSteps: [],
+          loadedWorkflow: null,
           generatedInputSpec: null,
           generatedOutputsSpec: null,
           finalizedDraft: null,
+        }
+
+        // Reconstruct shared draft state from previous messages so that
+        // continuations (e.g. after a stream interruption) can pick up where
+        // the previous request left off without losing step scripts.
+        for (const msg of originalMessages) {
+          for (const part of msg.parts) {
+            if (!isToolUIPart(part) || part.state !== "output-available") continue
+            const tn = getToolName(part)
+            if (tn === "define_step" && isRecord(part.input)) {
+              const inp = part.input as Record<string, unknown>
+              const step = isRecord(inp.step) ? (inp.step as Record<string, unknown>) : null
+              const key = step && typeof step.stepKey === "string" ? step.stepKey.trim() : ""
+              if (
+                key &&
+                step &&
+                typeof step.scriptEsm === "string" &&
+                step.scriptEsm !== "[saved to workflow]" &&
+                step.scriptEsm !== "[omitted from model context]"
+              ) {
+                const idx = shared.draftSteps.findIndex((s) => String(s.stepKey ?? "").trim() === key)
+                if (idx >= 0) {
+                  shared.draftSteps[idx] = step as unknown as Record<string, unknown>
+                } else {
+                  shared.draftSteps.push(step as unknown as Record<string, unknown>)
+                }
+              }
+            }
+            if (tn === "generate_input_spec") {
+              const out = isRecord(part.output) ? (part.output as Record<string, unknown>) : null
+              if (out?.ok === true && typeof out.inputSpec === "string") {
+                shared.generatedInputSpec = out.inputSpec
+              }
+            }
+            if (tn === "generate_output_spec") {
+              const out = isRecord(part.output) ? (part.output as Record<string, unknown>) : null
+              if (out?.ok === true && typeof out.outputsSpec === "string") {
+                shared.generatedOutputsSpec = out.outputsSpec
+              }
+            }
+          }
         }
 
         tracker = new OrchestratorPhaseTracker({ isEditing, skipPlan: !!planHandoff })
@@ -457,6 +559,8 @@ export const POST = withApiObservability(async (req: Request) => {
           model: openRouterModel,
           locale,
           shared,
+          workflowId,
+          abortSignal: abort.signal,
         })
 
         if (planHandoff) {
@@ -470,7 +574,8 @@ export const POST = withApiObservability(async (req: Request) => {
           if (!isAgentModeRegistryTool(t.name)) continue
           const aiName = canonicalToSdkToolName(t.name)
           if (aiName in orchTools) continue
-          agentRegistryTools[aiName] = (await import("ai")).tool({
+          agentRegistryToolNames.push(aiName)
+          agentRegistryTools[aiName] = tool({
             description: t.description,
             inputSchema: t.inputSchema,
             execute: async (input: unknown) =>
@@ -500,10 +605,8 @@ export const POST = withApiObservability(async (req: Request) => {
         const readOnlyTools: ToolSet = {}
         for (const t of allRegistered) {
           if (!isReadOnlyRegistryTool(t.name)) continue
-          const { tool: toolFn } = await import("ai")
-          const { executeRegisteredToolWithOperation } = await import("@/lib/server/tools/executor")
           const aiName = canonicalToSdkToolName(t.name)
-          readOnlyTools[aiName] = toolFn({
+          readOnlyTools[aiName] = tool({
             description: t.description,
             inputSchema: t.inputSchema,
             execute: async (input: unknown) =>
@@ -520,7 +623,9 @@ export const POST = withApiObservability(async (req: Request) => {
 
       // ── Prune messages ──
       const prunedUI = prunePayloadsForModel(originalMessages)
-      const rawModelMessages = await convertToModelMessages(prunedUI)
+      const rawModelMessages = await convertToModelMessages(prunedUI, {
+        ignoreIncompleteToolCalls: true,
+      })
 
       const prunedModel =
         mode === "agent"
@@ -542,12 +647,6 @@ export const POST = withApiObservability(async (req: Request) => {
       while (modelMessages.length > 2 && estimateTokenCount(modelMessages) > MODEL_CONTEXT_BUDGET_TOKENS) {
         modelMessages = modelMessages.slice(1)
       }
-
-      const STREAM_TIMEOUT_MS = Math.max(10_000, Number(process.env.CHAT_STREAM_TIMEOUT_MS) || 290_000)
-      const abort = new AbortController()
-      const timeout = setTimeout(() => abort.abort(), STREAM_TIMEOUT_MS)
-      const onRequestAbort = () => abort.abort()
-      req.signal.addEventListener("abort", onRequestAbort, { once: true })
 
       const streamOpts: Parameters<typeof streamText>[0] = {
         model: openRouterModel,
@@ -600,8 +699,8 @@ export const POST = withApiObservability(async (req: Request) => {
       if (mode === "agent" && tracker) {
         streamOpts.stopWhen = [stepCountIs(64), () => tracker!.terminal]
         streamOpts.prepareStep = async () => {
-          const at = tracker!.activeTools()
-          return { activeTools: at }
+          const orchActive = tracker!.activeTools()
+          return { activeTools: [...orchActive, ...agentRegistryToolNames] }
         }
         streamOpts.onStepFinish = ({ toolResults }) => tracker!.processToolResults(toolResults)
       } else {
@@ -615,7 +714,7 @@ export const POST = withApiObservability(async (req: Request) => {
       if (titlePromise) {
         const title = await titlePromise
         if (title) {
-          writer.write({ type: "data-chat-title" as never, data: title } as never)
+          writer.write({ type: "data-chat-title", data: title })
           void updateChatTitle(chatId, title).catch(() => {})
         }
       }
@@ -623,7 +722,7 @@ export const POST = withApiObservability(async (req: Request) => {
       if (descriptionPromise) {
         const description = await descriptionPromise
         if (description) {
-          writer.write({ type: "data-chat-description" as never, data: description } as never)
+          writer.write({ type: "data-chat-description", data: description })
           void updateChatDescription(chatId, description).catch(() => {})
         }
       }
