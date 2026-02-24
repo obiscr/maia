@@ -6,7 +6,7 @@ import type { LucideIcon } from "lucide-react"
 
 import { useI18n } from "@/components/i18n-provider"
 import { StandardActionDialog } from "@/components/common/standard-action-dialog"
-import { ChatHistorySheetSkeleton } from "@/components/workflows/agent/chat-history-sheet-skeleton"
+import { ChatHistorySheetSkeleton } from "@/components/agent/chat-history-sheet-skeleton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"

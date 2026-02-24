@@ -7,7 +7,7 @@ import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@/comp
 import { AgentQuickExamples } from "@/components/workflows/common/workflow-quick-examples"
 import type { TFunction } from "@/lib/shared/i18n/t"
 import { cn } from "@/lib/utils"
-import { ImagePreviewDialog, type ImagePreviewItem } from "@/components/workflows/agent/image-preview-dialog"
+import { ImagePreviewDialog, type ImagePreviewItem } from "@/components/agent/image-preview-dialog"
 import { toast } from "@/lib/client/toast"
 import {
   PromptComposer,
@@ -176,15 +176,6 @@ export function AgentWelcomeEmpty(props: {
                 disableSubmitWhenIdle={sendDisabled}
               />
             </EmptyContent>
-
-            <AgentQuickExamples
-              templateCount={2}
-              behavior="fill"
-              onPick={(text) => {
-                setPrompt(text)
-                requestAnimationFrame(() => promptRef.current?.focus())
-              }}
-            />
           </div>
         </Empty>
       </div>

@@ -6,7 +6,7 @@ import { CheckCircle2, Play, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
-import { PlanStepsProgress } from "@/components/workflows/agent/plan-steps-progress"
+import { PlanStepsProgress } from "@/components/agent/plan-steps-progress"
 import type { AgentMode } from "@/lib/shared/agent/modes"
 
 type OrchestratorProgress = {

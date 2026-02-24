@@ -16,13 +16,13 @@ import { Bot, CheckCircle2, CirclePause, Lightbulb, ListTodo, MessageCircleDashe
 import { Button } from "@/components/ui/button"
 import { ChatMarkdown } from "@/components/common/markdown/chat-markdown"
 import { ChatStreamdown } from "@/components/common/markdown/chat-streamdown"
-import { MessageFilePart } from "@/components/workflows/agent/message-file-part"
-import { MessageSourceDocument } from "@/components/workflows/agent/message-source-document"
-import { MessageSourceUrl } from "@/components/workflows/agent/message-source-url"
-import { ReasoningSummary } from "@/components/workflows/agent/reasoning-summary"
-import { WorkflowAgentInlineToolCall } from "@/components/workflows/agent/workflow-agent-inline-tool-call"
-import { PlanProgressCard } from "@/components/workflows/agent/plan-progress-card"
-import { ToolApprovalCard } from "@/components/workflows/agent/tool-approval-card"
+import { MessageFilePart } from "@/components/agent/message-file-part"
+import { MessageSourceDocument } from "@/components/agent/message-source-document"
+import { MessageSourceUrl } from "@/components/agent/message-source-url"
+import { ReasoningSummary } from "@/components/agent/reasoning-summary"
+import { AgentInlineToolCall } from "@/components/agent/agent-inline-tool-call"
+import { PlanProgressCard } from "@/components/agent/plan-progress-card"
+import { ToolApprovalCard } from "@/components/agent/tool-approval-card"
 import { sdkToCanonicalToolName } from "@/lib/shared/agent/tool-parts"
 import { type AgentMode, AGENT_MODE_I18N_KEYS, isAgentMode } from "@/lib/shared/agent/modes"
 
@@ -160,19 +160,19 @@ function MessagePartsImpl(props: MessagePartsProps) {
     if (isToolUIPart(part)) {
       const toolName = getToolName(part)
 
-      if (toolName === "create_plan") {
+      if (toolName === "plan_dashboard") {
         if (props.planBuildActive) continue
         if (!insertedOrchestratorProgress) {
           insertedOrchestratorProgress = true
           const inp = part.input as Record<string, unknown> | undefined
           const planTitle = String(inp?.title ?? orchestratorProgress?.plan?.title ?? "").trim()
           const planSummary = typeof inp?.summary === "string" ? inp.summary : ""
-          const rawSteps = Array.isArray(inp?.steps) ? inp.steps : []
-          const staticSteps: string[] = rawSteps.map((s: unknown) => {
+          const rawPanels = Array.isArray(inp?.panels) ? inp.panels : []
+          const staticSteps: string[] = rawPanels.map((s: unknown) => {
             if (typeof s === "string") return s
             if (s && typeof s === "object") {
               const st = s as Record<string, unknown>
-              return typeof st.name === "string" ? st.name : typeof st.stepKey === "string" ? st.stepKey : String(s)
+              return typeof st.title === "string" ? st.title : typeof st.panelKey === "string" ? st.panelKey : String(s)
             }
             return String(s)
           })
@@ -218,18 +218,18 @@ function MessagePartsImpl(props: MessagePartsProps) {
         continue
       }
 
-      if (toolName === "plan_ready") {
+      if (toolName === "dashboard_plan_ready") {
         const isPartial = part.state === "input-streaming"
         const input = part.input as Record<string, unknown> | undefined
         const title = typeof input?.title === "string" ? input.title : ""
         const summary = typeof input?.summary === "string" ? input.summary : ""
-        const rawSteps = Array.isArray(input?.steps) ? input.steps : []
+        const rawPanels = Array.isArray(input?.panels) ? input.panels : (Array.isArray(input?.steps) ? input.steps : [])
         const toolCallId = typeof part.toolCallId === "string" ? part.toolCallId : ""
-        const steps: string[] = rawSteps.map((s: unknown) => {
+        const steps: string[] = rawPanels.map((s: unknown) => {
           if (typeof s === "string") return s
           if (s && typeof s === "object") {
             const st = s as Record<string, unknown>
-            return typeof st.name === "string" ? st.name : typeof st.stepKey === "string" ? st.stepKey : String(s)
+            return typeof st.title === "string" ? st.title : typeof st.panelKey === "string" ? st.panelKey : String(s)
           }
           return String(s)
         })
@@ -251,7 +251,7 @@ function MessagePartsImpl(props: MessagePartsProps) {
               onContinuePlanning={() => {
                 if (!toolCallId) return
                 onToolOutput?.({
-                  tool: "plan_ready",
+                  tool: "dashboard_plan_ready",
                   toolCallId,
                   output: { accepted: false },
                 })
@@ -266,16 +266,15 @@ function MessagePartsImpl(props: MessagePartsProps) {
       }
 
       let plannedName: string | undefined
-      if (toolName === "define_step" && planSteps) {
+      if (toolName === "define_panel" && planSteps) {
         const inp = part.input as Record<string, unknown> | undefined
-        const step = inp?.step as Record<string, unknown> | undefined
-        const stepKey = typeof step?.stepKey === "string" ? step.stepKey : null
-        if (stepKey) {
-          plannedName = planSteps.find((s) => s.stepKey === stepKey)?.name
+        const panelKey = typeof inp?.panelKey === "string" ? inp.panelKey : null
+        if (panelKey) {
+          plannedName = planSteps.find((s) => s.stepKey === panelKey)?.name
         }
       }
       elements.push(
-        <WorkflowAgentInlineToolCall
+        <AgentInlineToolCall
           key={key}
           part={part}
           plannedName={plannedName}

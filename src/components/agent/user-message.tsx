@@ -6,7 +6,7 @@ import type { UIMessage } from "ai"
 
 import { AttachmentThumbImage, PromptComposer, type PromptComposerAttachment } from "@/components/agent/prompt-composer"
 import { Button } from "@/components/ui/button"
-import type { ImagePreviewItem } from "@/components/workflows/agent/image-preview-dialog"
+import type { ImagePreviewItem } from "@/components/agent/image-preview-dialog"
 import { Spinner } from "@/components/ui/spinner"
 import type { PromptComposerModelGroup } from "@/components/agent/prompt-composer"
 import { cn } from "@/lib/utils"

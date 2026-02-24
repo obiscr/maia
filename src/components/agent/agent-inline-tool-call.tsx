@@ -1,16 +1,14 @@
 "use client"
 
 import * as React from "react"
-import { ChevronDown, ChevronRight, CheckCircle2, Circle, XCircle, ListTree } from "lucide-react"
+import { ChevronDown, ChevronRight, CheckCircle2, Circle, XCircle } from "lucide-react"
 
-import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { useI18n } from "@/components/i18n-provider"
 import { getToolName } from "ai"
 import { sdkToCanonicalToolName, type ToolPart } from "@/lib/shared/agent/tool-parts"
 import { JsonViewer } from "@/components/common/json-viewer"
 import { GradientCircleArrowRightIcon } from "@/components/icons/GradientCircleArrowRightIcon"
-import { ChatMarkdown } from "@/components/common/markdown/chat-markdown"
 
 function rawToI18nKey(raw: string): string {
   return sdkToCanonicalToolName(raw)
@@ -93,21 +91,19 @@ function tryT(
 
 type ToolCategory =
   | "orchestrator_plan"
-  | "orchestrator_step"
+  | "orchestrator_panel"
   | "orchestrator_finalize"
   | "orchestrator_persist"
-  | "orchestrator_spec"
   | "read"
   | "write"
   | "generic"
 
 function categorize(toolName: string): ToolCategory {
-  if (toolName === "create_plan") return "orchestrator_plan"
-  if (toolName === "define_step") return "orchestrator_step"
-  if (toolName === "validate_draft") return "orchestrator_finalize"
-  if (toolName === "create_workflow" || toolName === "update_workflow") return "orchestrator_persist"
-  if (toolName === "load_workflow") return "read"
-  if (toolName === "generate_input_spec" || toolName === "generate_output_spec") return "orchestrator_spec"
+  if (toolName === "plan_dashboard") return "orchestrator_plan"
+  if (toolName === "define_panel") return "orchestrator_panel"
+  if (toolName === "validate_dashboard") return "orchestrator_finalize"
+  if (toolName === "create_dashboard" || toolName === "update_dashboard") return "orchestrator_persist"
+  if (toolName === "load_dashboard") return "read"
 
   const n = rawToI18nKey(toolName)
   if (
@@ -148,10 +144,9 @@ function categorize(toolName: string): ToolCategory {
 
 function shouldShowDetails(category: ToolCategory, state: string): boolean {
   if (category === "orchestrator_plan") return false
-  if (category === "orchestrator_step") return state === "output-error"
+  if (category === "orchestrator_panel") return state === "output-error"
   if (category === "orchestrator_finalize") return state === "output-error"
   if (category === "orchestrator_persist") return true
-  if (category === "orchestrator_spec") return false
   if (category === "write" && state === "output-available") return false
   return true
 }
@@ -161,25 +156,25 @@ function isTrivialOutput(output: Record<string, unknown> | null | undefined): bo
 }
 
 // ---------------------------------------------------------------------------
-// Orchestrator: Plan card
+// Dashboard: Plan card — shows the planned panels list
 // ---------------------------------------------------------------------------
 
 function PlanCard({ part }: { part: ToolPart }) {
   const inp = part.input as Record<string, unknown> | undefined
   const title = typeof inp?.title === "string" ? inp.title : null
-  const rawSteps = Array.isArray(inp?.steps) ? (inp.steps as unknown[]) : []
-  if (!rawSteps.length) return null
+  const rawPanels = Array.isArray(inp?.panels) ? (inp.panels as unknown[]) : []
+  if (!rawPanels.length) return null
 
   return (
     <div className="mt-1.5 space-y-1 p-2">
       {title ? <div className="text-xs font-medium text-foreground">{title}</div> : null}
       <ol className="list-decimal list-inside space-y-0.5">
-        {rawSteps.map((s, i) => {
+        {rawPanels.map((s, i) => {
           const text =
             typeof s === "string"
               ? s
-              : s && typeof s === "object" && "name" in s && typeof (s as Record<string, unknown>).name === "string"
-                ? `${(s as Record<string, unknown>).name} — ${(s as Record<string, unknown>).description ?? ""}`
+              : s && typeof s === "object" && "title" in s && typeof (s as Record<string, unknown>).title === "string"
+                ? `${(s as Record<string, unknown>).title} — ${(s as Record<string, unknown>).chartType ?? ""}`
                 : String(s)
           return (
             <li key={i} className="text-xs text-muted-foreground leading-relaxed">
@@ -193,59 +188,28 @@ function PlanCard({ part }: { part: ToolPart }) {
 }
 
 // ---------------------------------------------------------------------------
-// Orchestrator: Step card (Cursor-style)
+// Dashboard: Panel card — shows define_panel input summary
 // ---------------------------------------------------------------------------
 
-function StepCard({ part }: { part: ToolPart }) {
+function PanelCard({ part }: { part: ToolPart }) {
   const inp = part.input as Record<string, unknown> | undefined
-  const step = (inp?.step ?? null) as Record<string, unknown> | null
-  if (!step) return null
+  if (!inp) return null
 
-  const name = typeof step.name === "string" ? step.name : ""
-  const stepKey = typeof step.stepKey === "string" ? step.stepKey : ""
-  const deps = Array.isArray(step.deps) ? (step.deps as string[]) : []
-  const description = typeof step.description === "string" ? step.description : null
+  const title = typeof inp.title === "string" ? inp.title : ""
+  const panelKey = typeof inp.panelKey === "string" ? inp.panelKey : ""
+  const chartType = typeof inp.chartType === "string" ? inp.chartType : null
+  const dataLength = Array.isArray(inp.data) ? inp.data.length : 0
 
   return (
     <div className="p-2">
       <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold text-foreground">{name || stepKey}</span>
-        {stepKey && name ? <span className="text-[10px] text-muted-foreground font-mono">{stepKey}</span> : null}
+        <span className="text-xs font-semibold text-foreground">{title || panelKey}</span>
+        {panelKey && title ? <span className="text-[10px] text-muted-foreground font-mono">{panelKey}</span> : null}
       </div>
-      {description ? (
-        <div className="mt-1 text-[11px] text-muted-foreground leading-relaxed line-clamp-2">{description}</div>
-      ) : null}
-      {deps.length > 0 ? (
-        <div className="mt-1.5 flex items-center gap-1 flex-wrap">
-          <ListTree className="h-3 w-3 text-muted-foreground shrink-0" />
-          {deps.map((d) => (
-            <Badge key={d} variant="secondary" className="h-4 px-1 text-[9px] font-mono">
-              {d}
-            </Badge>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
-function StepEditDiffCard({ part }: { part: ToolPart }) {
-  if (part.state !== "output-available") return null
-  if (!part.output || typeof part.output !== "object") return null
-  const out = part.output as Record<string, unknown>
-  const raw = out.editDiff
-  if (!raw || typeof raw !== "object") return null
-  const diff = raw as Record<string, unknown>
-  const summary = typeof diff.summary === "string" ? diff.summary : ""
-  const kind = typeof diff.kind === "string" ? diff.kind : ""
-  const codeBlock = typeof diff.codeBlock === "string" ? diff.codeBlock : ""
-
-  if (!summary && !codeBlock) return null
-
-  return (
-    <div className="px-3 py-2">
-      {summary ? <div className="mb-1 text-[11px] text-muted-foreground">{summary}</div> : null}
-      {kind === "modified" && codeBlock ? <ChatMarkdown markdown={codeBlock} className="maia-mdx" /> : null}
+      <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+        {chartType ? <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-mono">{chartType}</span> : null}
+        {dataLength > 0 ? <span>{dataLength} rows</span> : null}
+      </div>
     </div>
   )
 }
@@ -273,7 +237,7 @@ const ToolStatusIcon = React.memo(function ToolStatusIcon(props: {
 // Main component
 // ---------------------------------------------------------------------------
 
-export function WorkflowAgentInlineToolCall(props: { part: ToolPart; plannedName?: string; isStreaming?: boolean }) {
+export function AgentInlineToolCall(props: { part: ToolPart; plannedName?: string; isStreaming?: boolean }) {
   const { t } = useI18n()
   const part = props.part
   const rawName = getToolName(part as Parameters<typeof getToolName>[0])
@@ -305,13 +269,12 @@ export function WorkflowAgentInlineToolCall(props: { part: ToolPart; plannedName
   const vars: Record<string, string | number> = {}
   if (category === "orchestrator_plan" && isDone) {
     const inp = part.input as Record<string, unknown> | undefined
-    const steps = Array.isArray(inp?.steps) ? inp.steps : []
-    if (steps.length) vars.count = steps.length
+    const panels = Array.isArray(inp?.panels) ? inp.panels : []
+    if (panels.length) vars.count = panels.length
   }
-  if (category === "orchestrator_step") {
+  if (category === "orchestrator_panel") {
     const inp = part.input as Record<string, unknown> | undefined
-    const step = inp?.step as Record<string, unknown> | undefined
-    const name = typeof step?.name === "string" ? step.name : props.plannedName
+    const name = typeof inp?.title === "string" ? inp.title : props.plannedName
     if (name) vars.name = name
   }
 
@@ -337,7 +300,7 @@ export function WorkflowAgentInlineToolCall(props: { part: ToolPart; plannedName
 
   const hasOrchestratorBody =
     (category === "orchestrator_plan" && (isDone || part.state === "input-available")) ||
-    (category === "orchestrator_step" && (isDone || part.state === "input-available"))
+    (category === "orchestrator_panel" && (isDone || part.state === "input-available"))
 
   const hasExpandable = hasJsonToShow || hasOrchestratorBody
   const detailPayload = React.useMemo(() => {
@@ -416,8 +379,7 @@ export function WorkflowAgentInlineToolCall(props: { part: ToolPart; plannedName
       {open && hasExpandable ? (
         <div className="border-t divide-y bg-background">
           {category === "orchestrator_plan" ? <PlanCard part={part} /> : null}
-          {category === "orchestrator_step" ? <StepCard part={part} /> : null}
-          {category === "orchestrator_step" ? <StepEditDiffCard part={part} /> : null}
+          {category === "orchestrator_panel" ? <PanelCard part={part} /> : null}
 
           {hasJsonToShow ? (
             <div className="w-0 min-w-full">
