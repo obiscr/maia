@@ -17,12 +17,13 @@ import { CommonListItemSkeleton } from "@/components/common/common-list-item-ske
 import { useLoadErrorAlert } from "@/hooks/use-load-error-alert"
 import { useStableListRows } from "@/hooks/use-stable-list-rows"
 import { useTopicStream } from "@/hooks/use-topic-stream"
+import { useViewer } from "@/hooks/use-viewer"
 import { makeListTopicForViewer } from "@/lib/shared/realtime/viewer-topics"
 import { batchStatusUiSpec, toCanonicalBatchStatus } from "@/lib/shared/batch-status"
-import type { Viewer } from "@/lib/shared/viewer"
 
-export default function BatchesPage(props: { viewer: Viewer }) {
+export default function BatchesPage() {
   const { t, locale } = useI18n()
+  const viewer = useViewer()
   const [filtersOpen, setFiltersOpen] = React.useState("")
   const searchInputRef = React.useRef<HTMLInputElement | null>(null)
   const {
@@ -69,7 +70,7 @@ export default function BatchesPage(props: { viewer: Viewer }) {
   }, [])
 
   useTopicStream({
-    topic: makeListTopicForViewer("batches", props.viewer),
+    topic: viewer ? makeListTopicForViewer("batches", viewer) : null,
     enabled: true,
     onMessage: (msg) => {
       if (msg.type !== "batch_state" && msg.type !== "job_state") return

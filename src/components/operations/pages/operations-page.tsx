@@ -17,9 +17,8 @@ import {
   type OperationRow,
   type OperationsSortKey,
 } from "@/components/operations/hooks/use-operations-page"
-import type { Viewer } from "@/lib/shared/viewer"
 
-export default function OperationsPage(props: { viewer: Viewer }) {
+export default function OperationsPage() {
   const { t, locale } = useI18n()
   const [filtersOpen, setFiltersOpen] = React.useState("")
   const searchInputRef = React.useRef<HTMLInputElement | null>(null)
@@ -48,7 +47,7 @@ export default function OperationsPage(props: { viewer: Viewer }) {
     setPageIndex,
     refresh,
     copyText,
-  } = useOperationsPage({ viewer: props.viewer })
+  } = useOperationsPage()
 
   const loadErrorAlert = useLoadErrorAlert(loadError, [
     { key: "refresh", label: t("common.refreshAction"), onClick: () => void refresh() },

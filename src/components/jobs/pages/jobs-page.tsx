@@ -15,16 +15,17 @@ import { JobsListPageSkeleton } from "@/components/jobs/list/jobs-list-page-skel
 import { useLoadErrorAlert } from "@/hooks/use-load-error-alert"
 import { useStableListRows } from "@/hooks/use-stable-list-rows"
 import { useTopicStream } from "@/hooks/use-topic-stream"
+import { useViewer } from "@/hooks/use-viewer"
 import { makeListTopicForViewer } from "@/lib/shared/realtime/viewer-topics"
-import type { Viewer } from "@/lib/shared/viewer"
 import { apiFetchJson } from "@/lib/shared/http/api"
 import { toast } from "@/lib/client/toast"
 import { tApiError } from "@/lib/shared/i18n/error"
 import { FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 
-export default function JobsPage(props: { viewer: Viewer }) {
+export default function JobsPage() {
   const { t, locale } = useI18n()
+  const viewer = useViewer()
   const searchInputRef = React.useRef<HTMLInputElement | null>(null)
   const {
     total,
@@ -73,7 +74,7 @@ export default function JobsPage(props: { viewer: Viewer }) {
   //   don't carry enough information to patch the final UI row safely.
   // - So SSE is used as a "dirty" signal only: debounce bursts (250ms) and then `refetch()` for correctness.
   useTopicStream({
-    topic: makeListTopicForViewer("jobs", props.viewer),
+    topic: viewer ? makeListTopicForViewer("jobs", viewer) : null,
     enabled: true,
     onMessage: (msg) => {
       if (msg.type !== "job_state") return

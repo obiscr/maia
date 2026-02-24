@@ -22,20 +22,21 @@ import { CommonListItemSkeleton } from "@/components/common/common-list-item-ske
 import { useLoadErrorAlert } from "@/hooks/use-load-error-alert"
 import { useStableListRows } from "@/hooks/use-stable-list-rows"
 import { useTopicStream } from "@/hooks/use-topic-stream"
+import { useViewer } from "@/hooks/use-viewer"
 import { makeListTopicForViewer } from "@/lib/shared/realtime/viewer-topics"
 import { scheduleStatusUiSpec, toCanonicalScheduleStatus } from "@/lib/shared/schedule-status"
 import { cn } from "@/lib/utils"
 import { apiFetchJson } from "@/lib/shared/http/api"
 import { toast } from "@/lib/client/toast"
 import { tApiError } from "@/lib/shared/i18n/error"
-import type { Viewer } from "@/lib/shared/viewer"
 
 function toScheduleKind(v: string): "CRON" | "INTERVAL" {
   return v === "INTERVAL" ? "INTERVAL" : "CRON"
 }
 
-export default function SchedulesPage(props: { viewer: Viewer }) {
+export default function SchedulesPage() {
   const { t, locale } = useI18n()
+  const viewer = useViewer()
   const [filtersOpen, setFiltersOpen] = React.useState("")
   const [editScheduleId, setEditScheduleId] = React.useState<string | null>(null)
   const [editOpen, setEditOpen] = React.useState(false)
@@ -83,7 +84,7 @@ export default function SchedulesPage(props: { viewer: Viewer }) {
   }, [])
 
   useTopicStream({
-    topic: makeListTopicForViewer("schedules", props.viewer),
+    topic: viewer ? makeListTopicForViewer("schedules", viewer) : null,
     enabled: true,
     onMessage: (msg) => {
       if (msg.type !== "schedule_state" && msg.type !== "schedule_deleted" && msg.type !== "job_state") return

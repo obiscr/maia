@@ -16,16 +16,17 @@ import { useLoadErrorAlert } from "@/hooks/use-load-error-alert"
 import { useStableListRows } from "@/hooks/use-stable-list-rows"
 import { runStatusUiSpec, toCanonicalRunStatus } from "@/lib/shared/run-status"
 import { useRunsListSsePatch } from "@/components/runs/pages/use-runs-list-sse-patch"
+import { useViewer } from "@/hooks/use-viewer"
 import { makeListTopicForViewer } from "@/lib/shared/realtime/viewer-topics"
-import type { Viewer } from "@/lib/shared/viewer"
 import { apiFetchJson } from "@/lib/shared/http/api"
 import { toast } from "@/lib/client/toast"
 import { tApiError } from "@/lib/shared/i18n/error"
 import { FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 
-export default function RunsPage(props: { viewer: Viewer }) {
+export default function RunsPage() {
   const { t, locale } = useI18n()
+  const viewer = useViewer()
   const [filtersOpen, setFiltersOpen] = React.useState("")
   const searchInputRef = React.useRef<HTMLInputElement | null>(null)
   const {
@@ -57,7 +58,7 @@ export default function RunsPage(props: { viewer: Viewer }) {
   const skeletonCount = Math.min(pageSize, 10)
   const { listItems } = useStableListRows({ rows: pageRows, loading, skeletonCount })
 
-  const listTopic = makeListTopicForViewer("runs", props.viewer)
+  const listTopic = viewer ? makeListTopicForViewer("runs", viewer) : null
   useRunsListSsePatch({ topic: listTopic, enabled: true })
 
   const filtersActive = !!search.trim() || exactStatus !== "ANY" || sort !== "CREATED_DESC"

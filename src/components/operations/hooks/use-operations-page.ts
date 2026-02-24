@@ -13,8 +13,8 @@ import { useListQuery } from "@/hooks/list-query/use-list-query"
 import { useListQueryState } from "@/hooks/list-query/use-list-query-state"
 import { useOperationsListSsePatch } from "@/components/operations/hooks/use-operations-list-sse-patch"
 import { usePageSizePreferenceOnce } from "@/hooks/use-page-size-preference"
+import { useViewer } from "@/hooks/use-viewer"
 import { makeListTopicForViewer } from "@/lib/shared/realtime/viewer-topics"
-import type { Viewer } from "@/lib/shared/viewer"
 
 export type OperationRow = {
   id: string
@@ -51,9 +51,10 @@ function normalizePageSize(raw: unknown): AllowedPageSize {
   return normalizeAllowedInt(raw, ALLOWED_PAGE_SIZES, DEFAULT_PAGE_SIZE)
 }
 
-export function useOperationsPage(p: { viewer: Viewer }) {
+export function useOperationsPage() {
   const { t } = useI18n()
   const queryClient = useQueryClient()
+  const viewer = useViewer()
 
   type State = {
     qDraft: string
@@ -345,7 +346,7 @@ export function useOperationsPage(p: { viewer: Viewer }) {
   //   progress fields, so patching the active list cache is more real-time and avoids extra requests.
   // - New rows can cause view "jumping" (especially when paginating/filtering or not in newest view), so we buffer
   //   creates and only surface them when the user opts into the newest view.
-  const listTopic = makeListTopicForViewer("operations", p.viewer)
+  const listTopic = viewer ? makeListTopicForViewer("operations", viewer) : null
   const { connected: listStreamConnected } = useOperationsListSsePatch<OperationRow>({
     topic: listTopic,
     getActiveQueryKey: () => activeQueryKeyRef.current,
