@@ -177,13 +177,11 @@ export function NewJobSheet(props: {
           {loading ? (
             <NewJobSheetSkeleton t={t} />
           ) : workflows.length === 0 ? (
-            <div className="px-4 pb-4">
-              <Alert className="rounded-md">
-                <Info aria-hidden="true" />
-                <AlertTitle>{t("common.workflowRequiredTitle")}</AlertTitle>
-                <AlertDescription>{t("common.workflowRequiredDescription")}</AlertDescription>
-              </Alert>
-            </div>
+            <Alert className="rounded-md">
+              <Info aria-hidden="true" />
+              <AlertTitle>{t("common.workflowRequiredTitle")}</AlertTitle>
+              <AlertDescription>{t("common.workflowRequiredDescription")}</AlertDescription>
+            </Alert>
           ) : (
             <div className="space-y-3 px-4 pb-4">
               <CollapsibleSectionCard

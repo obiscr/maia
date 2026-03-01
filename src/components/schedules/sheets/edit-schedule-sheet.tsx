@@ -506,13 +506,11 @@ export function EditScheduleSheet(props: {
           {loading ? (
             <SheetSkeleton t={t} />
           ) : !s ? (
-            <div className="px-4 pb-4">
-              <Alert className="rounded-md">
-                <Info aria-hidden="true" />
-                <AlertTitle>{t("common.loading")}</AlertTitle>
-                <AlertDescription>{t("common.loading")}</AlertDescription>
-              </Alert>
-            </div>
+            <Alert className="rounded-md">
+              <Info aria-hidden="true" />
+              <AlertTitle>{t("common.loading")}</AlertTitle>
+              <AlertDescription>{t("common.loading")}</AlertDescription>
+            </Alert>
           ) : (
             <div className="space-y-6">
               <div className="space-y-3">
