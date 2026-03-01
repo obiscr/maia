@@ -23,8 +23,8 @@ import { ReasoningSummary } from "@/components/agent/reasoning-summary"
 import { AgentInlineToolCall } from "@/components/agent/agent-inline-tool-call"
 import { PlanProgressCard } from "@/components/agent/plan-progress-card"
 import { ToolApprovalCard } from "@/components/agent/tool-approval-card"
-import { sdkToCanonicalToolName } from "@/lib/shared/agent/tool-parts"
 import { type AgentMode, AGENT_MODE_I18N_KEYS, isAgentMode } from "@/lib/shared/agent/modes"
+import { resolveToolLabelI18n } from "@/lib/shared/agent/tool-i18n"
 
 type MessagePartsProps = {
   message: UIMessage
@@ -286,22 +286,7 @@ function MessagePartsImpl(props: MessagePartsProps) {
         const approval = (part as unknown as { approval?: { id?: string } }).approval
         const approvalId = typeof approval?.id === "string" && approval.id.trim() ? approval.id : null
         if (approvalId) {
-          const canonical = sdkToCanonicalToolName(toolName)
-          const parts = canonical.split(".")
-          const i18nLabel =
-            (parts.length >= 2
-              ? (() => {
-                  const [domain, ...rest] = parts
-                  const labelKey = `toolCalls.${domain}.${rest.join("_")}.label`
-                  const v = t(labelKey)
-                  return v !== labelKey ? v : null
-                })()
-              : null) ??
-            (() => {
-              const labelKey = `toolCalls.${toolName}.label`
-              const v = t(labelKey)
-              return v !== labelKey ? v : canonical
-            })()
+          const i18nLabel = resolveToolLabelI18n(t, toolName)
           elements.push(
             <ToolApprovalCard
               key={`${key}-approval`}

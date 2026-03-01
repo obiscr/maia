@@ -6,13 +6,11 @@ import { ChevronDown, ChevronRight, CheckCircle2, Circle, XCircle } from "lucide
 import { cn } from "@/lib/utils"
 import { useI18n } from "@/components/i18n-provider"
 import { getToolName } from "ai"
-import { sdkToCanonicalToolName, type ToolPart } from "@/lib/shared/agent/tool-parts"
+import type { ToolPart } from "@/lib/shared/agent/tool-parts"
+import { resolveToolLabelI18n, resolveToolStatusI18n } from "@/lib/shared/agent/tool-i18n"
 import { JsonViewer } from "@/components/common/json-viewer"
 import { GradientCircleArrowRightIcon } from "@/components/icons/GradientCircleArrowRightIcon"
-
-function rawToI18nKey(raw: string): string {
-  return sdkToCanonicalToolName(raw)
-}
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable"
 
 const fallbackStatusKey = {
   todo: "toolCalls.fallback.todo",
@@ -38,45 +36,15 @@ function resolveI18n(
   state: "todo" | "running" | "done" | "failed",
   vars?: Record<string, string | number>,
 ): { label: string; status: string } {
-  const normalized = rawToI18nKey(toolName)
   const fallbackStatus = resolveFallbackStatusText(t, state)
-
-  const directLabel = tryT(t, `toolCalls.${toolName}.label`)
-  if (directLabel) {
-    let statusKey: string | null = null
-    if (state === "done" && vars) {
-      statusKey =
-        tryT(t, `toolCalls.${toolName}.doneWithCount`, vars) ?? tryT(t, `toolCalls.${toolName}.doneWithName`, vars)
-    } else if (state === "running" && vars) {
-      statusKey = tryT(t, `toolCalls.${toolName}.runningWithName`, vars)
-    }
-    return {
-      label: directLabel,
-      status:
-        statusKey ||
-        tryT(t, `toolCalls.${toolName}.${state}`) ||
-        tryT(t, `toolCalls.status.${state}`) ||
-        fallbackStatus,
-    }
-  }
-
-  const parts = normalized.split(".")
-  if (parts.length >= 2) {
-    const [domain, ...rest] = parts
-    const action = rest.join("_")
-    const domainLabel = tryT(t, `toolCalls.${domain}.${action}.label`)
-    if (domainLabel) {
-      return {
-        label: domainLabel,
-        status:
-          tryT(t, `toolCalls.${domain}.${action}.${state}`) || tryT(t, `toolCalls.status.${state}`) || fallbackStatus,
-      }
-    }
-  }
-
   return {
-    label: normalized,
-    status: tryT(t, `toolCalls.status.${state}`) || fallbackStatus,
+    label: resolveToolLabelI18n(t, toolName),
+    status: resolveToolStatusI18n(t, {
+      toolName,
+      state,
+      fallbackStatus,
+      vars,
+    }),
   }
 }
 
@@ -105,38 +73,38 @@ function categorize(toolName: string): ToolCategory {
   if (toolName === "create_dashboard" || toolName === "update_dashboard") return "orchestrator_persist"
   if (toolName === "load_dashboard") return "read"
 
-  const n = rawToI18nKey(toolName)
+  const n = toolName
   if (
-    n.includes(".list") ||
-    n.includes(".get") ||
-    n.includes(".export") ||
-    n.includes(".preview") ||
-    n.includes(".download") ||
-    n.includes(".definition") ||
-    n.includes(".input") ||
-    n.includes(".output") ||
-    n.includes(".artifact") ||
-    n.includes(".log") ||
-    n.includes(".meta")
+    n.includes("_list") ||
+    n.includes("_get") ||
+    n.includes("_export") ||
+    n.includes("_preview") ||
+    n.includes("_download") ||
+    n.includes("_definition") ||
+    n.includes("_input") ||
+    n.includes("_output") ||
+    n.includes("_artifact") ||
+    n.includes("_log") ||
+    n.includes("_meta")
   )
     return "read"
   if (
-    n.includes(".create") ||
-    n.includes(".update") ||
-    n.includes(".patch") ||
-    n.includes(".delete") ||
-    n.includes(".cancel") ||
-    n.includes(".resume") ||
-    n.includes(".pause") ||
-    n.includes(".stop") ||
-    n.includes(".retry") ||
-    n.includes(".rerun") ||
-    n.includes(".restart") ||
-    n.includes(".install") ||
-    n.includes(".restore") ||
-    n.includes(".fanout") ||
-    n.includes(".run_now") ||
-    n.includes(".snapshot")
+    n.includes("_create") ||
+    n.includes("_update") ||
+    n.includes("_patch") ||
+    n.includes("_delete") ||
+    n.includes("_cancel") ||
+    n.includes("_resume") ||
+    n.includes("_pause") ||
+    n.includes("_stop") ||
+    n.includes("_retry") ||
+    n.includes("_rerun") ||
+    n.includes("_restart") ||
+    n.includes("_install") ||
+    n.includes("_restore") ||
+    n.includes("_fanout") ||
+    n.includes("_run_now") ||
+    n.includes("_snapshot")
   )
     return "write"
   return "generic"
@@ -153,6 +121,13 @@ function shouldShowDetails(category: ToolCategory, state: string): boolean {
 
 function isTrivialOutput(output: Record<string, unknown> | null | undefined): boolean {
   return output != null && output.ok === true && Object.keys(output).length === 1
+}
+
+function isTrivialInput(input: unknown): boolean {
+  if (input == null) return true
+  if (typeof input === "object" && !Array.isArray(input) && Object.keys(input as Record<string, unknown>).length === 0)
+    return true
+  return false
 }
 
 // ---------------------------------------------------------------------------
@@ -324,6 +299,8 @@ export function AgentInlineToolCall(props: { part: ToolPart; plannedName?: strin
     part.state,
   ])
 
+  const showInputSection = hasOutput && !isError && hasInput && !isTrivialInput(part.input)
+
   React.useEffect(() => {
     const wasDone = prevDoneRef.current
     prevDoneRef.current = isDone
@@ -382,11 +359,27 @@ export function AgentInlineToolCall(props: { part: ToolPart; plannedName?: strin
           {category === "orchestrator_panel" ? <PanelCard part={part} /> : null}
 
           {hasJsonToShow ? (
-            <div className="w-0 min-w-full">
-              {detailPayload != null ? (
+            showInputSection && detailPayload != null ? (
+              <div className="w-0 min-w-full h-80">
+                <ResizablePanelGroup direction="vertical">
+                  <ResizablePanel defaultSize={35} minSize={15}>
+                    <div className="h-full overflow-hidden">
+                      <JsonViewer value={part.input} className="h-full" defaultWrap={false} preClassName="p-2" />
+                    </div>
+                  </ResizablePanel>
+                  <ResizableHandle withHandle />
+                  <ResizablePanel defaultSize={65} minSize={15}>
+                    <div className="h-full overflow-hidden">
+                      <JsonViewer value={detailPayload} className="h-full" defaultWrap={false} preClassName="p-2" />
+                    </div>
+                  </ResizablePanel>
+                </ResizablePanelGroup>
+              </div>
+            ) : detailPayload != null ? (
+              <div className="w-0 min-w-full">
                 <JsonViewer value={detailPayload} className="max-h-64" defaultWrap={false} preClassName="p-2" />
-              ) : null}
-            </div>
+              </div>
+            ) : null
           ) : null}
         </div>
       ) : null}

@@ -7,7 +7,7 @@ import { isToolUIPart, getToolName, type UIMessage } from "ai"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { toast } from "@/lib/client/toast"
-import { sdkToCanonicalToolName, type ToolPartState } from "@/lib/shared/agent/tool-parts"
+import type { ToolPartState } from "@/lib/shared/agent/tool-parts"
 
 function toolStateLabel(state: string): string {
   switch (state as ToolPartState) {
@@ -39,10 +39,9 @@ function serializeMessageForCopy(message: UIMessage): string {
 
     if (isToolUIPart(part)) {
       const sdkName = getToolName(part)
-      const canonicalName = sdkToCanonicalToolName(sdkName)
       const state = (part as { state?: string }).state ?? ""
       const label = toolStateLabel(state)
-      segments.push(`[ Tool call: ${canonicalName} → ${label} ]`)
+      segments.push(`[ Tool call: ${sdkName} → ${label} ]`)
       continue
     }
   }

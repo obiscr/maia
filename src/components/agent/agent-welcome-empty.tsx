@@ -176,6 +176,17 @@ export function AgentWelcomeEmpty(props: {
                 disableSubmitWhenIdle={sendDisabled}
               />
             </EmptyContent>
+
+            <AgentQuickExamples
+              templateCount={6}
+              actionsPerModule={1}
+              behavior="fill"
+              className="mx-auto max-w-2xl"
+              onPick={(text) => {
+                setPrompt(text)
+                requestAnimationFrame(() => promptRef.current?.focus())
+              }}
+            />
           </div>
         </Empty>
       </div>
