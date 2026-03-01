@@ -48,6 +48,7 @@ function buildModeSwitchInstructions(currentMode: AgentMode): string {
     "  • agent: Autonomous workflow building — plans, writes code, and saves real workflows end-to-end.",
     "  • plan: Read-only discussion — analyzes requirements, proposes designs, and discusses trade-offs BEFORE any building happens. No resources are created or modified.",
     "  • chat: General operations assistant — queries and manages the platform (list/inspect workflows, runs, jobs, schedules).",
+    "- CRITICAL: Never call suggest_mode_switch to switch to the CURRENT mode. If target_mode equals the current mode, do not call the tool — just continue the task.",
     "- IMPORTANT: If the user explicitly mentions a mode name (e.g. 'plan', 'chat', 'agent', '计划模式', '聊天模式') and it differs from the current mode, you MUST call suggest_mode_switch.",
     "- If the user's intent clearly does not match the current mode, call suggest_mode_switch to suggest switching.",
     "- Do not suggest switching frequently — only when the mismatch is obvious or the user explicitly references another mode.",

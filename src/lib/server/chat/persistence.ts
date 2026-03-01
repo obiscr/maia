@@ -43,7 +43,20 @@ function hasSuccessfulWorkflowSave(messages: UIMessage[]): boolean {
 }
 
 function prunePartsForStorage(parts: UIMessage["parts"], workflowSaved: boolean): UIMessage["parts"] {
-  return parts.map((part) => {
+  const hasPlanReady = parts.some(
+    (part) =>
+      isToolUIPart(part) &&
+      getToolName(part) === "plan_ready" &&
+      (part.state === "input-available" || part.state === "output-available" || part.state === "input-streaming"),
+  )
+
+  // If a plan-ready card is present in the same assistant message, preview tool parts are redundant noise.
+  // (The plan-ready input includes the steps list used to render the canvas preview.)
+  const normalized = hasPlanReady
+    ? parts.filter((part) => !(isToolUIPart(part) && getToolName(part) === "preview_steps"))
+    : parts
+
+  return normalized.map((part) => {
     if (!isToolUIPart(part)) return part
     const toolName = getToolName(part)
     const p = part as unknown as ToolPart & Record<string, unknown>
