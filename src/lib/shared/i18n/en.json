@@ -1808,6 +1808,11 @@
     "operation": {
       "list": { "label": "List operations", "running": "Loading operations…", "done": "Operations loaded" },
       "get": { "label": "Get operation", "running": "Loading operation…", "done": "Operation loaded" },
+      "maintenance_get": {
+        "label": "Get operation maintenance",
+        "running": "Loading maintenance info…",
+        "done": "Maintenance info loaded"
+      },
       "list_by_target": {
         "label": "List target operations",
         "running": "Loading operations…",

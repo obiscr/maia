@@ -1784,6 +1784,11 @@
     "operation": {
       "list": { "label": "查询操作", "running": "正在查询操作…", "done": "已查询操作" },
       "get": { "label": "查看操作", "running": "正在加载操作…", "done": "操作已加载" },
+      "maintenance_get": {
+        "label": "获取操作维护信息",
+        "running": "正在加载维护信息…",
+        "done": "维护信息已加载"
+      },
       "list_by_target": { "label": "按目标查询操作", "running": "正在查询操作…", "done": "操作已加载" }
     },
     "fallback": {
