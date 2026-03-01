@@ -2,6 +2,7 @@
 
 import type { StreamTopic } from "@/lib/shared/realtime/topics"
 import { backoffMs } from "@/lib/client/realtime/backoff"
+import { randomUUID } from "@/lib/shared/crypto/random-uuid"
 
 export type TopicStreamMessage = {
   id?: number
@@ -36,7 +37,7 @@ function getClientSessionId(): string {
   const key = "maia.sseClientSession"
   const existing = safeSessionStorageGet(key)
   if (existing && existing.trim()) return existing
-  const id = typeof crypto?.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
+  const id = randomUUID()
   safeSessionStorageSet(key, id)
   return id
 }

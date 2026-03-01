@@ -11,6 +11,7 @@ import { toast } from "@/lib/client/toast"
 import { AVAILABLE_MODELS, DEFAULT_CHAT_MODEL, groupModelsByProvider } from "@/lib/shared/models"
 import { useWorkflowAgentSession } from "@/components/workflows/agent/use-workflow-agent-session"
 import { type AgentMode, isAgentMode } from "@/lib/shared/agent/modes"
+import { randomUUID } from "@/lib/shared/crypto/random-uuid"
 
 type AgentSettingsResponse = {
   settings: { apiKeyConfigured: boolean; model: string; mode?: string }
@@ -132,7 +133,7 @@ export function AgentLandingPage(props: { initialApiKeyConfigured?: boolean }) {
 
       const abort = new AbortController()
       const newOnes: LandingAttachment[] = picked.map((f) => ({
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         filename: f.name || t("workflows.orchestrator.attachments.fallbackImageName"),
         mediaType: f.type || "application/octet-stream",
         previewUrl: URL.createObjectURL(f),

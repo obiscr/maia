@@ -43,6 +43,7 @@ export type { OrchestratorPlanStep, OrchestratorPlan, PlanPreviewStep } from "./
 
 import { DEFAULT_CHAT_MODEL } from "@/lib/shared/models"
 import { type AgentMode, DEFAULT_AGENT_MODE } from "@/lib/shared/agent/modes"
+import { randomUUID } from "@/lib/shared/crypto/random-uuid"
 
 export function useWorkflowAgentSession(params: {
   chatId?: string | null
@@ -60,7 +61,7 @@ export function useWorkflowAgentSession(params: {
 
   const router = useRouter()
 
-  const chatIdRef = React.useRef(chatIdProp || crypto.randomUUID())
+  const chatIdRef = React.useRef(chatIdProp || randomUUID())
   const stableChatId = chatIdProp || chatIdRef.current
 
   const didAutoSendRef = React.useRef(false)
@@ -84,7 +85,21 @@ export function useWorkflowAgentSession(params: {
 
   const [mode, setModeState] = React.useState<AgentMode>(() => params.initialMode ?? DEFAULT_AGENT_MODE)
 
+  const hasTerminalWorkflowSave = React.useCallback((messages: UIMessage[]): boolean => {
+    const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant")
+    if (!lastAssistant) return false
+    return lastAssistant.parts.some((part) => {
+      if (!isToolUIPart(part) || part.state !== "output-available") return false
+      const toolName = getToolName(part)
+      if (toolName !== "create_workflow" && toolName !== "update_workflow") return false
+      const out = isRecord(part.output) ? (part.output as Record<string, unknown>) : null
+      return out?.ok === true
+    })
+  }, [])
+
   const shouldAutoContinueToolChain = React.useCallback(({ messages }: { messages: UIMessage[] }): boolean => {
+    // AI SDK best practice: continue tool chains automatically except terminal save.
+    if (hasTerminalWorkflowSave(messages)) return false
     // AI SDK best practice: auto-continue when all tool results are available.
     // - lastAssistantMessageIsCompleteWithToolCalls: handles addToolOutput (plan_ready, suggest_mode_switch, etc.)
     // - lastAssistantMessageIsCompleteWithApprovalResponses: handles addToolApprovalResponse (tool approval flow)
@@ -92,7 +107,7 @@ export function useWorkflowAgentSession(params: {
       lastAssistantMessageIsCompleteWithToolCalls({ messages }) ||
       lastAssistantMessageIsCompleteWithApprovalResponses({ messages })
     )
-  }, [])
+  }, [hasTerminalWorkflowSave])
 
   const setModel = React.useCallback(
     (next: string) => {
@@ -717,7 +732,7 @@ export function useWorkflowAgentSession(params: {
 
         didAutoSendRef.current = true
         initialHandoffRef.current = {
-          idempotencyKey: String(handoff.idempotencyKey ?? "").trim() || crypto.randomUUID(),
+          idempotencyKey: String(handoff.idempotencyKey ?? "").trim() || randomUUID(),
           acknowledged: false,
         }
         latestSendRef.current(text, files.length ? files : undefined)

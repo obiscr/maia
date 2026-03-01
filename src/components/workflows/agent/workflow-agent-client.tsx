@@ -38,6 +38,7 @@ import { apiFetchJson } from "@/lib/shared/http/api"
 import { tApiError } from "@/lib/shared/i18n/error"
 import { ChatHistorySheet, type ChatHistoryItem } from "@/components/agent/chat-history-sheet"
 import { AgentMissingApiKeyAlert } from "@/components/agent/agent-missing-api-key-alert"
+import { randomUUID } from "@/lib/shared/crypto/random-uuid"
 
 const StepMonacoEditor = dynamic(() => import("@/components/workflows/agent/step-monaco-editor"), {
   ssr: false,
@@ -659,7 +660,7 @@ export default function WorkflowAgentClient(props: {
 
       const abort = new AbortController()
       const newOnes: ComposerAttachment[] = toAdd.map((f) => ({
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         filename: f.name || t("workflows.orchestrator.attachments.fallbackImageName"),
         mediaType: f.type || "application/octet-stream",
         previewUrl: URL.createObjectURL(f),

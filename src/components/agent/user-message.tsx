@@ -11,6 +11,7 @@ import { Spinner } from "@/components/ui/spinner"
 import type { PromptComposerModelGroup } from "@/components/agent/prompt-composer"
 import { cn } from "@/lib/utils"
 import type { AgentMode } from "@/lib/shared/agent/modes"
+import { randomUUID } from "@/lib/shared/crypto/random-uuid"
 
 type UserMessageProps = {
   message: UIMessage
@@ -374,7 +375,7 @@ export function UserMessage(props: UserMessageProps) {
           ...uploaded.map((f, i) => ({
             ...f,
             url: normalizeChatAttachmentUrl(String(f.url || "")),
-            _editId: `${props.message.id}-picked-${Date.now()}-${i}-${crypto.randomUUID()}`,
+            _editId: `${props.message.id}-picked-${Date.now()}-${i}-${randomUUID()}`,
           })),
         ])
       } finally {
