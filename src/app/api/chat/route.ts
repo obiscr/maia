@@ -28,7 +28,7 @@ import {
 import { listRegisteredTools } from "@/lib/server/tools/registry"
 import { executeRegisteredToolWithOperation } from "@/lib/server/tools/executor"
 import { isToolUIPart, getToolName } from "ai"
-import { canonicalToSdkToolName, type ToolPart } from "@/lib/shared/agent/tool-parts"
+import type { ToolPart } from "@/lib/shared/agent/tool-parts"
 import type { ToolExecutionContext } from "@/lib/server/tools/types"
 import { toViewerAuthContext } from "@/lib/server/scopes/viewer-scope"
 import { prisma } from "@/lib/server/db"
@@ -310,65 +310,65 @@ function estimateTokenCount(data: unknown): number {
 // ---------------------------------------------------------------------------
 
 const PLAN_MODE_WRITE_SUFFIXES = [
-  ".create",
-  ".update",
-  ".delete",
-  ".cancel",
-  ".patch",
-  ".pause",
-  ".resume",
-  ".force_stop",
-  ".fanout",
-  ".run_now",
-  ".deps.install",
-  ".version.create_snapshot",
-  ".version.restore",
-  ".job.create",
-  ".retry",
-  ".rerun",
-  ".restart",
+  "_create",
+  "_update",
+  "_delete",
+  "_cancel",
+  "_patch",
+  "_pause",
+  "_resume",
+  "_force_stop",
+  "_fanout",
+  "_run_now",
+  "_deps_install",
+  "_version_create_snapshot",
+  "_version_restore",
+  "_job_create",
+  "_retry",
+  "_rerun",
+  "_restart",
 ]
 
-function isReadOnlyRegistryTool(canonicalName: string): boolean {
-  return !PLAN_MODE_WRITE_SUFFIXES.some((suffix) => canonicalName.endsWith(suffix))
+function isReadOnlyRegistryTool(toolName: string): boolean {
+  return !PLAN_MODE_WRITE_SUFFIXES.some((suffix) => toolName.endsWith(suffix))
 }
 
 // Agent mode: only read-only registry tools for reference lookups.
 // Write/destructive ops and workflow create/update are handled by orchestrator tools.
 const AGENT_MODE_BLOCKED_TOOLS = new Set([
-  "workflow.create",
-  "workflow.update",
-  "workflow.patch",
-  "workflow.delete",
-  "run.delete",
-  "run.cancel",
-  "run.force_stop",
-  "run.step.retry",
-  "run.step.rerun",
-  "run.step.restart",
-  "job.create",
-  "job.delete",
-  "job.cancel",
-  "job.resume",
-  "schedule.create",
-  "schedule.patch",
-  "schedule.delete",
-  "schedule.run_now",
-  "batch.create",
-  "batch.patch",
-  "batch.delete",
-  "batch.pause",
-  "batch.resume",
-  "batch.cancel",
-  "batch.fanout",
-  "batch.job.create",
-  "workflow.deps.install",
-  "workflow.version.create_snapshot",
-  "workflow.version.restore",
+  "workflow_create",
+  "workflow_update",
+  "workflow_patch",
+  "workflow_delete",
+  "run_delete",
+  "run_cancel",
+  "run_force_stop",
+  "run_step_retry",
+  "run_step_rerun",
+  "run_step_restart",
+  "job_create",
+  "job_delete",
+  "job_cancel",
+  "job_resume",
+  "schedule_create",
+  "schedule_patch",
+  "schedule_delete",
+  "schedule_run_now",
+  "batch_create",
+  "batch_patch",
+  "batch_delete",
+  "batch_pause",
+  "batch_resume",
+  "batch_cancel",
+  "batch_fanout",
+  "batch_job_create",
+  "workflow_deps_install",
+  "workflow_version_create_snapshot",
+  "workflow_version_restore",
 ])
 
-function isAgentModeRegistryTool(canonicalName: string): boolean {
-  return !AGENT_MODE_BLOCKED_TOOLS.has(canonicalName)
+function isAgentModeRegistryTool(toolName: string): boolean {
+  return !AGENT_MODE_BLOCKED_TOOLS.has(toolName)
 }
 
 // ---------------------------------------------------------------------------
@@ -572,7 +572,7 @@ export const POST = withApiObservability(async (req: Request) => {
         const agentRegistryTools: ToolSet = {}
         for (const t of agentRegistered) {
           if (!isAgentModeRegistryTool(t.name)) continue
-          const aiName = canonicalToSdkToolName(t.name)
+          const aiName = t.name
           if (aiName in orchTools) continue
           agentRegistryToolNames.push(aiName)
           agentRegistryTools[aiName] = tool({
@@ -592,8 +592,8 @@ export const POST = withApiObservability(async (req: Request) => {
         systemPrompt = buildChatSystemPrompt({ locale })
         const chatRegistry = buildRegistryTools(toolCtx)
         // Chat mode should not have workflow create/update — those must go through Agent orchestrator
-        delete chatRegistry[canonicalToSdkToolName("workflow.create")]
-        delete chatRegistry[canonicalToSdkToolName("workflow.update")]
+        delete chatRegistry["workflow_create"]
+        delete chatRegistry["workflow_update"]
         tools = {
           ...chatRegistry,
           ...buildSuggestModeSwitchTool(),
@@ -605,7 +605,7 @@ export const POST = withApiObservability(async (req: Request) => {
         const readOnlyTools: ToolSet = {}
         for (const t of allRegistered) {
           if (!isReadOnlyRegistryTool(t.name)) continue
-          const aiName = canonicalToSdkToolName(t.name)
+          const aiName = t.name
           readOnlyTools[aiName] = tool({
             description: t.description,
             inputSchema: t.inputSchema,
@@ -709,7 +709,22 @@ export const POST = withApiObservability(async (req: Request) => {
 
       const result = streamText(streamOpts)
 
-      writer.merge(result.toUIMessageStream())
+      // Filter out no-op mode switch suggestions (target_mode === current mode).
+      // These are confusing and can cause the UI to show a redundant switch card.
+      const uiStream = result.toUIMessageStream()
+      const reader = uiStream.getReader()
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const v = value as unknown as Record<string, unknown> | null
+        const type = v && typeof v === "object" ? (v as any).type : null
+        if (type === "tool-suggest_mode_switch") {
+          const input = (v as any).input as Record<string, unknown> | undefined
+          const target = typeof input?.target_mode === "string" ? input.target_mode : ""
+          if (target && target === mode) continue
+        }
+        writer.write(value as any)
+      }
 
       if (titlePromise) {
         const title = await titlePromise

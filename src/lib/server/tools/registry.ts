@@ -138,8 +138,8 @@ function slimOperationListResult(result: Awaited<ReturnType<typeof listOperation
 const tools: RegisteredTool[] = [
   // workflows
   {
-    name: "workflow.list",
-    description: "List workflows (summary). Use workflow.get for full details.",
+    name: "workflow_list",
+    description: "List workflows (summary). Use workflow_get for full details.",
     inputSchema: listSchema.extend({
       sort: z.enum(["UPDATED_DESC", "UPDATED_ASC"]).default("UPDATED_DESC"),
       depsStatus: z.enum(["IDLE", "INSTALLING", "READY", "FAILED"]).optional(),
@@ -175,7 +175,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "workflow.get",
+    name: "workflow_get",
     description: "Get workflow details. Set includeCode=true to include step source code.",
     inputSchema: idSchema.extend({
       includeCode: z.boolean().optional().default(false).describe("Include step source code (scriptEsm)"),
@@ -213,7 +213,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "workflow.create",
+    name: "workflow_create",
     description: "Create a new workflow with steps, dependencies, env vars, and specs.",
     inputSchema: z.object({
       name: z.string().min(1),
@@ -429,9 +429,9 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "workflow.update",
+    name: "workflow_update",
     description:
-      "Full update of a workflow (name, description, dependencies, env, steps). Use workflow.patch for partial metadata updates.",
+      "Full update of a workflow (name, description, dependencies, env, steps). Use workflow_patch for partial metadata updates.",
     inputSchema: z.object({
       id: z.string().min(1).describe("Public ID of the workflow, e.g. wf-1"),
       name: z.string().min(1),
@@ -468,7 +468,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "workflow.patch",
+    name: "workflow_patch",
     description: "Patch workflow metadata",
     inputSchema: z.object({
       id: z.string().min(1),
@@ -488,7 +488,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "workflow.delete",
+    name: "workflow_delete",
     description: "Delete workflow",
     inputSchema: idSchema,
     riskLevel: "destructive",
@@ -499,7 +499,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "workflow.meta.get",
+    name: "workflow_meta_get",
     description: "Get workflow metadata",
     inputSchema: idSchema,
     riskLevel: "read",
@@ -522,7 +522,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "workflow.export",
+    name: "workflow_export",
     description: "Export workflow",
     inputSchema: idSchema.extend({
       includeEnv: z.boolean().optional().default(false),
@@ -650,7 +650,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "workflow.deps.install",
+    name: "workflow_deps_install",
     description: "Install workflow dependencies",
     inputSchema: idSchema,
     riskLevel: "write",
@@ -666,7 +666,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "workflow.deps.log.list",
+    name: "workflow_deps_log_list",
     description: "List dependency install logs",
     inputSchema: idSchema.extend({
       page: z.number().int().min(1).default(1),
@@ -709,7 +709,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "workflow.version.list",
+    name: "workflow_version_list",
     description: "List workflow versions",
     inputSchema: idSchema.extend({
       q: z.string().trim().max(200).optional(),
@@ -808,7 +808,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "workflow.version.create_snapshot",
+    name: "workflow_version_create_snapshot",
     description: "Create workflow snapshot version",
     inputSchema: idSchema.extend({ description: z.string().max(5000).optional().nullable() }),
     riskLevel: "write",
@@ -869,7 +869,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "workflow.version.get",
+    name: "workflow_version_get",
     description: "Get workflow version",
     inputSchema: z.object({ id: z.string().min(1), version: z.number().int().positive() }),
     riskLevel: "read",
@@ -904,7 +904,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "workflow.version.restore",
+    name: "workflow_version_restore",
     description: "Restore workflow version",
     inputSchema: z.object({ id: z.string().min(1), version: z.number().int().positive() }),
     riskLevel: "write",
@@ -1015,8 +1015,8 @@ const tools: RegisteredTool[] = [
 
   // runs
   {
-    name: "run.list",
-    description: "List runs (summary). Use run.get for full details.",
+    name: "run_list",
+    description: "List runs (summary). Use run_get for full details.",
     inputSchema: listSchema.extend({
       status: z.enum(["PENDING_INPUTS", "RUNNING", "SUCCEEDED", "FAILED", "CANCELED"]).optional(),
       sort: z.enum(["CREATED_DESC", "CREATED_ASC"]).default("CREATED_DESC"),
@@ -1043,7 +1043,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "run.get",
+    name: "run_get",
     description: "Get run detail",
     inputSchema: idSchema,
     riskLevel: "read",
@@ -1054,7 +1054,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "run.delete",
+    name: "run_delete",
     description: "Delete run",
     inputSchema: idSchema,
     riskLevel: "destructive",
@@ -1065,7 +1065,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "run.cancel",
+    name: "run_cancel",
     description: "Cancel run",
     inputSchema: idSchema.extend({ reason: z.string().optional() }),
     riskLevel: "write",
@@ -1080,7 +1080,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "run.force_stop",
+    name: "run_force_stop",
     description: "Force stop run",
     inputSchema: idSchema,
     riskLevel: "destructive",
@@ -1091,7 +1091,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "run.attempt.list",
+    name: "run_attempt_list",
     description: "List run attempts",
     inputSchema: idSchema.extend({ stepKey: z.string().trim().min(1) }),
     riskLevel: "read",
@@ -1121,7 +1121,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "run.inputs.get",
+    name: "run_inputs_get",
     description: "Get run inputs",
     inputSchema: idSchema,
     riskLevel: "read",
@@ -1136,7 +1136,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "run.outputs.get",
+    name: "run_outputs_get",
     description: "Get run outputs",
     inputSchema: idSchema,
     riskLevel: "read",
@@ -1193,7 +1193,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "run.artifact.list",
+    name: "run_artifact_list",
     description: "List run artifacts",
     inputSchema: idSchema.extend({ stepKey: z.string().trim().min(1).optional() }),
     riskLevel: "read",
@@ -1238,7 +1238,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "run.artifact.download",
+    name: "run_artifact_download",
     description: "Download run artifact",
     inputSchema: idSchema.extend({ artifactId: z.string().min(1), name: z.string().optional() }),
     riskLevel: "read",
@@ -1261,7 +1261,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "run.input_file.list",
+    name: "run_input_file_list",
     description: "List run input files",
     inputSchema: idSchema,
     riskLevel: "read",
@@ -1315,7 +1315,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "run.file.download",
+    name: "run_file_download",
     description: "Download run file",
     inputSchema: idSchema.extend({ fileId: z.string().min(1), name: z.string().optional() }),
     riskLevel: "read",
@@ -1338,7 +1338,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "run.step.definition.get",
+    name: "run_step_definition_get",
     description: "Get run step definition",
     inputSchema: idSchema.extend({ stepKey: z.string().min(1) }),
     riskLevel: "read",
@@ -1403,7 +1403,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "run.step.input.get",
+    name: "run_step_input_get",
     description: "Get run step input",
     inputSchema: idSchema.extend({ stepKey: z.string().min(1) }),
     riskLevel: "read",
@@ -1426,7 +1426,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "run.step.output.get",
+    name: "run_step_output_get",
     description: "Get run step output",
     inputSchema: idSchema.extend({ stepKey: z.string().min(1) }),
     riskLevel: "read",
@@ -1449,7 +1449,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "run.step.artifact.list",
+    name: "run_step_artifact_list",
     description: "List run step artifacts",
     inputSchema: idSchema.extend({ stepKey: z.string().min(1) }),
     riskLevel: "read",
@@ -1494,7 +1494,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "run.step.retry",
+    name: "run_step_retry",
     description: "Retry run step",
     inputSchema: idSchema.extend({ stepKey: z.string().min(1) }),
     riskLevel: "write",
@@ -1511,7 +1511,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "run.step.rerun",
+    name: "run_step_rerun",
     description: "Rerun run step",
     inputSchema: idSchema.extend({ stepKey: z.string().min(1) }),
     riskLevel: "write",
@@ -1529,7 +1529,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "run.step.restart",
+    name: "run_step_restart",
     description: "Restart run step",
     inputSchema: idSchema.extend({ stepKey: z.string().min(1) }),
     riskLevel: "write",
@@ -1549,8 +1549,8 @@ const tools: RegisteredTool[] = [
 
   // jobs
   {
-    name: "job.list",
-    description: "List jobs (summary). Use job.get for full details.",
+    name: "job_list",
+    description: "List jobs (summary). Use job_get for full details.",
     inputSchema: listSchema.extend({
       status: z.enum(["QUEUED", "PAUSED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELED"]).optional(),
       scheduleId: z.string().trim().min(1).optional(),
@@ -1561,7 +1561,7 @@ const tools: RegisteredTool[] = [
     execute: async (ctx, input) => slimJobListResult(await listJobs({ viewerAuth: mustViewerAuth(ctx), query: input })),
   },
   {
-    name: "job.get",
+    name: "job_get",
     description: "Get job detail",
     inputSchema: idSchema,
     riskLevel: "read",
@@ -1572,7 +1572,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "job.create",
+    name: "job_create",
     description:
       "Create a job to run a workflow. Requires workflowId. inputJson should match the workflow's inputSpec paramsSchema.",
     inputSchema: z.object({
@@ -1671,7 +1671,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "job.delete",
+    name: "job_delete",
     description: "Delete job",
     inputSchema: idSchema,
     riskLevel: "destructive",
@@ -1682,7 +1682,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "job.cancel",
+    name: "job_cancel",
     description: "Cancel job",
     inputSchema: idSchema.extend({ reason: z.string().optional() }),
     riskLevel: "write",
@@ -1697,7 +1697,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "job.resume",
+    name: "job_resume",
     description: "Resume paused job",
     inputSchema: idSchema,
     riskLevel: "write",
@@ -1712,7 +1712,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "job.attempt.list",
+    name: "job_attempt_list",
     description: "List job attempts",
     inputSchema: idSchema,
     riskLevel: "read",
@@ -1759,7 +1759,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "job.input_file.list",
+    name: "job_input_file_list",
     description: "List job input files",
     inputSchema: idSchema,
     riskLevel: "read",
@@ -1808,8 +1808,8 @@ const tools: RegisteredTool[] = [
 
   // schedules
   {
-    name: "schedule.list",
-    description: "List schedules (summary). Use schedule.get for full details.",
+    name: "schedule_list",
+    description: "List schedules (summary). Use schedule_get for full details.",
     inputSchema: listSchema.extend({
       status: z.enum(["ENABLED", "DISABLED"]).optional(),
       sort: z.enum(["CREATED_DESC", "CREATED_ASC"]).default("CREATED_DESC"),
@@ -1836,7 +1836,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "schedule.get",
+    name: "schedule_get",
     description: "Get schedule",
     inputSchema: idSchema,
     riskLevel: "read",
@@ -1847,7 +1847,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "schedule.create",
+    name: "schedule_create",
     description: "Create a schedule to run a workflow periodically.",
     inputSchema: z.object({
       workflowId: z.string().min(1).describe("Public ID of the workflow, e.g. wf-1"),
@@ -1867,7 +1867,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "schedule.patch",
+    name: "schedule_patch",
     description: "Partially update a schedule (name, cron, enabled, etc.).",
     inputSchema: z.object({
       id: z.string().min(1).describe("Public ID of the schedule, e.g. sch-1"),
@@ -1892,7 +1892,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "schedule.delete",
+    name: "schedule_delete",
     description: "Delete schedule",
     inputSchema: idSchema,
     riskLevel: "destructive",
@@ -1903,7 +1903,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "schedule.preview",
+    name: "schedule_preview",
     description: "Preview schedule",
     inputSchema: idSchema.extend({ limit: z.coerce.number().int().min(1).max(20).optional().default(5) }),
     riskLevel: "read",
@@ -1918,7 +1918,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "schedule.run_now",
+    name: "schedule_run_now",
     description: "Run schedule now",
     inputSchema: idSchema,
     riskLevel: "write",
@@ -1933,8 +1933,8 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "schedule.job.list",
-    description: "List jobs under schedule (summary). Use job.get for full details.",
+    name: "schedule_job_list",
+    description: "List jobs under schedule (summary). Use job_get for full details.",
     inputSchema: listSchema.extend({
       id: z.string().trim().min(1),
       status: z.enum(["QUEUED", "PAUSED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELED"]).optional(),
@@ -1959,8 +1959,8 @@ const tools: RegisteredTool[] = [
 
   // batches
   {
-    name: "batch.list",
-    description: "List batches (summary). Use batch.get for full details.",
+    name: "batch_list",
+    description: "List batches (summary). Use batch_get for full details.",
     inputSchema: listSchema.extend({
       status: z.enum(["CREATED", "PAUSED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELED"]).optional(),
       sort: z.enum(["CREATED_DESC", "CREATED_ASC"]).default("CREATED_DESC"),
@@ -1987,7 +1987,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "batch.get",
+    name: "batch_get",
     description: "Get batch",
     inputSchema: idSchema,
     riskLevel: "read",
@@ -1998,7 +1998,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "batch.create",
+    name: "batch_create",
     description: "Create a batch to run a workflow over multiple inputs in parallel.",
     inputSchema: z.object({
       workflowId: z.string().min(1).describe("Public ID of the workflow, e.g. wf-1"),
@@ -2015,7 +2015,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "batch.patch",
+    name: "batch_patch",
     description: "Partially update a batch (name, concurrency, failFast, etc.).",
     inputSchema: z.object({
       id: z.string().min(1).describe("Public ID of the batch, e.g. bat-1"),
@@ -2038,7 +2038,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "batch.delete",
+    name: "batch_delete",
     description: "Delete batch",
     inputSchema: idSchema,
     riskLevel: "destructive",
@@ -2049,7 +2049,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "batch.pause",
+    name: "batch_pause",
     description: "Pause batch",
     inputSchema: idSchema,
     riskLevel: "write",
@@ -2060,7 +2060,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "batch.resume",
+    name: "batch_resume",
     description: "Resume batch",
     inputSchema: idSchema,
     riskLevel: "write",
@@ -2071,7 +2071,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "batch.cancel",
+    name: "batch_cancel",
     description: "Cancel batch",
     inputSchema: idSchema,
     riskLevel: "write",
@@ -2082,7 +2082,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "batch.fanout",
+    name: "batch_fanout",
     description: "Fanout batch jobs",
     inputSchema: idSchema.extend({
       seedJson: z.unknown(),
@@ -2104,7 +2104,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "batch.job.create",
+    name: "batch_job_create",
     description: "Create batch job",
     inputSchema: z.object({
       id: z.string().min(1),
@@ -2123,8 +2123,8 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "batch.job.list",
-    description: "List jobs under batch (summary). Use job.get for full details.",
+    name: "batch_job_list",
+    description: "List jobs under batch (summary). Use job_get for full details.",
     inputSchema: listSchema.extend({
       id: z.string().trim().min(1),
       status: z.enum(["QUEUED", "PAUSED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELED"]).optional(),
@@ -2149,8 +2149,8 @@ const tools: RegisteredTool[] = [
 
   // operations
   {
-    name: "operation.list",
-    description: "List operations (summary). Use operation.get for full details.",
+    name: "operation_list",
+    description: "List operations (summary). Use operation_get for full details.",
     inputSchema: listSchema.extend({
       status: z.enum(["PENDING", "RUNNING", "SUCCEEDED", "FAILED"]).optional(),
       action: z.string().trim().min(1).max(100).optional(),
@@ -2163,7 +2163,7 @@ const tools: RegisteredTool[] = [
       slimOperationListResult(await listOperations({ viewerAuth: mustViewerAuth(ctx), query: input })),
   },
   {
-    name: "operation.get",
+    name: "operation_get",
     description: "Get operation",
     inputSchema: idSchema.extend({ expandTarget: z.boolean().optional() }),
     riskLevel: "read",
@@ -2178,7 +2178,7 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "operation.maintenance.get",
+    name: "operation_maintenance_get",
     description: "Get operation maintenance info",
     inputSchema: z.object({ run: z.boolean().optional() }),
     riskLevel: "read",
@@ -2189,8 +2189,8 @@ const tools: RegisteredTool[] = [
     },
   },
   {
-    name: "operation.list_by_target",
-    description: "List operations by target (summary). Use operation.get for full details.",
+    name: "operation_list_by_target",
+    description: "List operations by target (summary). Use operation_get for full details.",
     inputSchema: z.object({
       targetType: z.string().trim().min(1),
       targetId: z.string().trim().min(1),

@@ -20,7 +20,6 @@ import { compileJsonSchema } from "@/lib/server/maia/jsonschema"
 import { validateCronExpression } from "@/lib/server/maia/scheduler"
 import { isPlainObject } from "@/lib/shared/lang/is-plain-object"
 import type { ToolExecutionContext } from "@/lib/server/tools/types"
-import { canonicalToSdkToolName } from "@/lib/shared/agent/tool-parts"
 import { validateWorkflowGraph } from "@/lib/shared/maia/workflow-graph-validation"
 import { PLACEHOLDER_SCRIPTS } from "@/lib/server/chat/prompts"
 
@@ -613,9 +612,9 @@ export function buildRegistryTools(ctx: ToolExecutionContext): ToolSet {
   const registered = listRegisteredTools().filter((t) => !t.internalOnly)
   const seen = new Set<string>()
   const entries = registered.map((t) => {
-    const aiName = canonicalToSdkToolName(t.name)
+    const aiName = t.name
     if (seen.has(aiName)) {
-      throw new Error(`TOOL_NAME_COLLISION: ${t.name} -> ${aiName}`)
+      throw new Error(`TOOL_NAME_COLLISION: ${aiName}`)
     }
     seen.add(aiName)
     return [
@@ -869,7 +868,7 @@ export function buildOrchestratorTools(params: {
 
   const loadWorkflowSnapshot = async (workflowId: string): Promise<LoadedWorkflowSnapshot | null> => {
     const result = await executeRegisteredToolWithOperation({
-      name: "workflow.get",
+      name: "workflow_get",
       input: { id: workflowId, includeCode: true },
       ctx: toolCtx,
     })
@@ -883,7 +882,7 @@ export function buildOrchestratorTools(params: {
       inputSchema: z.object({ workflowId: z.string() }),
       execute: async ({ workflowId }: { workflowId: string }) => {
         const result = await executeRegisteredToolWithOperation({
-          name: "workflow.get",
+          name: "workflow_get",
           input: { id: workflowId, includeCode: true },
           ctx: toolCtx,
         })
@@ -1350,7 +1349,7 @@ export function buildOrchestratorTools(params: {
         const d = parsed.data
 
         const out = await executeRegisteredToolWithOperation({
-          name: "workflow.create",
+          name: "workflow_create",
           input: {
             name: d.name,
             description: d.description,
@@ -1401,7 +1400,7 @@ export function buildOrchestratorTools(params: {
         const d = parsed.data
 
         const out = await executeRegisteredToolWithOperation({
-          name: "workflow.update",
+          name: "workflow_update",
           input: {
             id: String(workflowId).trim(),
             name: d.name,

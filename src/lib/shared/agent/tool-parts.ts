@@ -4,7 +4,6 @@
  * SDK-provided utilities (`isToolUIPart`, `getToolName`) should be imported
  * directly from "ai". This module only exports project-specific additions:
  *
- *  - `canonicalToSdkToolName()` / `sdkToCanonicalToolName()` — reversible name codec
  *  - `ToolPart` — flat convenience type for component props (avoids
  *    discriminated-union narrowing overhead in render code)
  *  - `ToolPartState` — union of all possible tool invocation states
@@ -13,43 +12,6 @@
  */
 
 import { isToolUIPart, getToolName } from "ai"
-
-/**
- * Encode canonical tool names (e.g. "workflow.list") into AI SDK-safe names.
- * Fixed-token codec:
- * - "_" -> "__"
- * - "." -> "_d"
- */
-export function canonicalToSdkToolName(canonical: string): string {
-  return canonical.replaceAll("_", "__").replaceAll(".", "_d")
-}
-
-/**
- * Decode AI SDK-safe tool names back into canonical names.
- */
-export function sdkToCanonicalToolName(sdkName: string): string {
-  let out = ""
-  for (let i = 0; i < sdkName.length; i++) {
-    const ch = sdkName[i]
-    if (ch !== "_") {
-      out += ch
-      continue
-    }
-    const next = sdkName[i + 1]
-    if (next === "_") {
-      out += "_"
-      i++
-      continue
-    }
-    if (next === "d") {
-      out += "."
-      i++
-      continue
-    }
-    out += ch
-  }
-  return out
-}
 
 /**
  * Flat convenience type for tool message parts.
@@ -102,7 +64,7 @@ export function findToolPartByName(
     if (!isToolUIPart(raw as any)) continue
     const part = raw as unknown as ToolPart
     const toolName = getToolName(part as any)
-    if (toolName !== name && sdkToCanonicalToolName(toolName) !== name) continue
+    if (toolName !== name) continue
     if (states.length === 0 || isToolPartInState(part, ...states)) return part
   }
   return undefined
