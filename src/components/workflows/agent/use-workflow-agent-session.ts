@@ -97,17 +97,20 @@ export function useWorkflowAgentSession(params: {
     })
   }, [])
 
-  const shouldAutoContinueToolChain = React.useCallback(({ messages }: { messages: UIMessage[] }): boolean => {
-    // AI SDK best practice: continue tool chains automatically except terminal save.
-    if (hasTerminalWorkflowSave(messages)) return false
-    // AI SDK best practice: auto-continue when all tool results are available.
-    // - lastAssistantMessageIsCompleteWithToolCalls: handles addToolOutput (plan_ready, suggest_mode_switch, etc.)
-    // - lastAssistantMessageIsCompleteWithApprovalResponses: handles addToolApprovalResponse (tool approval flow)
-    return (
-      lastAssistantMessageIsCompleteWithToolCalls({ messages }) ||
-      lastAssistantMessageIsCompleteWithApprovalResponses({ messages })
-    )
-  }, [hasTerminalWorkflowSave])
+  const shouldAutoContinueToolChain = React.useCallback(
+    ({ messages }: { messages: UIMessage[] }): boolean => {
+      // AI SDK best practice: continue tool chains automatically except terminal save.
+      if (hasTerminalWorkflowSave(messages)) return false
+      // AI SDK best practice: auto-continue when all tool results are available.
+      // - lastAssistantMessageIsCompleteWithToolCalls: handles addToolOutput (plan_ready, suggest_mode_switch, etc.)
+      // - lastAssistantMessageIsCompleteWithApprovalResponses: handles addToolApprovalResponse (tool approval flow)
+      return (
+        lastAssistantMessageIsCompleteWithToolCalls({ messages }) ||
+        lastAssistantMessageIsCompleteWithApprovalResponses({ messages })
+      )
+    },
+    [hasTerminalWorkflowSave],
+  )
 
   const setModel = React.useCallback(
     (next: string) => {

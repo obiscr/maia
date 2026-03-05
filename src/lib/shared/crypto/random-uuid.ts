@@ -20,4 +20,3 @@ export function randomUUID(): string {
   // Last resort: non-crypto fallback (still stable enough for UI ids)
   return `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`
 }
-

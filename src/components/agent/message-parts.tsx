@@ -223,7 +223,7 @@ function MessagePartsImpl(props: MessagePartsProps) {
         const input = part.input as Record<string, unknown> | undefined
         const title = typeof input?.title === "string" ? input.title : ""
         const summary = typeof input?.summary === "string" ? input.summary : ""
-        const rawPanels = Array.isArray(input?.panels) ? input.panels : (Array.isArray(input?.steps) ? input.steps : [])
+        const rawPanels = Array.isArray(input?.panels) ? input.panels : Array.isArray(input?.steps) ? input.steps : []
         const toolCallId = typeof part.toolCallId === "string" ? part.toolCallId : ""
         const steps: string[] = rawPanels.map((s: unknown) => {
           if (typeof s === "string") return s
@@ -274,12 +274,7 @@ function MessagePartsImpl(props: MessagePartsProps) {
         }
       }
       elements.push(
-        <AgentInlineToolCall
-          key={key}
-          part={part}
-          plannedName={plannedName}
-          isStreaming={isStreaming && isLast}
-        />,
+        <AgentInlineToolCall key={key} part={part} plannedName={plannedName} isStreaming={isStreaming && isLast} />,
       )
 
       if (part.state === "approval-requested") {

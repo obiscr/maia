@@ -44,8 +44,8 @@ export function resolveToolStatusI18n(
 
   const directStatus =
     (state === "done" && vars
-      ? tryTranslate(t, `toolCalls.${toolName}.doneWithCount`, vars) ??
-        tryTranslate(t, `toolCalls.${toolName}.doneWithName`, vars)
+      ? (tryTranslate(t, `toolCalls.${toolName}.doneWithCount`, vars) ??
+        tryTranslate(t, `toolCalls.${toolName}.doneWithName`, vars))
       : null) ??
     (state === "running" && vars ? tryTranslate(t, `toolCalls.${toolName}.runningWithName`, vars) : null) ??
     tryTranslate(t, `toolCalls.${toolName}.${state}`) ??
