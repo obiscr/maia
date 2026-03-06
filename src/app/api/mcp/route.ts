@@ -86,4 +86,3 @@ export const GET = withApiObservability(async (req: Request) => {
 export const POST = withApiObservability(async (req: Request) => {
   return await mcpHandler(req)
 })
-

@@ -14,6 +14,8 @@ export const AVAILABLE_MODELS: ModelInfo[] = [
   { id: "anthropic/claude-sonnet-4.6", name: "Claude Sonnet 4.6", provider: "Anthropic", badges: ALL_BADGES },
   { id: "anthropic/claude-sonnet-4.5", name: "Claude Sonnet 4.5", provider: "Anthropic", badges: CHAT_PLAN },
   // OpenAI
+  { id: "openai/gpt-5.4", name: "GPT-5.4", provider: "OpenAI", badges: ALL_BADGES },
+  { id: "openai/gpt-5.3-codex", name: "GPT-5.3 Codex", provider: "OpenAI", badges: ALL_BADGES },
   { id: "openai/gpt-5.2-pro", name: "GPT-5.2 Pro", provider: "OpenAI", badges: ALL_BADGES },
   { id: "openai/gpt-5.2-codex", name: "GPT-5.2 Codex", provider: "OpenAI", badges: ALL_BADGES },
   { id: "openai/gpt-5.2", name: "GPT-5.2", provider: "OpenAI", badges: CHAT_PLAN },
