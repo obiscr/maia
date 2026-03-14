@@ -1,8 +1,8 @@
-export type ToolI18nTranslator = (key: string, vars?: Record<string, string | number>) => string
+export type ToolI18nTranslator = (i18nKey: string, vars?: Record<string, string | number>) => string
 
-function tryTranslate(t: ToolI18nTranslator, key: string, vars?: Record<string, string | number>): string | null {
-  const value = t(key, vars)
-  return value === key ? null : value
+function tryTranslate(t: ToolI18nTranslator, i18nKey: string, vars?: Record<string, string | number>): string | null {
+  const value = t(i18nKey, vars)
+  return value === i18nKey ? null : value
 }
 
 export function splitToolName(toolName: string): { domain: string; action: string } | null {
