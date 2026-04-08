@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
+## v0.3.2
+
+### Added
+  - Added support for Claude Opus 4.7, Claude Opus 4.6 Fast, GPT-5.5, GPT-5.5 Pro, GPT-5.4 Pro, MiniMax M2.7, Kimi K2.6, Qwen 3.6 Plus, DeepSeek V4 Pro, and DeepSeek V4 Flash.
+
+### Deprecated
+  - Deprecated GPT-5.3 Codex, GPT-5.2 Codex, GPT-5.2, GPT-5.2 Pro, MiniMax M2.5, Kimi K2.5, Qwen 3.5, Qwen 3.5 Plus, and DeepSeek V3.2.
+
 ## v0.3.1
 
 ### Added
@@ -125,4 +133,3 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 
 - Auto-pull missing Docker images during container creation (runner `server.mjs`).
-
